@@ -4,23 +4,38 @@ SaaS B2B multi-tenant que convierte una necesidad de compra de software/tecnolog
 
 ## Estado del proyecto
 
-Greenfield. No hay código de aplicación, infraestructura ni dependencias instaladas todavía. Este repositorio contiene, por ahora, únicamente documentación de planeación, producto, arquitectura y seguridad. La implementación empieza en la Fase 0 (Bootstrap) — ver [`docs/development/current-phase.md`](docs/development/current-phase.md).
+Fase 1A (Estructura y herramientas) completada el 2026-07-17: `apps/web` (React+TS+Vite) y `service/` (FastAPI+worker sobre el paquete compartido `procurawise`) arrancan localmente y pasan `make test/lint/typecheck`. Sin Docker, sin Mongo, sin CI y sin lógica de dominio todavía — ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el alcance exacto y la próxima sub-fase (1B).
+
+## Cómo correr el proyecto localmente
+
+Requiere `uv` y `pnpm` instalados (ver `docs/development/current-phase.md` si faltan).
+
+```
+make dev         # levanta la API (http://localhost:8000) y el frontend (http://localhost:5173)
+make test        # unit + integration (backend) y tests de frontend
+make lint        # ruff + mypy + eslint + prettier
+make typecheck   # mypy + tsc
+make contracts   # regenera apps/web/src/api/client.ts desde el openapi.json de la API
+```
 
 ## Organización del repositorio
 
 ```
+apps/web/          # frontend React + TypeScript (Vite)
+service/            # backend Python: paquete procurawise (api/ + worker/ + shared/)
 docs/
-  requirements/   # especificación de producto original (fuente, no se edita)
-  planning/       # plan aprobado del MVP (fuente de verdad de decisiones)
-  product/        # alcance y roadmap
-  development/    # backlog, fase actual, handoff entre sesiones
+  requirements/    # especificación de producto original (fuente, no se edita)
+  planning/        # plan aprobado del MVP (fuente de verdad de decisiones)
+  product/         # alcance y roadmap
+  development/     # backlog, fase actual, handoff entre sesiones
   architecture/    # arquitectura y ADRs (decisiones que no se reabren sin ADR nuevo)
   security/        # modelo de amenazas
   operations/      # despliegue e infraestructura
+Makefile           # make dev/test/lint/typecheck/contracts
 CLAUDE.md          # reglas operativas para trabajar en este repositorio
 ```
 
-Cuando la implementación comience (Fase 0 en adelante), se añadirán `apps/web` (frontend React+TS), `service/` (backend Python monolito modular) e `infra/` (Bicep), según lo descrito en [`docs/architecture/architecture.md`](docs/architecture/architecture.md).
+Infraestructura local (Docker Compose para Mongo/Azurite/Redis/Mailhog), CI y los subpaquetes de dominio (`identity`, `evaluations`, ...) llegan en la Fase 1B, según lo descrito en [`docs/architecture/architecture.md`](docs/architecture/architecture.md).
 
 ## Por dónde empezar
 
