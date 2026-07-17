@@ -6,7 +6,7 @@ Este documento describe el diseño de despliegue aprobado. **Ninguna infraestruc
 
 | Ambiente | Infraestructura | Cuándo existe | Propósito |
 |---|---|---|---|
-| Local | Docker Compose: Mongo, Azurite, Redis, Mailhog | Desde Fase 0 | Desarrollo con datos sintéticos, sin Azure real |
+| Local | Docker Compose: Mongo, Azurite. Cola: `InMemoryMessageBus` en proceso (ver [ADR 0020](../architecture/decisions/0020-composicion-servicios-desarrollo-local.md)) | Desde Fase 1B | Desarrollo con datos sintéticos, sin Azure real |
 | Development | CI (GitHub Actions), recursos económicos | Desde que exista `.github/workflows/` (Fase 0 en adelante para lint/test; despliegue real Fase 27) | Validación automatizada en cada PR |
 | Staging | Azure real, similar a producción | Desde Fase 27 | E2E, UAT antes del piloto |
 | Production | Azure Container Apps, aprobaciones, backups, alertas, mínimo privilegio | Desde Fase 27-28 | Piloto (Fase 28) y operación real |
@@ -16,7 +16,7 @@ Este documento describe el diseño de despliegue aprobado. **Ninguna infraestruc
 - **Azure Container Apps**: hosting de API y worker (ver [ADR 0019](../architecture/decisions/0019-azure-container-apps-hosting.md)).
 - **MongoDB Atlas**: tier M0 (free) con IP allowlist para todo el MVP (ver [ADR 0015](../architecture/decisions/0015-tier-mongodb-atlas-m0.md)).
 - **Azure Blob Storage**: almacenamiento de documentos (Azurite como equivalente local).
-- **Azure Service Bus**: cola de jobs asíncronos en staging/producción (Redis como equivalente local, ver [ADR 0005](../architecture/decisions/0005-worker-asincrono-service-bus.md)).
+- **Azure Service Bus**: cola de jobs asíncronos en staging/producción (`InMemoryMessageBus` como equivalente local en proceso, no Redis — ver [ADR 0005](../architecture/decisions/0005-worker-asincrono-service-bus.md) y [ADR 0020](../architecture/decisions/0020-composicion-servicios-desarrollo-local.md)). El emulador oficial de Azure Service Bus podrá agregarse como perfil opcional del compose local cuando exista el adaptador real (Fase 13+); no es requisito de `make dev`/`make test`/`make dev-up`.
 - **Azure Key Vault**: gestión de secretos vía identidad administrada — sin secretos en código ni en GitHub.
 - **Azure Container Registry**: imágenes firmadas/escaneadas.
 - **Azure Communication Services**: notificaciones reales (desde Fase 24).

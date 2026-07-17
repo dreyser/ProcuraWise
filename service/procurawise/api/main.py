@@ -1,11 +1,10 @@
 from fastapi import FastAPI
 
+from procurawise.api.routers.health import router as health_router
 from procurawise.shared.config import get_settings
+from procurawise.shared.logging import configure_logging
+
+configure_logging(get_settings())
 
 app = FastAPI(title="ProcuraWise API")
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    settings = get_settings()
-    return {"status": "ok", "environment": settings.environment}
+app.include_router(health_router)

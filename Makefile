@@ -1,4 +1,4 @@
-.PHONY: dev test lint typecheck contracts
+.PHONY: dev test lint typecheck contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration
 
 dev:
 	@trap 'kill 0' EXIT INT TERM; \
@@ -7,7 +7,7 @@ dev:
 	wait
 
 test:
-	cd service && uv run pytest
+	cd service && uv run pytest -m "not docker"
 	cd apps/web && pnpm test
 
 lint:
@@ -21,3 +21,29 @@ typecheck:
 contracts:
 	cd service && uv run python -m procurawise.api.export_openapi
 	cd apps/web && pnpm contracts
+
+migrate:
+	cd service && uv run python -m procurawise.shared.migrations
+
+dev-up:
+	docker compose up -d --wait
+
+dev-down:
+	docker compose down
+
+dev-logs:
+	docker compose logs -f mongo azurite
+
+dev-status:
+	docker compose ps
+
+dev-reset:
+	@if [ "$(CONFIRM)" != "yes" ]; then \
+		echo "ADVERTENCIA: dev-reset borra los datos locales de Mongo/Azurite (volumenes nombrados)."; \
+		echo "Vuelve a correr con 'make dev-reset CONFIRM=yes' si estas seguro."; \
+		exit 1; \
+	fi
+	docker compose down -v
+
+test-integration: dev-up
+	cd service && uv run pytest -m docker

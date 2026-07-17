@@ -51,7 +51,7 @@ Cada bounded context sigue la misma forma interna:
 
 Operaciones interactivas (CRUD, login, scoring manual) van por la API síncrona y responden directamente. Operaciones largas o costosas (generación IA, reportes, imports) se despachan al worker: la API responde `202 Accepted` con `{job_id, status_url}` y el estado se consulta por **polling adaptativo** desde el cliente — no hay WebSockets/SSE/SignalR en el MVP. Contrato completo, incluyendo comportamiento de backoff, pausa en pestaña oculta y manejo de offline, en [ADR 0012](decisions/0012-polling-adaptativo.md).
 
-Cola: Redis local en desarrollo, Azure Service Bus en staging/producción, mismo contrato de dispatch table en el worker. Ver [ADR 0005](decisions/0005-worker-asincrono-service-bus.md).
+Cola: `InMemoryMessageBus` (dentro del proceso) en desarrollo local, Azure Service Bus en staging/producción, mismo contrato `MessageBus`/dispatch table en el worker. Ver [ADR 0005](decisions/0005-worker-asincrono-service-bus.md) y [ADR 0020](decisions/0020-composicion-servicios-desarrollo-local.md) (cambio del default local, Fase 1B).
 
 ## 5. Multi-tenancy
 
@@ -80,7 +80,7 @@ MongoDB Atlas, tier M0 en el MVP (ver [ADR 0015](decisions/0015-tier-mongodb-atl
 
 | Ambiente | Infraestructura | Propósito |
 |---|---|---|
-| Local | Docker Compose (Mongo, Azurite, Redis, Mailhog) | Desarrollo, datos sintéticos — Fases 0-26 |
+| Local | Docker Compose (Mongo, Azurite) + `InMemoryMessageBus` en proceso | Desarrollo, datos sintéticos — Fases 0-26 |
 | Development | CI, recursos económicos | Validación automatizada |
 | Staging | Azure real, similar a producción | E2E, UAT — desde Fase 27 |
 | Production | Azure Container Apps, aprobaciones, backups, alertas | Piloto y operación — Fase 28 |
@@ -108,6 +108,7 @@ UI construida con shadcn/ui + Tailwind + TanStack Table (ver [ADR 0006](decision
     /api                       # FastAPI: main.py, router aggregation, middleware, deps.py
     /worker                    # main.py, dispatch table de jobs
   /tests/{unit,integration,security,e2e_support}
+  /migrations                   # migraciones numeradas, aplicadas idempotentemente vía `make migrate`
   pyproject.toml  uv.lock  Dockerfile.api  Dockerfile.worker
 /infra
   /bicep  /params  /scripts
@@ -115,7 +116,7 @@ UI construida con shadcn/ui + Tailwind + TanStack Table (ver [ADR 0006](decision
   /planning /product /development /architecture/decisions /security /operations
   /requirements (ya existe)
 /.github/workflows
-docker-compose.yml             # mongo, azurite, redis (cola local), mailhog
+docker-compose.yml             # mongo, azurite (cola local en proceso: InMemoryMessageBus — ver ADR 0020)
 Makefile                        # make dev/test/lint/contracts/migrate
 CLAUDE.md  README.md
 ```

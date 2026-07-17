@@ -7,6 +7,8 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic-settings>=2.6",
+    "pymongo>=4.9",
+    "azure-storage-blob>=12.23",
 ]
 
 [dependency-groups]
@@ -28,6 +30,9 @@ packages = ["procurawise"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "docker: requires local Docker services (mongo/azurite) via `make dev-up`",
+]
 
 [tool.ruff]
 line-length = 100

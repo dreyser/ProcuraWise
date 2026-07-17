@@ -6,7 +6,7 @@ function App() {
   const [status, setStatus] = useState<HealthStatus>('checking')
 
   useEffect(() => {
-    fetch('/health')
+    fetch('/health/live')
       .then((response) => setStatus(response.ok ? 'ok' : 'error'))
       .catch(() => setStatus('error'))
   }, [])

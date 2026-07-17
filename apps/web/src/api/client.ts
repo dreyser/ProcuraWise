@@ -4,34 +4,36 @@
  * ProcuraWise API
  * OpenAPI spec version: 0.1.0
  */
-export type HealthHealthGet200 = {[key: string]: string};
+export type LiveHealthLiveGet200 = {[key: string]: string};
+
+export type ReadyHealthReadyGet200 = { [key: string]: unknown };
 
 /**
- * @summary Health
+ * @summary Live
  */
-export type healthHealthGetResponse200 = {
-  data: HealthHealthGet200
+export type liveHealthLiveGetResponse200 = {
+  data: LiveHealthLiveGet200
   status: 200
 }
     
-export type healthHealthGetResponseSuccess = (healthHealthGetResponse200) & {
+export type liveHealthLiveGetResponseSuccess = (liveHealthLiveGetResponse200) & {
   headers: Headers;
 };
 ;
 
-export type healthHealthGetResponse = (healthHealthGetResponseSuccess)
+export type liveHealthLiveGetResponse = (liveHealthLiveGetResponseSuccess)
 
-export const getHealthHealthGetUrl = () => {
+export const getLiveHealthLiveGetUrl = () => {
 
 
   
 
-  return `/health`
+  return `/health/live`
 }
 
-export const healthHealthGet = async ( options?: RequestInit): Promise<healthHealthGetResponse> => {
+export const liveHealthLiveGet = async ( options?: RequestInit): Promise<liveHealthLiveGetResponse> => {
   
-  const res = await fetch(getHealthHealthGetUrl(),
+  const res = await fetch(getLiveHealthLiveGetUrl(),
   {      
     ...options,
     method: 'GET'
@@ -42,6 +44,48 @@ export const healthHealthGet = async ( options?: RequestInit): Promise<healthHea
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
   
-  const data: healthHealthGetResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as healthHealthGetResponse
+  const data: liveHealthLiveGetResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as liveHealthLiveGetResponse
+}
+
+
+
+/**
+ * @summary Ready
+ */
+export type readyHealthReadyGetResponse200 = {
+  data: ReadyHealthReadyGet200
+  status: 200
+}
+    
+export type readyHealthReadyGetResponseSuccess = (readyHealthReadyGetResponse200) & {
+  headers: Headers;
+};
+;
+
+export type readyHealthReadyGetResponse = (readyHealthReadyGetResponseSuccess)
+
+export const getReadyHealthReadyGetUrl = () => {
+
+
+  
+
+  return `/health/ready`
+}
+
+export const readyHealthReadyGet = async ( options?: RequestInit): Promise<readyHealthReadyGetResponse> => {
+  
+  const res = await fetch(getReadyHealthReadyGetUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: readyHealthReadyGetResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as readyHealthReadyGetResponse
 }

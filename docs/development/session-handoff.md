@@ -32,6 +32,114 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-17 — Fase 1B: Infraestructura local de desarrollo
+
+**✅ Fase 1B — Completed.** Código completo y verificado, incluyendo validación con Docker real del founder en dos rondas: la primera encontró un defecto real (incompatibilidad de versión de API de Blob Storage), la segunda —tras el fix— confirmó las 5 pruebas Docker en verde. Ver "Actualización — ronda 1" y "Actualización — ronda 2 (✅ éxito, cierre de fase)" al final de esta entrada.
+
+**Resumen:** Ejecutada la Fase 1B (planeada en Plan Mode y aprobada en la misma sesión, tras resolver 3 contradicciones con la documentación previa vía `AskUserQuestion`): entorno local reproducible para API y worker con MongoDB Community + Azurite vía Docker Compose, configuración tipada por ambiente, adaptadores de Mongo/Blob/cola, health checks de dependencias, logging estructurado, y pruebas de integración. El alcance original de "Fase 1B" en `current-phase.md` (que incluía además pre-commit, CI y 15 bounded contexts) se acotó explícitamente por el founder a una **Fase 1C** nueva — ver nota de sub-división en `current-phase.md`.
+
+**Archivos tocados:**
+- `docker-compose.yml` (nuevo) — Mongo Community `7.0.14` + Azurite `3.33.0` (blob), volúmenes nombrados, healthchecks, sin Redis/Mailhog.
+- `service/procurawise/shared/config.py` — `Settings` ampliada (Mongo/Storage/`queue_backend`), valida `queue_backend=memory` prohibido en `production`.
+- `service/procurawise/shared/{logging,mongo,storage,messaging,health,migrations}.py` (nuevos) — logging JSON estructurado, cliente Mongo, adaptador `AzureBlobStorage`, `InMemoryMessageBus` (`MessageBus` Protocol), health checks, runner de migraciones idempotente.
+- `service/migrations/` (nuevo, vacío) — scaffold para migraciones numeradas futuras.
+- `service/procurawise/api/routers/health.py` (nuevo) + `api/main.py` — `GET /health/live` y `GET /health/ready` reemplazan el `/health` plano de Fase 1A.
+- `service/procurawise/worker/main.py` — logging estructurado + `InMemoryMessageBus` instanciado (sin dispatch table real todavía).
+- `service/tests/conftest.py` (nuevo) — fixtures `mongo_test_db`/`blob_test_storage` con limpieza.
+- `service/tests/unit/{test_config,test_logging,test_messaging,test_storage}.py` — nuevos/ampliados (`test_storage.py` y los casos de `storage_api_version` en `test_config.py` se agregaron en la actualización posterior a la validación con Docker del founder, ver abajo).
+- `service/tests/integration/{test_health,test_health_ready_down,test_health_ready_up,test_mongo_client,test_blob_storage}.py` — nuevos/ajustados; los 3 últimos marcados `@pytest.mark.docker`.
+- `service/pyproject.toml` — deps `pymongo`, `azure-storage-blob`; marker `docker` registrado.
+- `Makefile` — `make dev-up/down/logs/status/reset`, `make test-integration`, `make migrate`; `make test` ahora filtra `-m "not docker"`.
+- `.env.example` — variables no sensibles nuevas (`MONGODB_URI`, `STORAGE_CONNECTION_STRING=UseDevelopmentStorage=true`, `QUEUE_BACKEND=memory`, etc.).
+- `docs/architecture/decisions/0020-composicion-servicios-desarrollo-local.md` (nuevo ADR).
+- `docs/architecture/decisions/0005-worker-asincrono-service-bus.md` — nota de referencia a ADR 0020 (sin cambiar `Estado`).
+- `docs/architecture/architecture.md` (§4, §7, §9) — cola local `InMemoryMessageBus`, compose sin Redis/Mailhog.
+- `docs/operations/deployment.md` — fila "Local" y línea de Service Bus actualizadas.
+- `docs/development/current-phase.md` — cierre de Fase 1B (estado final `Completed` tras validación con Docker real, ver actualizaciones abajo) + Fase 1C en `Planned / Not Started`.
+- `README.md` — instrucciones locales, comandos y endpoints de health actualizados.
+- `apps/web/src/App.tsx` — `fetch('/health')` → `fetch('/health/live')` (el `/health` plano dejó de existir).
+- `apps/web/openapi.json`, `apps/web/src/api/client.ts` — regenerados vía `make contracts` para reflejar `/health/live`/`/health/ready`.
+
+**Resultado de pruebas:**
+- `uv sync` (nuevas deps `pymongo`, `azure-storage-blob`) → ok.
+- `make lint` → verde (ruff check/format, eslint, prettier).
+- `make typecheck` → verde (mypy, tsc -b).
+- `make test` → verde, 13 passed (backend, sin Docker) + 1 passed (frontend).
+- `make contracts` → ok, regenerado sin errores.
+- **`make dev-up` y `make test-integration` NO se ejecutaron** — el entorno de esta sesión no tiene Docker disponible (Docker Desktop no instalado/en ejecución; se verificó que no hay alternativa como Colima/OrbStack/Podman tampoco). Las pruebas marcadas `@pytest.mark.docker` (`test_mongo_client.py`, `test_blob_storage.py`, `test_health_ready_up.py`) quedaron escritas pero sin ejecutar. **Pendiente que el founder las corra en una máquina con Docker** antes de dar Fase 1B por cerrada en firme.
+- Bug encontrado y corregido durante la verificación: `check_storage_ready`/`AzureBlobStorage.ping()` no pasaba `retry_total=0` al SDK de Azure, por lo que el chequeo de `/health/ready` con Azurite caído tardaba ~87s (reintentos con backoff exponencial de azure-core) en vez de fallar rápido. Corregido antes de cerrar la sesión; el test `test_health_ready_down.py` ahora corre en <2s.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Cola local por defecto cambia de Redis (documentado previamente) a `InMemoryMessageBus` — **formalizada en ADR 0020**, no queda como ad-hoc.
+- Re-corte de "Fase 1B" en 1B (infra local) + 1C (automatización/dominio) — decisión operativa de secuenciación de sesiones, no arquitectónica; documentada en `current-phase.md`, no requiere ADR.
+- `/health` plano de Fase 1A se reemplaza por `/health/live` + `/health/ready` — consecuencia directa del alcance pedido para esta fase, no una decisión arquitectónica nueva.
+
+**Deuda técnica introducida:**
+- **`InMemoryMessageBus` no cruza procesos** — API y worker cada uno instancia la suya; no hay todavía un flujo real de publicación desde la API que el worker consuma. Se resuelve cuando exista el primer job asíncrono real (Fase 13), momento en que también se evalúa el adaptador de Service Bus.
+- **`make migrate` es un no-op** — el runner y la colección `_migrations` existen, pero no hay ninguna migración de dominio real todavía; se agregará junto con el primer índice/colección de negocio (Fase 1, `identity`).
+- **Mongo Community local sin autenticación** — aceptado por ser solo local, nunca expuesto; no aplica a producción (Atlas usa auth + IP allowlist).
+- **Sin CI ni pre-commit todavía** — diferido a Fase 1C junto con los 15 bounded contexts vacíos, para agrupar automatización de calidad y esqueleto de dominio en una sola sub-fase.
+
+---
+
+**Actualización — ronda 1 — 2026-07-17 (misma sesión, tras primera validación manual del founder con Docker):**
+
+El founder corrió `make test-integration` en macOS con Docker real. Resultado:
+
+- 5 pruebas Docker seleccionadas.
+- Mongo (`test_mongo_client.py`): **2/2 PASS**.
+- Blob Storage (`test_blob_storage.py`): **2/2 ERROR**.
+- `/health/ready` con dependencias arriba (`test_health_ready_up.py`): **FAIL** (503, no 200).
+
+**Causa confirmada:** `azure-storage-blob` 12.30.0 envía por defecto el header `x-ms-version: 2026-06-06` (el último valor de su lista interna `_SUPPORTED_API_VERSIONS`). Azurite 3.33.0 no soporta esa versión y responde `InvalidHeaderValue: The API version 2026-06-06 is not supported by Azurite`. El 503 de `/health/ready` es consecuencia directa del mismo error en `check_storage_ready`. Mongo no tuvo ningún problema — el error es específico del cliente de Blob Storage.
+
+**Decisión aprobada por el founder:** mantener `azure-storage-blob==12.30.0` y Azurite `3.33.0` (sin bajar versiones, sin `latest`, sin `--skipApiVersionCheck`), y fijar explícitamente la versión REST de la API vía un campo tipado — no dejarla en el default del SDK.
+
+**Fix implementado (verificado en el código fuente instalado de `azure-storage-blob`: `2025-01-05` está en `_SUPPORTED_API_VERSIONS`, confirmado compatible con Azurite 3.33.0 y con Azure Storage real):**
+- `service/procurawise/shared/config.py` — nuevo campo `Settings.storage_api_version: str`, default `"2025-01-05"`, override vía env var `AZURE_STORAGE_API_VERSION` (alias explícito, no el nombre por convención `STORAGE_API_VERSION`); `model_config` gana `populate_by_name=True` para que la construcción directa por nombre de campo (usada en tests/fixtures) siga funcionando junto con el alias.
+- `service/procurawise/shared/storage.py` — `AzureBlobStorage.__init__` acepta `api_version` y lo pasa explícitamente a `BlobServiceClient.from_connection_string(..., api_version=api_version)`; `from_settings()` lo puebla desde `settings.storage_api_version`. Confirmado en el código del SDK (`get_container_client`/`get_blob_client`) que los clientes derivados (`ContainerClient`, `BlobClient`) heredan automáticamente el mismo `api_version` del cliente de servicio — no hace falta pasarlo en cada punto.
+- `.env.example` — `AZURE_STORAGE_API_VERSION=2025-01-05` con comentario explicando por qué está fijada y que no debe quitarse solo porque el SDK tenga un default más nuevo.
+- `service/tests/unit/test_storage.py` (nuevo) — 4 tests: default `2025-01-05` propagado a `BlobServiceClient`/`ContainerClient`; override por env var; `BlobClient` derivado también hereda la versión; un `api_version` inválido produce `ValueError` sin la connection string ni `AccountKey` en el mensaje. Todos construyen el cliente offline (sin red), no requieren Docker.
+- `service/tests/unit/test_config.py` — 2 casos nuevos: default de `storage_api_version` y override vía `AZURE_STORAGE_API_VERSION`.
+
+**Resultado de pruebas tras el fix (sin Docker, mismo entorno sin Docker de esta sesión):**
+- `make lint` → verde.
+- `make typecheck` → verde.
+- `make test` → verde, **19 passed** (antes 13; +4 `test_storage.py` +2 `test_config.py`), 5 deselected (`docker`).
+- `make contracts` → ok.
+- **`make dev-up`/`make test-integration` NO se re-ejecutaron** — este entorno sigue sin Docker. El fix está verificado por lectura del código fuente del SDK instalado (confirmando que `2025-01-05` es una versión soportada y que se propaga a los clientes derivados) y por los 6 tests unitarios nuevos, pero **no está confirmado contra Azurite real todavía**.
+
+---
+
+**Actualización — ronda 2 (✅ éxito, cierre de fase) — 2026-07-17:**
+
+El founder re-corrió la validación completa en su Mac con Docker Desktop, con el fix de `AZURE_STORAGE_API_VERSION=2025-01-05` aplicado:
+
+- `docker version` / `docker compose version` → PASS.
+- `make dev-up` → PASS.
+- `make dev-status` / `docker compose ps` → Mongo y Azurite `healthy`.
+- `make test-integration` → **PASS, las 5 pruebas Docker pasaron**: roundtrip Mongo (2/2), roundtrip Blob Storage contra Azurite (2/2), `/health/ready` con dependencias disponibles → HTTP 200.
+- `make lint` → PASS. `make typecheck` → PASS.
+- `make test` → PASS, 19 passed, 5 pruebas Docker correctamente excluidas de la suite unitaria (`-m "not docker"`).
+- `make contracts` → PASS.
+- `make dev-down` → PASS; `docker compose ps` después, sin contenedores activos.
+
+**Confirmado: `AZURE_STORAGE_API_VERSION=2025-01-05` resolvió la incompatibilidad con Azurite 3.33.0.** No se hizo ningún cambio de código ni de dependencias en esta actualización — únicamente se registra el resultado de la validación y se cierra la fase.
+
+**Fase 1B queda formalmente Completed.** Todos los criterios de aceptación de la fase están cumplidos — ver `current-phase.md` para el detalle punto por punto. Las condiciones para iniciar Fase 1C están cumplidas, pero **Fase 1C sigue en estado Planned / Not Started: no se ha iniciado ningún trabajo de esa sub-fase.**
+
+**Deuda técnica registrada (no bloqueante para Fase 1C):**
+- `StarletteDeprecationWarning` al usar `fastapi.testclient.TestClient` con `httpx` ("install `httpx2` instead"). Solo aparece en la suite de tests, no afecta runtime ni falla ningún test. Revisar cuando FastAPI/Starlette estabilicen la migración a `httpx2`, o la próxima vez que se toquen las dependencias de testing del backend.
+
+**Instrucciones para la siguiente sesión / founder:**
+- Fase 1B está cerrada — no repetir su trabajo ni volver a pedir validación de Docker salvo que se toque de nuevo la infraestructura local.
+- Decidir si se comitea el resultado de Fase 1B antes de continuar (ver recomendación de commit más abajo en el reporte de esta sesión).
+- Ejecutar **Fase 1C (Automatización y esqueleto de dominio)**: pre-commit (ruff, mypy permisivo, eslint, prettier), CI (`lint.yml`, `test.yml`), y los 15 subpaquetes vacíos de bounded contexts en `service/procurawise/`. Ver alcance exacto en `docs/development/current-phase.md`.
+- No tocar todavía: lógica de dominio (`evaluations`, `vendors`, etc. — más allá de crear los subpaquetes vacíos en 1C), auth real, IA, pagos.
+- Ningún archivo de esta sesión fue comiteado a git — el founder debe confirmar explícitamente si quiere commitear el resultado de Fase 1B antes o junto con el trabajo de Fase 1C.
+
+---
+
 ### Sesión — 2026-07-17 — Fase 1A: Estructura y herramientas
 
 **Resumen:** Ejecutada la Fase 1A (planeada y aprobada en la misma sesión): estructura mínima ejecutable de `apps/web` (Vite+React+TS) y `service/` (FastAPI+worker sobre el paquete compartido `procurawise`), con lint/format/typecheck/tests funcionando vía `Makefile`. Docker, Mongo, CI, pre-commit y los 15 bounded contexts de dominio quedaron explícitamente diferidos a una sub-fase 1B nueva (ver `current-phase.md`).

@@ -1,0 +1,51 @@
+# Entorno local de ProcuraWise: MongoDB Community + Azurite (Blob Storage).
+#
+# Redis y Mailhog quedan fuera del perfil por defecto (ver ADR 0020) — la cola local
+# usa InMemoryMessageBus dentro del proceso, y el correo se difiere hasta que exista
+# notificación real. El emulador de Azure Service Bus queda documentado en
+# docs/operations/deployment.md como incorporación futura opcional, no un servicio
+# de este archivo todavía.
+#
+# Versionado: imágenes fijadas a una versión explícita, nunca `latest`. Se actualizan
+# manualmente en un commit dedicado (p. ej. al parchear un CVE conocido o alinear con
+# la versión de MongoDB soportada por Atlas) — ver docs/operations/deployment.md.
+
+services:
+  mongo:
+    image: mongo:7.0.14
+    container_name: procurawise-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - procurawise-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.33.0
+    container_name: procurawise-azurite
+    command: "azurite-blob --blobHost 0.0.0.0 --blobPort 10000"
+    ports:
+      - "10000:10000"
+    volumes:
+      - procurawise-azurite-data:/data
+    healthcheck:
+      # `nc`/`curl` aren't reliably present on this image's base; `node` is,
+      # since it's the runtime Azurite itself runs on - use it for a plain TCP check.
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "require('net').createConnection({port:10000,host:'127.0.0.1'}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  procurawise-mongo-data:
+  procurawise-azurite-data:

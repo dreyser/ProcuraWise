@@ -4,19 +4,28 @@ SaaS B2B multi-tenant que convierte una necesidad de compra de software/tecnolog
 
 ## Estado del proyecto
 
-Fase 1A (Estructura y herramientas) completada el 2026-07-17: `apps/web` (React+TS+Vite) y `service/` (FastAPI+worker sobre el paquete compartido `procurawise`) arrancan localmente y pasan `make test/lint/typecheck`. Sin Docker, sin Mongo, sin CI y sin lógica de dominio todavía — ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el alcance exacto y la próxima sub-fase (1B).
+Fase 1B (Infraestructura local de desarrollo), código completo el 2026-07-17: además de lo entregado en Fase 1A, `service/` ahora tiene MongoDB Community + Azurite vía Docker Compose, configuración tipada por ambiente, adaptadores de Mongo/Blob/cola (`InMemoryMessageBus` por defecto en local — ver [ADR 0020](docs/architecture/decisions/0020-composicion-servicios-desarrollo-local.md)), health checks (`/health/live`, `/health/ready`), logging estructurado y pruebas de integración. **Nota:** la parte que requiere Docker (`make dev-up`, `make test-integration`) todavía no se verificó — la sesión que la implementó no tenía Docker disponible; ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle exacto. Sin CI, sin pre-commit y sin los bounded contexts de dominio todavía — próxima sub-fase (1C).
 
 ## Cómo correr el proyecto localmente
 
-Requiere `uv` y `pnpm` instalados (ver `docs/development/current-phase.md` si faltan).
+Requiere `uv`, `pnpm` y Docker instalados (ver `docs/development/current-phase.md` si faltan).
 
 ```
-make dev         # levanta la API (http://localhost:8000) y el frontend (http://localhost:5173)
-make test        # unit + integration (backend) y tests de frontend
-make lint        # ruff + mypy + eslint + prettier
-make typecheck   # mypy + tsc
-make contracts   # regenera apps/web/src/api/client.ts desde el openapi.json de la API
+make dev-up          # levanta Mongo + Azurite vía Docker Compose (idempotente)
+make dev             # levanta la API (http://localhost:8000) y el frontend (http://localhost:5173)
+make test            # unit + integration sin Docker (backend) y tests de frontend
+make test-integration  # levanta dependencias y corre las pruebas que sí requieren Mongo/Azurite
+make lint            # ruff + mypy + eslint + prettier
+make typecheck       # mypy + tsc
+make contracts       # regenera apps/web/src/api/client.ts desde el openapi.json de la API
+make migrate         # aplica migraciones pendientes de Mongo (no-op hasta que exista la primera)
+make dev-down        # baja Mongo + Azurite (conserva los datos en volúmenes nombrados)
+make dev-status       # muestra el estado de los contenedores locales
+make dev-logs         # sigue los logs de Mongo + Azurite
+make dev-reset CONFIRM=yes  # baja los contenedores y BORRA los datos locales (irreversible)
 ```
+
+Con `make dev-up` arriba, `curl http://localhost:8000/health/ready` debe responder 200 con `{"status":"ok","checks":{"mongodb":true,"storage":true}}`.
 
 ## Organización del repositorio
 
@@ -31,11 +40,12 @@ docs/
   architecture/    # arquitectura y ADRs (decisiones que no se reabren sin ADR nuevo)
   security/        # modelo de amenazas
   operations/      # despliegue e infraestructura
-Makefile           # make dev/test/lint/typecheck/contracts
-CLAUDE.md          # reglas operativas para trabajar en este repositorio
+docker-compose.yml  # Mongo + Azurite locales (make dev-up)
+Makefile            # make dev/test/lint/typecheck/contracts/migrate/dev-up/dev-down/...
+CLAUDE.md           # reglas operativas para trabajar en este repositorio
 ```
 
-Infraestructura local (Docker Compose para Mongo/Azurite/Redis/Mailhog), CI y los subpaquetes de dominio (`identity`, `evaluations`, ...) llegan en la Fase 1B, según lo descrito en [`docs/architecture/architecture.md`](docs/architecture/architecture.md).
+CI, pre-commit y los subpaquetes de dominio (`identity`, `evaluations`, ...) llegan en la Fase 1C, según lo descrito en [`docs/architecture/architecture.md`](docs/architecture/architecture.md) y [`docs/development/current-phase.md`](docs/development/current-phase.md).
 
 ## Por dónde empezar
 

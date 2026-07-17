@@ -4,6 +4,8 @@
 **Fecha:** 2026-07-16
 **Origen:** Sesión de planeación arquitectónica
 
+> **Nota (2026-07-17):** el backend de cola por defecto en desarrollo **local** cambió de Redis a `InMemoryMessageBus` — ver [ADR 0020](0020-composicion-servicios-desarrollo-local.md). La decisión de Azure Service Bus para staging/producción descrita abajo no cambia.
+
 ## Contexto
 
 Operaciones largas o costosas (generación de requerimientos por IA, evaluación asistida por IA, generación de reportes, imports de Excel/CSV) no deben bloquear la API síncrona ni degradar la experiencia de otros usuarios concurrentes.
