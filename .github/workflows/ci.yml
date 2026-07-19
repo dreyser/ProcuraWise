@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install uv + Python 3.13
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "service/uv.lock"
+
+      - name: Install dependencies (locked)
+        working-directory: service
+        run: uv sync --locked
+
+      - name: Ruff + mypy
+        run: make lint-backend typecheck-backend
+
+      - name: Unit tests (sin Docker, con cobertura)
+        run: make test-backend
+
+      - name: Subir reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-coverage
+          path: service/coverage.xml
+          retention-days: 5
+          if-no-files-found: ignore
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies (frozen lockfile)
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint + Prettier + typecheck
+        run: make lint-frontend typecheck-frontend
+
+      - name: Unit tests
+        run: make test-frontend
+
+      - name: Build de producción
+        working-directory: apps/web
+        run: pnpm build
+
+  contracts:
+    name: contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install uv + Python 3.13
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "service/uv.lock"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install backend dependencies (locked)
+        working-directory: service
+        run: uv sync --locked
+
+      - name: Install frontend dependencies (frozen lockfile)
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerar contratos (openapi.json + orval)
+        run: make contracts
+
+      - name: Verificar que el cliente generado no esté desactualizado
+        run: |
+          if ! git diff --exit-code -- apps/web/src/api/client.ts; then
+            echo "::error::apps/web/src/api/client.ts está desactualizado respecto al backend."
+            echo "::error::Corre 'make contracts' localmente y comitea el resultado (ver ADR 0007)."
+            exit 1
+          fi

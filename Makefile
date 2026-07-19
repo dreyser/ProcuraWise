@@ -1,4 +1,4 @@
-.PHONY: dev test lint typecheck contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration
+.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration
 
 dev:
 	@trap 'kill 0' EXIT INT TERM; \
@@ -6,16 +6,28 @@ dev:
 	(cd apps/web && pnpm dev) & \
 	wait
 
-test:
+test: test-backend test-frontend
+
+test-backend:
 	cd service && uv run pytest -m "not docker"
+
+test-frontend:
 	cd apps/web && pnpm test
 
-lint:
+lint: lint-backend lint-frontend
+
+lint-backend:
 	cd service && uv run ruff check . && uv run ruff format --check .
+
+lint-frontend:
 	cd apps/web && pnpm lint && pnpm format
 
-typecheck:
+typecheck: typecheck-backend typecheck-frontend
+
+typecheck-backend:
 	cd service && uv run mypy procurawise
+
+typecheck-frontend:
 	cd apps/web && pnpm typecheck
 
 contracts:

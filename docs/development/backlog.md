@@ -12,7 +12,7 @@ Estado por fase se actualiza en [`docs/development/current-phase.md`](current-ph
 
 | Fase | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
 |---|---|---|---|---|---|
-| 0 | Bootstrap: docker-compose (mongo+azurite+redis+mailhog), `pyproject.toml`+uv, FastAPI `/health`, React hello-world, pre-commit, CI lint+test skeleton | P0 | — | `docker compose up` levanta todo; CI verde en PR vacío; `/health` responde 200 | Not Started |
+| 0 | Bootstrap: docker-compose (mongo+azurite+redis+mailhog), `pyproject.toml`+uv, FastAPI `/health`, React hello-world, pre-commit, CI lint+test skeleton | P0 | — | `docker compose up` levanta todo; CI verde en PR vacío; `/health` responde 200 | ✅ Completed (2026-07-18, ejecutada como 3 sesiones — 1A/1B/1C, ver `current-phase.md`; pre-commit se movió a la Fase 1 `identity`; "CI verde en PR vacío" verificado localmente, verificación en GitHub real pendiente del founder) |
 | 1 | `identity`: Tenant/User/Membership + `TenantCollection` + middleware que extrae `tenant_id` del JWT | P0 | 0 | Crear tenant+usuario vía API; test negativo: tenant A no lee datos de tenant B | Not Started |
 | 2 | Auth local (email+password) + OIDC Microsoft/Google (authlib) + JWT propio + login/logout en frontend. Excluye MFA | P0 | 1 | Login exitoso ambos flujos; JWT contiene `tenant_id` correcto; sesión expira | Not Started |
 

@@ -54,7 +54,8 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 ## Controles existentes vs. pendientes
 
 - **Existentes (diseñados, a implementar desde Fase 1):** aislamiento estructural de tenant, router disjunto de proveedores, snapshot inmutable, `Agreement` tipado.
-- **Pendientes (Fase 26 — Hardening):** rate limiting, CSRF, headers de seguridad, escaneo de secretos/dependencias en CI, WCAG 2.1 AA, pruebas de performance, backup/restore verificado.
+- **Baseline de seguridad de pipeline (implementado desde Fase 1C, 2026-07-18):** secret scanning en cada PR/push a `main` vía `gitleaks` (`.github/workflows/security.yml`, job `secret-scan`, **bloqueante**), dependency vulnerability scanning vía `pip-audit` (Python) y `pnpm audit` (JS/pnpm) (jobs `python-deps`/`frontend-deps`, **informativo por ahora** — el repo es privado sin GitHub Advanced Security, y un árbol de dependencias recién creado tiene CVEs transitivos sin fix disponible que bloquearían PRs sin motivo real; política de bloqueo se revisita cuando haya bandwidth para triage regular), `Dependabot` para `pip`/`npm`/`github-actions`. **CodeQL no implementado** — no disponible gratis en un repo privado sin GHAS (requeriría hacer público el repo o adquirir GitHub Advanced Security); queda documentado aquí como mejora disponible, no como pendiente de una fase futura concreta.
+- **Pendientes (Fase 26 — Hardening):** rate limiting, CSRF, headers de seguridad, promover dependency scanning de informativo a bloqueante (una vez exista bandwidth de triage regular), CodeQL si cambia la visibilidad del repo o se adquiere GHAS, SBOM, WCAG 2.1 AA, pruebas de performance, backup/restore verificado.
 - **Pendientes de gate externo:** aprobación legal de web-grounding antes de activar `FoundryWebSearchProvider` (ver ADR 0011).
 
 ## Riesgos aceptados temporalmente

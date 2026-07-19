@@ -1,0 +1,14 @@
+title = "ProcuraWise — configuración de gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Atajos públicos de emuladores de desarrollo local, documentados como no-secretos por sus proveedores — no son credenciales reales."
+regexes = [
+  # Atajo público documentado por el Azure SDK / Azurite para el emulador de Blob Storage local.
+  '''UseDevelopmentStorage=true''',
+  # Cuenta y clave por defecto, bien conocidas y públicas, del emulador Azurite (mismo valor
+  # para cualquier instalación de Azurite en el mundo — no es una credencial de este proyecto).
+  '''Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==''',
+]

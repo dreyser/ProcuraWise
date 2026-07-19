@@ -7,7 +7,7 @@ Este documento describe el diseño de despliegue aprobado. **Ninguna infraestruc
 | Ambiente | Infraestructura | Cuándo existe | Propósito |
 |---|---|---|---|
 | Local | Docker Compose: Mongo, Azurite. Cola: `InMemoryMessageBus` en proceso (ver [ADR 0020](../architecture/decisions/0020-composicion-servicios-desarrollo-local.md)) | Desde Fase 1B | Desarrollo con datos sintéticos, sin Azure real |
-| Development | CI (GitHub Actions), recursos económicos | Desde que exista `.github/workflows/` (Fase 0 en adelante para lint/test; despliegue real Fase 27) | Validación automatizada en cada PR |
+| Development | CI (GitHub Actions), recursos económicos | Desde Fase 1C (`.github/workflows/`; despliegue real Fase 27) | Validación automatizada en cada PR |
 | Staging | Azure real, similar a producción | Desde Fase 27 | E2E, UAT antes del piloto |
 | Production | Azure Container Apps, aprobaciones, backups, alertas, mínimo privilegio | Desde Fase 27-28 | Piloto (Fase 28) y operación real |
 
@@ -22,12 +22,12 @@ Este documento describe el diseño de despliegue aprobado. **Ninguna infraestruc
 - **Azure Communication Services**: notificaciones reales (desde Fase 24).
 - **Azure OpenAI / Foundry**: `AIProvider` (desde Fase 13); Foundry Web Search desactivado por flag hasta aprobación legal (ver [ADR 0011](../architecture/decisions/0011-research-provider-gate-legal-foundry.md)).
 
-## Pipeline CI/CD (diseño aprobado)
+## Pipeline CI/CD
 
-- **IaC**: Bicep (ver [ADR 0004](../architecture/decisions/0004-bicep-vs-terraform.md)), carpetas `/infra/{bicep,params,scripts}`.
-- **CI/CD**: GitHub Actions con OIDC federado a Azure — sin secretos de larga vida en el repositorio.
-- **Pipelines objetivo**: `lint.yml`, `test.yml` (desde Fase 0, contra smoke test de `/health`), `deploy-staging.yml`, `deploy-prod.yml` (desde Fase 27).
-- **Registro de imágenes**: Azure Container Registry, imágenes firmadas y escaneadas antes de desplegar.
+- **IaC**: Bicep (ver [ADR 0004](../architecture/decisions/0004-bicep-vs-terraform.md)), carpetas `/infra/{bicep,params,scripts}` — a partir de Fase 27.
+- **CI/CD de despliegue** (diseño aprobado, no implementado todavía): GitHub Actions con OIDC federado a Azure — sin secretos de larga vida en el repositorio. `deploy-staging.yml`/`deploy-prod.yml` llegan en Fase 27.
+- **CI/CD de calidad e integración** (implementado desde Fase 1C, 2026-07-18): `.github/workflows/ci.yml` (lint, typecheck, tests unitarios backend/frontend, build de producción del frontend, verificación de que el contrato OpenAPI/cliente TS generado no está desactualizado — ver [ADR 0007](../architecture/decisions/0007-contratos-openapi-orval.md)), `.github/workflows/integration.yml` (pruebas contra Mongo+Azurite reales), `.github/workflows/security.yml` (secret scanning con `gitleaks`, dependency scanning con `pip-audit`/`pnpm audit`). Reemplaza el boceto original `lint.yml`/`test.yml` — se consolidó en `ci.yml` con jobs separados por responsabilidad (`backend`/`frontend`/`contracts`) para no duplicar checkout/setup entre workflows disparados por el mismo evento, y se separó `integration.yml` para no acoplar la señal rápida de lint/typecheck al arranque de contenedores Docker. Ningún job usa secretos; todos corren con `permissions: contents: read`. Detalle completo del diseño y de las Actions pinneadas por SHA en `docs/development/session-handoff.md` (entrada de Fase 1C).
+- **Registro de imágenes**: Azure Container Registry, imágenes firmadas y escaneadas antes de desplegar — a partir de Fase 27.
 
 ## Gestión de secretos
 

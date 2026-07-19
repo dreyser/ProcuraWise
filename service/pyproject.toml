@@ -15,6 +15,7 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
     "httpx>=0.27",
     "ruff>=0.7",
     "mypy>=1.13",
@@ -30,9 +31,13 @@ packages = ["procurawise"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+addopts = "--cov=procurawise --cov-report=term-missing --cov-report=xml"
 markers = [
     "docker: requires local Docker services (mongo/azurite) via `make dev-up`",
 ]
+
+[tool.coverage.run]
+source = ["procurawise"]
 
 [tool.ruff]
 line-length = 100

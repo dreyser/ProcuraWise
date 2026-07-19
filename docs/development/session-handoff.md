@@ -32,6 +32,60 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-18 — Fase 1C: Integración continua y seguridad de pipeline (cierre de Fase 1 — Fundación técnica)
+
+**✅ Fase 1C — Completed (redefinida).** Planeada en Plan Mode (2 preguntas bloqueantes resueltas vía `AskUserQuestion`: alcance acotado a CI/CD + seguridad de pipeline, sin pre-commit ni bounded contexts; repo asumido privado sin GitHub Advanced Security) y aprobada por el founder. Implementada y verificada localmente en la misma sesión. **Fase 1 — Fundación técnica queda formalmente cerrada** a nivel de código local; falta únicamente que el founder autorice el primer push para verificar los workflows contra GitHub real.
+
+**Resumen:** Se agregaron 3 workflows de GitHub Actions (`ci.yml`, `integration.yml`, `security.yml`) que reutilizan exactamente los comandos `make`/`pnpm` ya existentes — para eso el `Makefile` se descompuso en targets granulares por lado (backend/frontend) sin cambiar el comportamiento de los targets compuestos. Se agregó `pytest-cov` (cobertura medida y mostrada, sin umbral global). Seguridad de pipeline: `gitleaks` (secret scanning, bloqueante) corriendo como binario descargado y verificado por checksum (no la Action wrapper, por ambigüedad de licenciamiento en repos privados), `pip-audit`+`pnpm audit` (dependency scanning, informativo por ahora) y `Dependabot` para `pip`/`npm`/`github-actions`. Todas las Actions de terceros quedaron pinneadas por SHA completo, obtenido y verificado contra la API de GitHub (no inventado). Nada de esto se comiteó ni se hizo push — queda en el working tree a criterio del founder.
+
+**Archivos tocados:**
+- `.github/workflows/ci.yml` (nuevo) — jobs `backend` (ruff, mypy, `pytest -m "not docker"` con cobertura), `frontend` (ESLint, Prettier, `tsc`, Vitest, `vite build`), `contracts` (regenera y verifica que `apps/web/src/api/client.ts` no esté desactualizado, ver ADR 0007).
+- `.github/workflows/integration.yml` (nuevo) — `make test-integration` contra Mongo+Azurite reales; diagnóstico de Docker solo si falla; `make dev-down` con `if: always()`.
+- `.github/workflows/security.yml` (nuevo) — `secret-scan` (gitleaks, bloqueante), `python-deps` (pip-audit, informativo), `frontend-deps` (pnpm audit, informativo); trigger `schedule` semanal además de PR/push/`workflow_dispatch`.
+- `.gitleaks.toml` (nuevo) — allowlist para `UseDevelopmentStorage=true` y la clave pública conocida de Azurite (verificado que gitleaks no los marca ni con ni sin el allowlist — queda como protección documentada a futuro).
+- `.github/dependabot.yml` (nuevo) — ecosistemas `pip` (`/service`), `npm` (`/apps/web`), `github-actions` (`/`), semanal, agrupando actualizaciones menores/patch.
+- `Makefile` — nuevos targets granulares `lint-backend`/`lint-frontend`, `typecheck-backend`/`typecheck-frontend`, `test-backend`/`test-frontend`; `lint`/`typecheck`/`test` ahora los invocan en secuencia (comportamiento idéntico, verificado).
+- `service/pyproject.toml` — `pytest-cov>=6.0` en `dependency-groups.dev`; `addopts` con `--cov=procurawise --cov-report=term-missing --cov-report=xml`; `[tool.coverage.run] source = ["procurawise"]`.
+- `service/uv.lock` — regenerado vía `uv sync` (agrega `pytest-cov` y `coverage`).
+- `apps/web/package.json` — `packageManager: "pnpm@9.15.9"` (coincide con `lockfileVersion: '9.0'` de `pnpm-lock.yaml`), `engines.node: ">=22 <23"` (confirmado `node -v` → v22.11.0 en esta sesión). **Nota:** el `pnpm` de corepack en esta máquina falló (error de verificación de firma al intentar instalar 9.x, error de import dinámico con la 11.x cacheada) — se usó `npx pnpm@9.15.9` como workaround para validar localmente; el founder debería revisar por qué corepack está roto en su entorno, aunque no bloquea el CI (que instala pnpm de forma independiente vía `pnpm/action-setup`).
+- `.gitignore` — agrega `.coverage`, `coverage.xml`.
+- `README.md` — nueva sección "Integración continua"; "Estado del proyecto" actualizado a Fase 1 completa; nota de reubicación de pre-commit/bounded contexts a `identity`.
+- `docs/development/current-phase.md` — Fase 1 marcada `✅ Completed`; Fase 1C redefinida y cerrada; criterios de aceptación/pruebas actualizados con los resultados de esta sesión; nueva sección "Cierre de Fase 1C" reemplaza "Condiciones para iniciar Fase 1C".
+- `docs/development/session-handoff.md` (este archivo) — nueva entrada.
+- `docs/security/threat-model.md`, `docs/operations/deployment.md`, `docs/development/backlog.md` — actualizados, ver sus propias entradas de esta sesión más abajo en cada archivo si aplica (o el resumen en `current-phase.md`).
+
+**Resultado de pruebas:**
+- `make lint-backend` → verde (ruff check + format). `make typecheck-backend` → verde (mypy, 16 archivos).
+- `make lint-frontend` (vía `npx pnpm@9.15.9`) → verde (ESLint + Prettier). `make typecheck-frontend` → verde (`tsc -b`).
+- `make test-backend` → verde, **19 passed, 5 deselected**, cobertura 64% mostrada en log + `coverage.xml` generado.
+- `make test-frontend` → verde, 1 passed. `pnpm build` → verde, build de producción generado sin problemas de binding nativo de Rolldown (Vite resolvió a 6.4.3, esbuild-based).
+- `make contracts` → verde, sin diff en `apps/web/src/api/client.ts` (ya estaba al día).
+- `make test-integration` (Docker real) → verde, **5/5 pruebas Docker pasaron** (Mongo 2/2, Blob 2/2, `/health/ready` arriba). `make dev-down` → verde, sin contenedores activos después.
+- `actionlint .github/workflows/*.yml` → sin errores.
+- `gitleaks detect --source . --config .gitleaks.toml --redact` → **sin hallazgos** (ídem sin el allowlist — las reglas default no marcan los valores conocidos de Azurite).
+- `pip-audit` (vía `uv export` + `uvx pip-audit@2.10.1`) → **sin vulnerabilidades conocidas**.
+- `pnpm audit` → **3 hallazgos** (1 high, 2 moderate), todos transitivos dentro de la cadena de `orval` (herramienta de generación de código, no código de producción) sin fix disponible todavía — confirma en la práctica que la política "informativo, no bloqueante" definida para esta fase es la correcta.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna decisión arquitectónica — elección de herramientas de CI/seguridad de pipeline, no de arquitectura (CLAUDE.md §3 solo exige ADR para monolito/DB/hosting/comunicación). No requiere ADR.
+- Redefinición del alcance de Fase 1C (solo CI/CD + seguridad de pipeline, sin pre-commit ni bounded contexts) — decisión operativa de secuenciación, resuelta vía `AskUserQuestion` con el founder antes de planear, documentada en `current-phase.md`.
+- Repo asumido privado sin GitHub Advanced Security (no se pudo verificar con `gh` CLI, no instalado en el entorno) — decisión de diseño de seguridad conservadora, resuelta vía `AskUserQuestion`, revisitar si cambia la visibilidad del repo o se adquiere GHAS.
+- `gitleaks` como binario descargado directo (con verificación de checksum SHA-256) en vez de la Action wrapper `gitleaks/gitleaks-action`, para evitar cualquier ambigüedad de licenciamiento de esa Action en repos privados.
+
+**Deuda técnica introducida:**
+- **`security / python-deps` y `security / frontend-deps` son informativos, no bloqueantes** — aceptado deliberadamente para esta fase (ver `threat-model.md`); revisar política de bloqueo en Fase 26 (Hardening), cuando haya bandwidth para triage regular de CVEs transitivos.
+- **CodeQL no implementado** — repo privado sin GHAS no lo soporta gratis; documentado en `threat-model.md` como mejora disponible si el repo se hace público o se adquiere GHAS.
+- **`corepack` roto en la máquina de esta sesión** para instalar pnpm 9.x/11.x (error de firma / import dinámico) — no bloqueó el trabajo (se usó `npx pnpm@9.15.9`), pero el founder debería investigarlo si le ocurre lo mismo en su entorno habitual de desarrollo.
+- **Verificación contra GitHub real pendiente** — todo lo de esta sesión está validado localmente (`actionlint`, `gitleaks`, `pip-audit`, `pnpm audit`, todos los `make` relevantes) pero no se ha hecho push ni abierto un PR real; eso es intencional (acción con efectos externos que requiere autorización explícita del founder, fuera del alcance que esta sesión toma por sí sola) y queda como el paso inmediato de la próxima sesión/acción del founder.
+
+**Instrucciones para la siguiente sesión / founder:**
+- Revisar el diff completo de esta sesión (`git status`/`git diff`), decidir si comitea y hace push.
+- Al hacer push, confirmar en GitHub que los 5 checks bloqueantes (`ci / backend`, `ci / frontend`, `ci / contracts`, `integration / integration`, `security / secret-scan`) quedan en verde en un PR real, y aplicar manualmente la branch protection recomendada en el plan de Fase 1C.
+- Ejecutar la sub-fase **`identity`**: `Tenant`/`User`/`Membership` + `TenantCollection` + middleware de `tenant_id`, incluyendo al inicio pre-commit hooks locales y los 15 subpaquetes vacíos de bounded contexts (movidos aquí desde la Fase 1C original). No repetir el trabajo de Fase 1A/1B/1C.
+- No tocar todavía: lógica de dominio más allá de los subpaquetes vacíos, auth real, IA, pagos, despliegue a Azure.
+
+---
+
 ### Sesión — 2026-07-17 — Fase 1B: Infraestructura local de desarrollo
 
 **✅ Fase 1B — Completed.** Código completo y verificado, incluyendo validación con Docker real del founder en dos rondas: la primera encontró un defecto real (incompatibilidad de versión de API de Blob Storage), la segunda —tras el fix— confirmó las 5 pruebas Docker en verde. Ver "Actualización — ronda 1" y "Actualización — ronda 2 (✅ éxito, cierre de fase)" al final de esta entrada.

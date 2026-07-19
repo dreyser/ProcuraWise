@@ -4,7 +4,9 @@ SaaS B2B multi-tenant que convierte una necesidad de compra de software/tecnolog
 
 ## Estado del proyecto
 
-Fase 1B (Infraestructura local de desarrollo), código completo el 2026-07-17: además de lo entregado en Fase 1A, `service/` ahora tiene MongoDB Community + Azurite vía Docker Compose, configuración tipada por ambiente, adaptadores de Mongo/Blob/cola (`InMemoryMessageBus` por defecto en local — ver [ADR 0020](docs/architecture/decisions/0020-composicion-servicios-desarrollo-local.md)), health checks (`/health/live`, `/health/ready`), logging estructurado y pruebas de integración. **Nota:** la parte que requiere Docker (`make dev-up`, `make test-integration`) todavía no se verificó — la sesión que la implementó no tenía Docker disponible; ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle exacto. Sin CI, sin pre-commit y sin los bounded contexts de dominio todavía — próxima sub-fase (1C).
+**Fase 1 — Fundación técnica: completa.** Fase 1A (estructura y herramientas) y Fase 1B (infraestructura local: MongoDB Community + Azurite vía Docker Compose, configuración tipada por ambiente, adaptadores de Mongo/Blob/cola — `InMemoryMessageBus` por defecto en local, ver [ADR 0020](docs/architecture/decisions/0020-composicion-servicios-desarrollo-local.md) —, health checks, logging estructurado y pruebas de integración) están verificadas con Docker real. Fase 1C (Integración continua y seguridad de pipeline) agrega CI en GitHub Actions, escaneo de secretos/dependencias y cierra formalmente la Fundación técnica — ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle.
+
+La siguiente sub-fase (`identity`) introduce el primer bounded context de dominio real y, junto con él, pre-commit hooks locales.
 
 ## Cómo correr el proyecto localmente
 
@@ -27,6 +29,16 @@ make dev-reset CONFIRM=yes  # baja los contenedores y BORRA los datos locales (i
 
 Con `make dev-up` arriba, `curl http://localhost:8000/health/ready` debe responder 200 con `{"status":"ok","checks":{"mongodb":true,"storage":true}}`.
 
+## Integración continua
+
+Cada pull request contra `main` (y cada push a `main`) dispara 3 workflows en `.github/workflows/`, todos con permisos mínimos (`contents: read`) y sin secretos:
+
+- **`ci.yml`** — jobs `backend` (ruff, mypy, `pytest -m "not docker"` con cobertura), `frontend` (ESLint, Prettier, `tsc`, Vitest, build de producción) y `contracts` (regenera `openapi.json`/`apps/web/src/api/client.ts` y falla si queda desactualizado respecto a lo comiteado — ver [ADR 0007](docs/architecture/decisions/0007-contratos-openapi-orval.md)).
+- **`integration.yml`** — levanta Mongo + Azurite reales vía `make test-integration` y corre las 5 pruebas marcadas `docker`; los contenedores se detienen siempre, incluso si las pruebas fallan.
+- **`security.yml`** — `gitleaks` (secret scanning, bloqueante) + `pip-audit`/`pnpm audit` (dependencias, informativo por ahora — ver [`docs/security/threat-model.md`](docs/security/threat-model.md)).
+
+Todos reutilizan exactamente los mismos comandos `make`/`pnpm` que se corren en local — no hay lógica duplicada entre CI y desarrollo local. `Dependabot` (`.github/dependabot.yml`) abre PRs semanales de actualización para `pip`, `npm` y las propias GitHub Actions (pinneadas por SHA completo).
+
 ## Organización del repositorio
 
 ```
@@ -42,10 +54,11 @@ docs/
   operations/      # despliegue e infraestructura
 docker-compose.yml  # Mongo + Azurite locales (make dev-up)
 Makefile            # make dev/test/lint/typecheck/contracts/migrate/dev-up/dev-down/...
+.github/            # workflows de CI (ci.yml, integration.yml, security.yml) + Dependabot
 CLAUDE.md           # reglas operativas para trabajar en este repositorio
 ```
 
-CI, pre-commit y los subpaquetes de dominio (`identity`, `evaluations`, ...) llegan en la Fase 1C, según lo descrito en [`docs/architecture/architecture.md`](docs/architecture/architecture.md) y [`docs/development/current-phase.md`](docs/development/current-phase.md).
+Pre-commit hooks locales y los subpaquetes de dominio (`identity`, `evaluations`, ...) se introducen junto con el primer código de negocio real, en la sub-fase `identity` — ver [`docs/development/current-phase.md`](docs/development/current-phase.md).
 
 ## Por dónde empezar
 
