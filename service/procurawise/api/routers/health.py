@@ -11,6 +11,12 @@ def live() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@router.get("/version")
+def version() -> dict[str, str]:
+    """REMOVE-ME: intentional new route to test the ci/contracts drift gate, added without regenerating apps/web/src/api/client.ts."""
+    return {"version": "test"}
+
+
 @router.get("/ready")
 def ready(response: Response) -> dict[str, object]:
     settings = get_settings()

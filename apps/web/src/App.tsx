@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 type HealthStatus = 'checking' | 'ok' | 'error'
 
 function App() {
+  const unusedTestVariable = "REMOVE-ME: intentional eslint/prettier violation";
   const [status, setStatus] = useState<HealthStatus>('checking')
 
   useEffect(() => {

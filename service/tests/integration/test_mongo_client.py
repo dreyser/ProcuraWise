@@ -8,7 +8,8 @@ pytestmark = pytest.mark.docker
 
 def test_ping_mongo_succeeds_against_live_mongo(mongo_test_settings: Settings) -> None:
     client = get_mongo_client(mongo_test_settings)
-    assert ping_mongo(client) is True
+    # REMOVE-ME: intentional false assertion to test the integration/integration gate.
+    assert ping_mongo(client) is False
 
 
 def test_write_then_read_a_technical_document(mongo_test_db) -> None:

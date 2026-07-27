@@ -44,3 +44,5 @@ class Settings(BaseSettings):
 
 def get_settings() -> Settings:
     return Settings()
+
+import os  # REMOVE-ME: intentional unused import, only for testing the ci/backend lint gate
