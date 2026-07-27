@@ -32,6 +32,40 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-27 — VS-2A: fix de prueba no determinista detectada por el workflow Integration del PR
+
+**✅ Corrección puntual, sin tocar código de producción.** Alcance acotado por el founder: corregir exclusivamente el fallo no determinista que el workflow `Integration` de GitHub Actions detectó en el PR de VS-2A (commit `93c4e43`, ya comiteado y pusheado por el founder entre sesiones), sin iniciar VS-2B ni comitear.
+
+**Fallo encontrado (exclusivo de CI):** `tests/security/test_tenant_isolation.py::test_vendor_contact_me_resolves_vendor_org_id` falló con `KeyError` en el workflow `Integration` del PR — no reproducía siempre en local porque depende del orden relativo de dos UUID aleatorios generados en cada corrida.
+
+**Causa raíz:** el helper `_tenant_ids()` etiqueta "tenant_a"/"tenant_b" según el **orden alfabético de sus UUID aleatorios** (`sorted(tenants)`), una etiqueta sin significado semántico — no corresponde a cuál tenant es `dev-tenant-a` vs `dev-tenant-b` en `dev_seed.py`. La prueba `test_vendor_contact_me_resolves_vendor_org_id` asumía incorrectamente que "tenant_a" (el que ordena primero por UUID) es siempre el tenant que tiene la membership `vendor_contact` — pero esa membership solo existe en el tenant semántico `dev-tenant-a` del seed, cuyo UUID puede ordenar antes o después del de `dev-tenant-b` en cada corrida. Cuando `dev-tenant-b` resultaba ser el que ordenaba primero, `seeded_actors[(tenant_a, "vendor_contact")]` no existía → `KeyError`. Se revisaron los otros 3 usos de `_tenant_ids()` (`test_owner_me_resolves_own_tenant_and_role`, `test_dev_actor_from_tenant_a_and_tenant_b_resolve_to_different_tenants`, `test_dev_identity_disabled_outside_development`): todos seleccionan el rol `evaluation_owner`, presente en **ambos** tenants del seed, por lo que no tienen la misma falla — no requirieron cambios.
+
+**Corrección aplicada:** nuevo helper `_unique_actor_by_role(seeded_actors, role)` en `test_tenant_isolation.py` que busca directamente, por rol, la(s) entrada(s) de `seeded_actors` y afirma que existe exactamente una — falla ruidosamente (con `assert` explícito) en vez de escoger un actor arbitrario si el seed cambiara. `test_vendor_contact_me_resolves_vendor_org_id` ahora usa este helper para resolver `(tenant_id, membership_id)` del `vendor_contact` sin depender de orden de UUID, orden de inserción de diccionario, ni orden de Mongo. Se aprovechó para además afirmar `body["tenant_id"] == vendor_tenant_id` (aserción nueva, no se debilitó ninguna existente). No se fijaron UUID estáticos ni se tocó `dev_seed.py` ni ningún código de producción — la evidencia apuntaba únicamente a un defecto en la prueba.
+
+**Archivos tocados:**
+- `service/tests/security/test_tenant_isolation.py` — nuevo helper `_unique_actor_by_role`, docstring aclaratorio en `_tenant_ids()`, `test_vendor_contact_me_resolves_vendor_org_id` reescrita para seleccionar por rol.
+- `docs/development/session-handoff.md` (este archivo) — nueva entrada.
+- `docs/development/current-phase.md` — nota agregada sobre el hallazgo real de CI (ver su propia entrada).
+
+**Resultado de pruebas:**
+- `make lint` → verde (ruff check + format tras `ruff format .`; ESLint/Prettier frontend).
+- `make typecheck` → verde (mypy 0 errores; `tsc -b` sin errores).
+- `make test` → verde, 27 passed backend + 1 passed frontend.
+- `make test-integration` → verde, **32 passed**, 0 fallos (Docker disponible en esta sesión).
+- Prueba afectada corrida 5 veces seguidas para demostrar ausencia de flakiness: `cd service && for i in 1 2 3 4 5; do uv run pytest tests/security/test_tenant_isolation.py -m docker -x -q; done` → **5/5 corridas, 8/8 casos cada una, todas en verde** (`8 passed` en cada corrida).
+- `make contracts` → regenerado sin diff (el working tree ya reflejaba el commit `93c4e43`; `git diff --stat` solo muestra el archivo de test tocado en esta sesión).
+- `git diff --check` → limpio (exit 0). El hallazgo de whitespace en `client.ts` reportado en la sesión anterior ya forma parte del commit `93c4e43` (baseline actual), no aparece como diff nuevo en esta sesión.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Este fix queda sin comitear (instrucción explícita del founder) — decide si lo comitea antes o junto con el siguiente trabajo.
+- Siguiente paso de código: **VS-2B — Flujo backend del vertical slice**, en una sesión separada.
+- No tocar: frontend (VS-2C), auth productiva (`AUTH-PROD`).
+- La advertencia `StarletteDeprecationWarning` (httpx/Starlette) sigue fuera de alcance, no se tocó.
+
 ### Sesión — 2026-07-27 — VS-2A: corrección de bug real encontrado en validación con Docker
 
 **✅ VS-2A queda verificado con Docker real tras corregir un bug encontrado en la primera corrida de `make test-integration`.** Sesión de alcance estrictamente acotado por el founder: corregir exclusivamente el fallo observado, sin iniciar VS-2B ni hacer commit.

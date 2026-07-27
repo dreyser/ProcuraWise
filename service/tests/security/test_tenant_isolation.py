@@ -30,9 +30,34 @@ def client(mongo_test_settings: Settings, seeded_actors):
 
 
 def _tenant_ids(seeded_actors: dict[tuple[str, str], str]) -> tuple[str, str]:
+    """Returns two arbitrary, distinct tenant ids from the seed. The labels
+    "tenant_a"/"tenant_b" only mean "some tenant" / "some other tenant" -
+    tenant/membership ids are random UUIDs, so this sorted order carries no
+    semantic meaning (it is not guaranteed to match `dev_seed.py`'s own
+    "dev-tenant-a"/"dev-tenant-b" slugs). Only use this where a test needs
+    two distinct tenants but doesn't care which one is which - never to infer
+    that a specific role lives in "the first" tenant (see
+    `_unique_actor_by_role` for that)."""
     tenants = {tenant_id for tenant_id, _role in seeded_actors}
     tenant_a, tenant_b = sorted(tenants)
     return tenant_a, tenant_b
+
+
+def _unique_actor_by_role(seeded_actors: dict[tuple[str, str], str], role: str) -> tuple[str, str]:
+    """Resolves (tenant_id, membership_id) for the seeded actor with this
+    role, asserting there is exactly one. Selecting by role is deterministic
+    regardless of how tenant/membership UUIDs happen to sort; assuming a role
+    lives in whichever tenant sorts first is not (that was the bug this
+    replaced)."""
+    matches = [
+        (tenant_id, membership_id)
+        for (tenant_id, actor_role), membership_id in seeded_actors.items()
+        if actor_role == role
+    ]
+    assert len(matches) == 1, (
+        f"expected exactly one seeded actor with role={role!r}, found {len(matches)}: {matches}"
+    )
+    return matches[0]
 
 
 def test_dev_actor_header_missing_returns_401(client) -> None:
@@ -58,13 +83,13 @@ def test_owner_me_resolves_own_tenant_and_role(client, seeded_actors) -> None:
 
 
 def test_vendor_contact_me_resolves_vendor_org_id(client, seeded_actors) -> None:
-    tenant_a, _tenant_b = _tenant_ids(seeded_actors)
-    vendor_membership_id = seeded_actors[(tenant_a, "vendor_contact")]
+    vendor_tenant_id, vendor_membership_id = _unique_actor_by_role(seeded_actors, "vendor_contact")
 
     response = client.get("/api/v1/me", headers={DEV_ACTOR_HEADER: vendor_membership_id})
 
     assert response.status_code == 200
     body = response.json()
+    assert body["tenant_id"] == vendor_tenant_id
     assert body["role"] == "vendor_contact"
     assert body["vendor_org_id"] is not None
 
