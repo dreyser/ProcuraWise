@@ -1,6 +1,9 @@
 import logging
 import sys
+from dataclasses import replace
 
+from procurawise.evaluations.models import Evaluation, Requirement
+from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.models import Membership, Role, Tenant, User, VendorOrganization
 from procurawise.identity.repository import (
     MembershipRepository,
@@ -8,6 +11,8 @@ from procurawise.identity.repository import (
     UserRepository,
     VendorOrganizationRepository,
 )
+from procurawise.proposals.models import Proposal
+from procurawise.proposals.repository import ProposalRepository
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.logging import configure_logging
 from procurawise.shared.mongo import get_database
@@ -16,7 +21,15 @@ logger = logging.getLogger("procurawise.dev_seed")
 
 # Collections this script owns. `make seed-reset` drops exactly these, nothing
 # from a future bounded context - keep this list in sync as seed-dev grows.
-SEEDED_COLLECTIONS = ["memberships", "vendor_organizations", "users", "tenants"]
+SEEDED_COLLECTIONS = [
+    "memberships",
+    "vendor_organizations",
+    "users",
+    "tenants",
+    "evaluations",
+    "proposals",
+    "scores",
+]
 
 
 def _require_dev_environment(settings: Settings) -> None:
@@ -73,6 +86,63 @@ def _get_or_create_membership(
     return membership
 
 
+def _get_or_create_evaluation(
+    evaluations: EvaluationRepository,
+    proposals: ProposalRepository,
+    tenant: Tenant,
+    owner: Membership,
+    vendor_org: VendorOrganization,
+    name: str,
+) -> Evaluation:
+    existing = next((doc for doc in evaluations.find_many(tenant.id) if doc["name"] == name), None)
+    if existing is not None:
+        return Evaluation.from_document(existing)
+
+    evaluation = Evaluation.create(
+        tenant_id=tenant.id,
+        name=name,
+        description="Evaluacion de ejemplo generada por seed-dev",
+        created_by_membership_id=owner.id,
+    )
+    functional_requirement = Requirement.create(
+        dimension="functional",
+        category="Capacidades",
+        title="Gestion de flujos de aprobacion",
+        description="La solucion debe soportar flujos de aprobacion configurables.",
+        priority="mandatory",
+        response_type="compliant_status",
+        weight=40.0,
+        required=True,
+        display_order=1,
+        buyer_guidance="Describir el motor de flujos disponible.",
+    )
+    technical_requirement = Requirement.create(
+        dimension="technical",
+        category="Integraciones",
+        title="API REST documentada",
+        description="La solucion debe exponer una API REST documentada (OpenAPI).",
+        priority="important",
+        response_type="compliant_status",
+        weight=20.0,
+        required=True,
+        display_order=1,
+        buyer_guidance="Adjuntar enlace a la documentacion de la API.",
+    )
+    evaluation = replace(
+        evaluation,
+        requirements=[functional_requirement, technical_requirement],
+        linked_vendor_count=1,
+    )
+    evaluations.insert(tenant.id, evaluation.to_document())
+
+    proposal = Proposal.create(
+        tenant_id=tenant.id, evaluation_id=evaluation.id, vendor_org_id=vendor_org.id
+    )
+    proposals.insert(tenant.id, proposal.to_document())
+
+    return evaluation
+
+
 def seed(settings: Settings) -> list[Membership]:
     """Idempotent: safe to call repeatedly, never duplicates a tenant, user,
     vendor organization, or membership already seeded."""
@@ -95,11 +165,15 @@ def seed(settings: Settings) -> list[Membership]:
 
     vendor_org_a = _get_or_create_vendor_org(vendor_orgs, tenant_a, "Proveedor Uno (dev)")
 
+    owner_a_membership = _get_or_create_membership(
+        memberships, tenant_a, owner_a, "evaluation_owner"
+    )
+
     # owner_b also holds a second Membership (evaluator, same tenant) on
     # purpose: demonstrates that a single User can carry multiple Memberships,
     # which the domain model must support without restriction.
-    return [
-        _get_or_create_membership(memberships, tenant_a, owner_a, "evaluation_owner"),
+    created = [
+        owner_a_membership,
         _get_or_create_membership(memberships, tenant_a, evaluator_a, "evaluator"),
         _get_or_create_membership(
             memberships, tenant_a, vendor_user_a, "vendor_contact", vendor_org_a.id
@@ -108,6 +182,19 @@ def seed(settings: Settings) -> list[Membership]:
         _get_or_create_membership(memberships, tenant_b, evaluator_b, "evaluator"),
         _get_or_create_membership(memberships, tenant_b, owner_b, "evaluator"),
     ]
+
+    evaluations = EvaluationRepository(db)
+    proposals = ProposalRepository(db)
+    _get_or_create_evaluation(
+        evaluations,
+        proposals,
+        tenant_a,
+        owner_a_membership,
+        vendor_org_a,
+        "Evaluacion de ejemplo (dev)",
+    )
+
+    return created
 
 
 def reset(settings: Settings) -> None:

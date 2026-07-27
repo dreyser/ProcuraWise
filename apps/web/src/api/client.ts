@@ -4,19 +4,42 @@
  * ProcuraWise API
  * OpenAPI spec version: 0.1.0
  */
-export type ActorContextResponseVendorOrgId = string | null;
+export type ActorContextResponseVendorOrgId = string | null
 
 export interface ActorContextResponse {
-  membership_id: string;
-  user_id: string;
-  tenant_id: string;
-  tenant_name: string;
-  role: string;
-  vendor_org_id?: ActorContextResponseVendorOrgId;
-  display_name: string;
+  membership_id: string
+  user_id: string
+  tenant_id: string
+  tenant_name: string
+  role: string
+  vendor_org_id?: ActorContextResponseVendorOrgId
+  display_name: string
 }
 
-export type DevActorSummaryVendorOrgId = string | null;
+export type AnswerResponseVendorComment = string | null
+
+export interface AnswerResponse {
+  requirement_id: string
+  value: unknown
+  vendor_comment: AnswerResponseVendorComment
+  updated_at: string
+}
+
+export type AnswerWriteRequestVendorComment = string | null
+
+/**
+ * `expected_version` is the optimistic-concurrency contract (plan §12):
+the version the vendor last read. A mismatch means someone/something
+changed the proposal concurrently - the server responds 409 rather than
+accepting the write.
+ */
+export interface AnswerWriteRequest {
+  value: unknown
+  vendor_comment?: AnswerWriteRequestVendorComment
+  expected_version: number
+}
+
+export type DevActorSummaryVendorOrgId = string | null
 
 /**
  * One selectable development actor for the `/dev` picker. `actor_id` is
@@ -24,32 +47,579 @@ an alias for the underlying Membership id - selecting an actor means
 selecting a Membership, not a user.
  */
 export interface DevActorSummary {
-  actor_id: string;
-  display_name: string;
-  tenant_name: string;
-  role: string;
-  vendor_org_id?: DevActorSummaryVendorOrgId;
+  actor_id: string
+  display_name: string
+  tenant_name: string
+  role: string
+  vendor_org_id?: DevActorSummaryVendorOrgId
+}
+
+export interface DimensionSubtotal {
+  earned_points: number
+  maximum_points: number
+}
+
+export interface DraftProposalSummary {
+  proposal_id: string
+  vendor_org_id: string
+  vendor_org_name: string
+}
+
+export type EconomicSubtotalStatus =
+  (typeof EconomicSubtotalStatus)[keyof typeof EconomicSubtotalStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const EconomicSubtotalStatus = {
+  not_available: 'not_available',
+  available: 'available',
+} as const
+
+export type EconomicSubtotalEarnedPoints = number | null
+
+export interface EconomicSubtotal {
+  status: EconomicSubtotalStatus
+  earned_points: EconomicSubtotalEarnedPoints
+  maximum_points: number
+}
+
+export interface EvaluationCreateRequest {
+  name: string
+  description?: string
+}
+
+export type EvaluationDetailResponseStatus =
+  (typeof EvaluationDetailResponseStatus)[keyof typeof EvaluationDetailResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const EvaluationDetailResponseStatus = {
+  draft: 'draft',
+  collecting_responses: 'collecting_responses',
+  evaluating: 'evaluating',
+  completed: 'completed',
+} as const
+
+export type EvaluationDetailResponseCollectingResponsesStartedAt = string | null
+
+export type EvaluationDetailResponseEvaluatingStartedAt = string | null
+
+export type EvaluationDetailResponseCompletedAt = string | null
+
+export interface EvaluationDetailResponse {
+  id: string
+  name: string
+  description: string
+  status: EvaluationDetailResponseStatus
+  requirements: RequirementResponse[]
+  linked_vendor_count: number
+  created_by_membership_id: string
+  created_at: string
+  updated_at: string
+  collecting_responses_started_at: EvaluationDetailResponseCollectingResponsesStartedAt
+  evaluating_started_at: EvaluationDetailResponseEvaluatingStartedAt
+  completed_at: EvaluationDetailResponseCompletedAt
+}
+
+export type EvaluationSummaryResponseStatus =
+  (typeof EvaluationSummaryResponseStatus)[keyof typeof EvaluationSummaryResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const EvaluationSummaryResponseStatus = {
+  draft: 'draft',
+  collecting_responses: 'collecting_responses',
+  evaluating: 'evaluating',
+  completed: 'completed',
+} as const
+
+export interface EvaluationSummaryResponse {
+  id: string
+  name: string
+  status: EvaluationSummaryResponseStatus
+  linked_vendor_count: number
+  created_at: string
+  updated_at: string
+}
+
+export type EvaluationUpdateRequestName = string | null
+
+export type EvaluationUpdateRequestDescription = string | null
+
+export interface EvaluationUpdateRequest {
+  name?: EvaluationUpdateRequestName
+  description?: EvaluationUpdateRequestDescription
 }
 
 export interface HTTPValidationError {
-  detail?: ValidationError[];
+  detail?: ValidationError[]
 }
 
-export type ValidationErrorLocItem = string | number;
+export interface PartialResult {
+  earned_points: number
+  maximum_points: number
+  model_coverage_percent: number
+}
 
-export type ValidationErrorCtx = { [key: string]: unknown };
+export type ProposalDetailResponseStatus =
+  (typeof ProposalDetailResponseStatus)[keyof typeof ProposalDetailResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ProposalDetailResponseStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+} as const
+
+export type ProposalDetailResponseSnapshot = SnapshotResponse | null
+
+export type ProposalDetailResponseSubmittedAt = string | null
+
+export interface ProposalDetailResponse {
+  id: string
+  evaluation_id: string
+  vendor_org_id: string
+  status: ProposalDetailResponseStatus
+  version: number
+  answers: AnswerResponse[]
+  snapshot: ProposalDetailResponseSnapshot
+  created_at: string
+  updated_at: string
+  submitted_at: ProposalDetailResponseSubmittedAt
+}
+
+/**
+ * functional/technical/economic/partial_result are per-proposal, not a
+single evaluation-wide aggregate: each vendor's Proposal is scored
+independently (Score's natural key includes proposal_id), so summing
+weighted_points across competing proposals into one number would not be
+mathematically meaningful. Nothing here ranks or compares proposals -
+each subtotal stands on its own; the reader compares them, the system
+does not (no automatic adjudication).
+ */
+export interface ProposalResult {
+  proposal_id: string
+  vendor_org_id: string
+  vendor_org_name: string
+  status: 'submitted'
+  functional: DimensionSubtotal
+  technical: DimensionSubtotal
+  economic: EconomicSubtotal
+  partial_result: PartialResult
+  scores: RequirementScoreDetail[]
+  mandatory_alerts_count: number
+}
+
+export type ProposalSummaryResponseStatus =
+  (typeof ProposalSummaryResponseStatus)[keyof typeof ProposalSummaryResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ProposalSummaryResponseStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+} as const
+
+export type ProposalSummaryResponseSubmittedAt = string | null
+
+export interface ProposalSummaryResponse {
+  id: string
+  evaluation_id: string
+  vendor_org_id: string
+  status: ProposalSummaryResponseStatus
+  version: number
+  created_at: string
+  updated_at: string
+  submitted_at: ProposalSummaryResponseSubmittedAt
+}
+
+export type RequirementCreateRequestDimension =
+  (typeof RequirementCreateRequestDimension)[keyof typeof RequirementCreateRequestDimension]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RequirementCreateRequestDimension = {
+  functional: 'functional',
+  technical: 'technical',
+} as const
+
+export type RequirementCreateRequestPriority =
+  (typeof RequirementCreateRequestPriority)[keyof typeof RequirementCreateRequestPriority]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RequirementCreateRequestPriority = {
+  mandatory: 'mandatory',
+  important: 'important',
+  desirable: 'desirable',
+} as const
+
+export type RequirementCreateRequestResponseType =
+  (typeof RequirementCreateRequestResponseType)[keyof typeof RequirementCreateRequestResponseType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RequirementCreateRequestResponseType = {
+  compliant_status: 'compliant_status',
+  text: 'text',
+  single_choice: 'single_choice',
+  multi_choice: 'multi_choice',
+  number: 'number',
+  percentage: 'percentage',
+  date: 'date',
+  url: 'url',
+  comment: 'comment',
+  currency: 'currency',
+} as const
+
+export type RequirementCreateRequestBuyerGuidance = string | null
+
+export type RequirementCreateRequestOptions = string[] | null
+
+export interface RequirementCreateRequest {
+  dimension: RequirementCreateRequestDimension
+  category: string
+  title: string
+  description: string
+  priority: RequirementCreateRequestPriority
+  response_type: RequirementCreateRequestResponseType
+  weight: number
+  required: boolean
+  display_order: number
+  buyer_guidance?: RequirementCreateRequestBuyerGuidance
+  options?: RequirementCreateRequestOptions
+}
+
+export type RequirementResponseDimension =
+  (typeof RequirementResponseDimension)[keyof typeof RequirementResponseDimension]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RequirementResponseDimension = {
+  functional: 'functional',
+  technical: 'technical',
+} as const
+
+export type RequirementResponsePriority =
+  (typeof RequirementResponsePriority)[keyof typeof RequirementResponsePriority]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RequirementResponsePriority = {
+  mandatory: 'mandatory',
+  important: 'important',
+  desirable: 'desirable',
+} as const
+
+export type RequirementResponseResponseType =
+  (typeof RequirementResponseResponseType)[keyof typeof RequirementResponseResponseType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RequirementResponseResponseType = {
+  compliant_status: 'compliant_status',
+  text: 'text',
+  single_choice: 'single_choice',
+  multi_choice: 'multi_choice',
+  number: 'number',
+  percentage: 'percentage',
+  date: 'date',
+  url: 'url',
+  comment: 'comment',
+  currency: 'currency',
+} as const
+
+export type RequirementResponseBuyerGuidance = string | null
+
+export type RequirementResponseOptions = string[] | null
+
+export interface RequirementResponse {
+  id: string
+  dimension: RequirementResponseDimension
+  category: string
+  title: string
+  description: string
+  priority: RequirementResponsePriority
+  response_type: RequirementResponseResponseType
+  weight: number
+  required: boolean
+  buyer_guidance: RequirementResponseBuyerGuidance
+  display_order: number
+  options: RequirementResponseOptions
+  created_at: string
+  updated_at: string
+}
+
+export type RequirementScoreDetailDimension =
+  (typeof RequirementScoreDetailDimension)[keyof typeof RequirementScoreDetailDimension]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RequirementScoreDetailDimension = {
+  functional: 'functional',
+  technical: 'technical',
+} as const
+
+export interface RequirementScoreDetail {
+  requirement_id: string
+  dimension: RequirementScoreDetailDimension
+  title: string
+  priority: string
+  raw_score: number
+  requirement_weight: number
+  weighted_points: number
+  evaluator_membership_id: string
+  mandatory_alert: boolean
+}
+
+export type RequirementUpdateRequestDimension = 'functional' | 'technical' | null
+
+export type RequirementUpdateRequestCategory = string | null
+
+export type RequirementUpdateRequestTitle = string | null
+
+export type RequirementUpdateRequestDescription = string | null
+
+export type RequirementUpdateRequestPriority = 'mandatory' | 'important' | 'desirable' | null
+
+export type RequirementUpdateRequestResponseType =
+  | 'compliant_status'
+  | 'text'
+  | 'single_choice'
+  | 'multi_choice'
+  | 'number'
+  | 'percentage'
+  | 'date'
+  | 'url'
+  | 'comment'
+  | 'currency'
+  | null
+
+export type RequirementUpdateRequestWeight = number | null
+
+export type RequirementUpdateRequestRequired = boolean | null
+
+export type RequirementUpdateRequestDisplayOrder = number | null
+
+export type RequirementUpdateRequestBuyerGuidance = string | null
+
+export type RequirementUpdateRequestOptions = string[] | null
+
+export interface RequirementUpdateRequest {
+  dimension?: RequirementUpdateRequestDimension
+  category?: RequirementUpdateRequestCategory
+  title?: RequirementUpdateRequestTitle
+  description?: RequirementUpdateRequestDescription
+  priority?: RequirementUpdateRequestPriority
+  response_type?: RequirementUpdateRequestResponseType
+  weight?: RequirementUpdateRequestWeight
+  required?: RequirementUpdateRequestRequired
+  display_order?: RequirementUpdateRequestDisplayOrder
+  buyer_guidance?: RequirementUpdateRequestBuyerGuidance
+  options?: RequirementUpdateRequestOptions
+}
+
+export type ResultsResponseScoringStatus =
+  (typeof ResultsResponseScoringStatus)[keyof typeof ResultsResponseScoringStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ResultsResponseScoringStatus = {
+  incomplete: 'incomplete',
+  complete: 'complete',
+} as const
+
+export interface ResultsResponse {
+  result_status: 'partial'
+  is_final: boolean
+  scoring_status: ResultsResponseScoringStatus
+  proposals: ProposalResult[]
+  draft_proposals: DraftProposalSummary[]
+  disclaimer: string
+}
+
+export type ScoreResponseDimension =
+  (typeof ScoreResponseDimension)[keyof typeof ScoreResponseDimension]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ScoreResponseDimension = {
+  functional: 'functional',
+  technical: 'technical',
+} as const
+
+export type ScoreResponseComment = string | null
+
+export interface ScoreResponse {
+  id: string
+  requirement_id: string
+  dimension: ScoreResponseDimension
+  priority: string
+  requirement_weight: number
+  score: number
+  comment: ScoreResponseComment
+  weighted_points: number
+  mandatory_alert: boolean
+  version: number
+  created_by_membership_id: string
+  updated_by_membership_id: string
+  created_at: string
+  updated_at: string
+}
+
+export type ScoreWriteRequestComment = string | null
+
+export type ScoreWriteRequestVersion = number | null
+
+/**
+ * `version` is intentionally part of the write contract (optimistic
+concurrency), not a server-managed field being smuggled in - omit/None
+on first create for a given requirement, echo the current Score.version
+on every subsequent update.
+ */
+export interface ScoreWriteRequest {
+  score: number
+  comment?: ScoreWriteRequestComment
+  version?: ScoreWriteRequestVersion
+}
+
+export interface SnapshotResponse {
+  snapshot_id: string
+  taken_at: string
+  evaluation_id: string
+  evaluation_name: string
+  vendor_org_id: string
+  vendor_org_name: string
+  requirements: RequirementResponse[]
+  answers: AnswerResponse[]
+  submitted_by_membership_id: string
+  submitted_at: string
+}
+
+export interface SubmitRequest {
+  expected_version: number
+}
+
+export type ValidationErrorLocItem = string | number
+
+export type ValidationErrorCtx = { [key: string]: unknown }
 
 export interface ValidationError {
-  loc: ValidationErrorLocItem[];
-  msg: string;
-  type: string;
-  input?: unknown;
-  ctx?: ValidationErrorCtx;
+  loc: ValidationErrorLocItem[]
+  msg: string
+  type: string
+  input?: unknown
+  ctx?: ValidationErrorCtx
 }
 
-export type LiveHealthLiveGet200 = {[key: string]: string};
+export type VendorAnswerResponseVendorComment = string | null
 
-export type ReadyHealthReadyGet200 = { [key: string]: unknown };
+export interface VendorAnswerResponse {
+  requirement_id: string
+  value: unknown
+  vendor_comment: VendorAnswerResponseVendorComment
+  updated_at: string
+}
+
+export interface VendorLinkRequest {
+  vendor_org_id: string
+}
+
+export type VendorProposalDetailResponseStatus =
+  (typeof VendorProposalDetailResponseStatus)[keyof typeof VendorProposalDetailResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorProposalDetailResponseStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+} as const
+
+export type VendorProposalDetailResponseSubmittedAt = string | null
+
+export interface VendorProposalDetailResponse {
+  id: string
+  evaluation_id: string
+  evaluation_name: string
+  status: VendorProposalDetailResponseStatus
+  version: number
+  requirements: VendorRequirementResponse[]
+  answers: VendorAnswerResponse[]
+  created_at: string
+  updated_at: string
+  submitted_at: VendorProposalDetailResponseSubmittedAt
+}
+
+export type VendorProposalSummaryResponseStatus =
+  (typeof VendorProposalSummaryResponseStatus)[keyof typeof VendorProposalSummaryResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorProposalSummaryResponseStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+} as const
+
+export type VendorProposalSummaryResponseSubmittedAt = string | null
+
+export interface VendorProposalSummaryResponse {
+  id: string
+  evaluation_id: string
+  evaluation_name: string
+  status: VendorProposalSummaryResponseStatus
+  version: number
+  created_at: string
+  updated_at: string
+  submitted_at: VendorProposalSummaryResponseSubmittedAt
+}
+
+export type VendorRequirementResponseDimension =
+  (typeof VendorRequirementResponseDimension)[keyof typeof VendorRequirementResponseDimension]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorRequirementResponseDimension = {
+  functional: 'functional',
+  technical: 'technical',
+} as const
+
+export type VendorRequirementResponsePriority =
+  (typeof VendorRequirementResponsePriority)[keyof typeof VendorRequirementResponsePriority]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorRequirementResponsePriority = {
+  mandatory: 'mandatory',
+  important: 'important',
+  desirable: 'desirable',
+} as const
+
+export type VendorRequirementResponseResponseType =
+  (typeof VendorRequirementResponseResponseType)[keyof typeof VendorRequirementResponseResponseType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorRequirementResponseResponseType = {
+  compliant_status: 'compliant_status',
+  text: 'text',
+  single_choice: 'single_choice',
+  multi_choice: 'multi_choice',
+  number: 'number',
+  percentage: 'percentage',
+  date: 'date',
+  url: 'url',
+  comment: 'comment',
+  currency: 'currency',
+} as const
+
+export type VendorRequirementResponseBuyerGuidance = string | null
+
+export type VendorRequirementResponseOptions = string[] | null
+
+/**
+ * Deliberately narrower than evaluations.schemas.RequirementResponse:
+no `weight` field - scoring weight is buyer-internal configuration, not
+exposed to the vendor portal (CLAUDE.md: comentarios internos/scoring
+nunca visibles al proveedor).
+ */
+export interface VendorRequirementResponse {
+  id: string
+  dimension: VendorRequirementResponseDimension
+  category: string
+  title: string
+  description: string
+  priority: VendorRequirementResponsePriority
+  response_type: VendorRequirementResponseResponseType
+  required: boolean
+  buyer_guidance: VendorRequirementResponseBuyerGuidance
+  display_order: number
+  options: VendorRequirementResponseOptions
+}
+
+export type LiveHealthLiveGet200 = { [key: string]: string }
+
+export type ReadyHealthReadyGet200 = { [key: string]: unknown }
 
 /**
  * @summary Live
@@ -58,40 +628,29 @@ export type liveHealthLiveGetResponse200 = {
   data: LiveHealthLiveGet200
   status: 200
 }
-    
-export type liveHealthLiveGetResponseSuccess = (liveHealthLiveGetResponse200) & {
-  headers: Headers;
-};
-;
 
-export type liveHealthLiveGetResponse = (liveHealthLiveGetResponseSuccess)
+export type liveHealthLiveGetResponseSuccess = liveHealthLiveGetResponse200 & {
+  headers: Headers
+}
+export type liveHealthLiveGetResponse = liveHealthLiveGetResponseSuccess
 
 export const getLiveHealthLiveGetUrl = () => {
-
-
-  
-
   return `/health/live`
 }
 
-export const liveHealthLiveGet = async ( options?: RequestInit): Promise<liveHealthLiveGetResponse> => {
-  
-  const res = await fetch(getLiveHealthLiveGetUrl(),
-  {      
+export const liveHealthLiveGet = async (
+  options?: RequestInit,
+): Promise<liveHealthLiveGetResponse> => {
+  const res = await fetch(getLiveHealthLiveGetUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  })
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
   const data: liveHealthLiveGetResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as liveHealthLiveGetResponse
 }
-
-
 
 /**
  * @summary Ready
@@ -100,40 +659,29 @@ export type readyHealthReadyGetResponse200 = {
   data: ReadyHealthReadyGet200
   status: 200
 }
-    
-export type readyHealthReadyGetResponseSuccess = (readyHealthReadyGetResponse200) & {
-  headers: Headers;
-};
-;
 
-export type readyHealthReadyGetResponse = (readyHealthReadyGetResponseSuccess)
+export type readyHealthReadyGetResponseSuccess = readyHealthReadyGetResponse200 & {
+  headers: Headers
+}
+export type readyHealthReadyGetResponse = readyHealthReadyGetResponseSuccess
 
 export const getReadyHealthReadyGetUrl = () => {
-
-
-  
-
   return `/health/ready`
 }
 
-export const readyHealthReadyGet = async ( options?: RequestInit): Promise<readyHealthReadyGetResponse> => {
-  
-  const res = await fetch(getReadyHealthReadyGetUrl(),
-  {      
+export const readyHealthReadyGet = async (
+  options?: RequestInit,
+): Promise<readyHealthReadyGetResponse> => {
+  const res = await fetch(getReadyHealthReadyGetUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  })
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
   const data: readyHealthReadyGetResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as readyHealthReadyGetResponse
 }
-
-
 
 /**
  * @summary List Dev Actors
@@ -142,40 +690,34 @@ export type listDevActorsApiV1DevActorsGetResponse200 = {
   data: DevActorSummary[]
   status: 200
 }
-    
-export type listDevActorsApiV1DevActorsGetResponseSuccess = (listDevActorsApiV1DevActorsGetResponse200) & {
-  headers: Headers;
-};
-;
 
-export type listDevActorsApiV1DevActorsGetResponse = (listDevActorsApiV1DevActorsGetResponseSuccess)
+export type listDevActorsApiV1DevActorsGetResponseSuccess =
+  listDevActorsApiV1DevActorsGetResponse200 & {
+    headers: Headers
+  }
+export type listDevActorsApiV1DevActorsGetResponse = listDevActorsApiV1DevActorsGetResponseSuccess
 
 export const getListDevActorsApiV1DevActorsGetUrl = () => {
-
-
-  
-
   return `/api/v1/dev/actors`
 }
 
-export const listDevActorsApiV1DevActorsGet = async ( options?: RequestInit): Promise<listDevActorsApiV1DevActorsGetResponse> => {
-  
-  const res = await fetch(getListDevActorsApiV1DevActorsGetUrl(),
-  {      
+export const listDevActorsApiV1DevActorsGet = async (
+  options?: RequestInit,
+): Promise<listDevActorsApiV1DevActorsGetResponse> => {
+  const res = await fetch(getListDevActorsApiV1DevActorsGetUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  })
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
   const data: listDevActorsApiV1DevActorsGetResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listDevActorsApiV1DevActorsGetResponse
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listDevActorsApiV1DevActorsGetResponse
 }
-
-
 
 /**
  * @summary Get Me
@@ -189,37 +731,1154 @@ export type getMeApiV1MeGetResponse422 = {
   data: HTTPValidationError
   status: 422
 }
-    
-export type getMeApiV1MeGetResponseSuccess = (getMeApiV1MeGetResponse200) & {
-  headers: Headers;
-};
-export type getMeApiV1MeGetResponseError = (getMeApiV1MeGetResponse422) & {
-  headers: Headers;
-};
 
-export type getMeApiV1MeGetResponse = (getMeApiV1MeGetResponseSuccess | getMeApiV1MeGetResponseError)
+export type getMeApiV1MeGetResponseSuccess = getMeApiV1MeGetResponse200 & {
+  headers: Headers
+}
+export type getMeApiV1MeGetResponseError = getMeApiV1MeGetResponse422 & {
+  headers: Headers
+}
+
+export type getMeApiV1MeGetResponse = getMeApiV1MeGetResponseSuccess | getMeApiV1MeGetResponseError
 
 export const getGetMeApiV1MeGetUrl = () => {
-
-
-  
-
   return `/api/v1/me`
 }
 
-export const getMeApiV1MeGet = async ( options?: RequestInit): Promise<getMeApiV1MeGetResponse> => {
-  
-  const res = await fetch(getGetMeApiV1MeGetUrl(),
-  {      
+export const getMeApiV1MeGet = async (options?: RequestInit): Promise<getMeApiV1MeGetResponse> => {
+  const res = await fetch(getGetMeApiV1MeGetUrl(), {
     ...options,
-    method: 'GET'
-    
-    
-  }
-)
+    method: 'GET',
+  })
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
   const data: getMeApiV1MeGetResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getMeApiV1MeGetResponse
+}
+
+/**
+ * @summary Create Evaluation
+ */
+export type createEvaluationApiV1EvaluationsPostResponse201 = {
+  data: EvaluationDetailResponse
+  status: 201
+}
+
+export type createEvaluationApiV1EvaluationsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createEvaluationApiV1EvaluationsPostResponseSuccess =
+  createEvaluationApiV1EvaluationsPostResponse201 & {
+    headers: Headers
+  }
+export type createEvaluationApiV1EvaluationsPostResponseError =
+  createEvaluationApiV1EvaluationsPostResponse422 & {
+    headers: Headers
+  }
+
+export type createEvaluationApiV1EvaluationsPostResponse =
+  | createEvaluationApiV1EvaluationsPostResponseSuccess
+  | createEvaluationApiV1EvaluationsPostResponseError
+
+export const getCreateEvaluationApiV1EvaluationsPostUrl = () => {
+  return `/api/v1/evaluations`
+}
+
+export const createEvaluationApiV1EvaluationsPost = async (
+  evaluationCreateRequest: EvaluationCreateRequest,
+  options?: RequestInit,
+): Promise<createEvaluationApiV1EvaluationsPostResponse> => {
+  const res = await fetch(getCreateEvaluationApiV1EvaluationsPostUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(evaluationCreateRequest),
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: createEvaluationApiV1EvaluationsPostResponse['data'] = body ? JSON.parse(body) : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createEvaluationApiV1EvaluationsPostResponse
+}
+
+/**
+ * @summary List Evaluations
+ */
+export type listEvaluationsApiV1EvaluationsGetResponse200 = {
+  data: EvaluationSummaryResponse[]
+  status: 200
+}
+
+export type listEvaluationsApiV1EvaluationsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listEvaluationsApiV1EvaluationsGetResponseSuccess =
+  listEvaluationsApiV1EvaluationsGetResponse200 & {
+    headers: Headers
+  }
+export type listEvaluationsApiV1EvaluationsGetResponseError =
+  listEvaluationsApiV1EvaluationsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listEvaluationsApiV1EvaluationsGetResponse =
+  | listEvaluationsApiV1EvaluationsGetResponseSuccess
+  | listEvaluationsApiV1EvaluationsGetResponseError
+
+export const getListEvaluationsApiV1EvaluationsGetUrl = () => {
+  return `/api/v1/evaluations`
+}
+
+export const listEvaluationsApiV1EvaluationsGet = async (
+  options?: RequestInit,
+): Promise<listEvaluationsApiV1EvaluationsGetResponse> => {
+  const res = await fetch(getListEvaluationsApiV1EvaluationsGetUrl(), {
+    ...options,
+    method: 'GET',
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: listEvaluationsApiV1EvaluationsGetResponse['data'] = body ? JSON.parse(body) : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listEvaluationsApiV1EvaluationsGetResponse
+}
+
+/**
+ * @summary Get Evaluation
+ */
+export type getEvaluationApiV1EvaluationsEvaluationIdGetResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type getEvaluationApiV1EvaluationsEvaluationIdGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getEvaluationApiV1EvaluationsEvaluationIdGetResponseSuccess =
+  getEvaluationApiV1EvaluationsEvaluationIdGetResponse200 & {
+    headers: Headers
+  }
+export type getEvaluationApiV1EvaluationsEvaluationIdGetResponseError =
+  getEvaluationApiV1EvaluationsEvaluationIdGetResponse422 & {
+    headers: Headers
+  }
+
+export type getEvaluationApiV1EvaluationsEvaluationIdGetResponse =
+  | getEvaluationApiV1EvaluationsEvaluationIdGetResponseSuccess
+  | getEvaluationApiV1EvaluationsEvaluationIdGetResponseError
+
+export const getGetEvaluationApiV1EvaluationsEvaluationIdGetUrl = (evaluationId: string) => {
+  return `/api/v1/evaluations/${evaluationId}`
+}
+
+export const getEvaluationApiV1EvaluationsEvaluationIdGet = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<getEvaluationApiV1EvaluationsEvaluationIdGetResponse> => {
+  const res = await fetch(getGetEvaluationApiV1EvaluationsEvaluationIdGetUrl(evaluationId), {
+    ...options,
+    method: 'GET',
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: getEvaluationApiV1EvaluationsEvaluationIdGetResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getEvaluationApiV1EvaluationsEvaluationIdGetResponse
+}
+
+/**
+ * @summary Update Evaluation
+ */
+export type updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateEvaluationApiV1EvaluationsEvaluationIdPatchResponseSuccess =
+  updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse200 & {
+    headers: Headers
+  }
+export type updateEvaluationApiV1EvaluationsEvaluationIdPatchResponseError =
+  updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse422 & {
+    headers: Headers
+  }
+
+export type updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse =
+  | updateEvaluationApiV1EvaluationsEvaluationIdPatchResponseSuccess
+  | updateEvaluationApiV1EvaluationsEvaluationIdPatchResponseError
+
+export const getUpdateEvaluationApiV1EvaluationsEvaluationIdPatchUrl = (evaluationId: string) => {
+  return `/api/v1/evaluations/${evaluationId}`
+}
+
+export const updateEvaluationApiV1EvaluationsEvaluationIdPatch = async (
+  evaluationId: string,
+  evaluationUpdateRequest: EvaluationUpdateRequest,
+  options?: RequestInit,
+): Promise<updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse> => {
+  const res = await fetch(getUpdateEvaluationApiV1EvaluationsEvaluationIdPatchUrl(evaluationId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(evaluationUpdateRequest),
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse
+}
+
+/**
+ * @summary Add Requirement
+ */
+export type addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse201 = {
+  data: RequirementResponse
+  status: 201
+}
+
+export type addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponseSuccess =
+  addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse201 & {
+    headers: Headers
+  }
+export type addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponseError =
+  addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse422 & {
+    headers: Headers
+  }
+
+export type addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse =
+  | addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponseSuccess
+  | addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponseError
+
+export const getAddRequirementApiV1EvaluationsEvaluationIdRequirementsPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/requirements`
+}
+
+export const addRequirementApiV1EvaluationsEvaluationIdRequirementsPost = async (
+  evaluationId: string,
+  requirementCreateRequest: RequirementCreateRequest,
+  options?: RequestInit,
+): Promise<addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse> => {
+  const res = await fetch(
+    getAddRequirementApiV1EvaluationsEvaluationIdRequirementsPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(requirementCreateRequest),
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse
+}
+
+/**
+ * @summary Update Requirement
+ */
+export type updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse200 =
+  {
+    data: RequirementResponse
+    status: 200
+  }
+
+export type updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponseSuccess =
+  updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse200 & {
+    headers: Headers
+  }
+export type updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponseError =
+  updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse422 & {
+    headers: Headers
+  }
+
+export type updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse =
+  | updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponseSuccess
+  | updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponseError
+
+export const getUpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchUrl = (
+  evaluationId: string,
+  requirementId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/requirements/${requirementId}`
+}
+
+export const updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch = async (
+  evaluationId: string,
+  requirementId: string,
+  requirementUpdateRequest: RequirementUpdateRequest,
+  options?: RequestInit,
+): Promise<updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse> => {
+  const res = await fetch(
+    getUpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchUrl(
+      evaluationId,
+      requirementId,
+    ),
+    {
+      ...options,
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(requirementUpdateRequest),
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse['data'] =
+    body ? JSON.parse(body) : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse
+}
+
+/**
+ * @summary Delete Requirement
+ */
+export type deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse204 =
+  {
+    data: void
+    status: 204
+  }
+
+export type deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponseSuccess =
+  deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse204 & {
+    headers: Headers
+  }
+export type deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponseError =
+  deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse =
+  | deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponseSuccess
+  | deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponseError
+
+export const getDeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteUrl = (
+  evaluationId: string,
+  requirementId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/requirements/${requirementId}`
+}
+
+export const deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete = async (
+  evaluationId: string,
+  requirementId: string,
+  options?: RequestInit,
+): Promise<deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse> => {
+  const res = await fetch(
+    getDeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteUrl(
+      evaluationId,
+      requirementId,
+    ),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse['data'] =
+    body ? JSON.parse(body) : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse
+}
+
+/**
+ * @summary Link Vendor
+ */
+export type linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse201 = {
+  data: ProposalSummaryResponse
+  status: 201
+}
+
+export type linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponseSuccess =
+  linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse201 & {
+    headers: Headers
+  }
+export type linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponseError =
+  linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse422 & {
+    headers: Headers
+  }
+
+export type linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse =
+  | linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponseSuccess
+  | linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponseError
+
+export const getLinkVendorApiV1EvaluationsEvaluationIdVendorsPostUrl = (evaluationId: string) => {
+  return `/api/v1/evaluations/${evaluationId}/vendors`
+}
+
+export const linkVendorApiV1EvaluationsEvaluationIdVendorsPost = async (
+  evaluationId: string,
+  vendorLinkRequest: VendorLinkRequest,
+  options?: RequestInit,
+): Promise<linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse> => {
+  const res = await fetch(getLinkVendorApiV1EvaluationsEvaluationIdVendorsPostUrl(evaluationId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vendorLinkRequest),
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse
+}
+
+/**
+ * @summary Unlink Vendor
+ */
+export type unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse204 = {
+  data: void
+  status: 204
+}
+
+export type unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponseSuccess =
+  unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse204 & {
+    headers: Headers
+  }
+export type unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponseError =
+  unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse =
+  | unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponseSuccess
+  | unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponseError
+
+export const getUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteUrl = (
+  evaluationId: string,
+  vendorOrgId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/vendors/${vendorOrgId}`
+}
+
+export const unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete = async (
+  evaluationId: string,
+  vendorOrgId: string,
+  options?: RequestInit,
+): Promise<unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse> => {
+  const res = await fetch(
+    getUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteUrl(
+      evaluationId,
+      vendorOrgId,
+    ),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse['data'] =
+    body ? JSON.parse(body) : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse
+}
+
+/**
+ * @summary Start Collection
+ */
+export type startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponseSuccess =
+  startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse200 & {
+    headers: Headers
+  }
+export type startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponseError =
+  startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse422 & {
+    headers: Headers
+  }
+
+export type startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse =
+  | startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponseSuccess
+  | startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponseError
+
+export const getStartCollectionApiV1EvaluationsEvaluationIdStartCollectionPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/start-collection`
+}
+
+export const startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse> => {
+  const res = await fetch(
+    getStartCollectionApiV1EvaluationsEvaluationIdStartCollectionPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse
+}
+
+/**
+ * @summary Start Evaluation
+ */
+export type startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponseSuccess =
+  startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse200 & {
+    headers: Headers
+  }
+export type startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponseError =
+  startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse422 & {
+    headers: Headers
+  }
+
+export type startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse =
+  | startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponseSuccess
+  | startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponseError
+
+export const getStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/start-evaluation`
+}
+
+export const startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse> => {
+  const res = await fetch(
+    getStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse
+}
+
+/**
+ * @summary List Proposals
+ */
+export type listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse200 = {
+  data: ProposalSummaryResponse[]
+  status: 200
+}
+
+export type listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponseSuccess =
+  listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse200 & {
+    headers: Headers
+  }
+export type listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponseError =
+  listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse =
+  | listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponseSuccess
+  | listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponseError
+
+export const getListProposalsApiV1EvaluationsEvaluationIdProposalsGetUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/proposals`
+}
+
+export const listProposalsApiV1EvaluationsEvaluationIdProposalsGet = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse> => {
+  const res = await fetch(
+    getListProposalsApiV1EvaluationsEvaluationIdProposalsGetUrl(evaluationId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse
+}
+
+/**
+ * @summary Get Proposal
+ */
+export type getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse200 = {
+  data: ProposalDetailResponse
+  status: 200
+}
+
+export type getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponseSuccess =
+  getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse200 & {
+    headers: Headers
+  }
+export type getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponseError =
+  getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse422 & {
+    headers: Headers
+  }
+
+export type getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse =
+  | getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponseSuccess
+  | getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponseError
+
+export const getGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetUrl = (
+  evaluationId: string,
+  proposalId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}`
+}
+
+export const getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet = async (
+  evaluationId: string,
+  proposalId: string,
+  options?: RequestInit,
+): Promise<getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse> => {
+  const res = await fetch(
+    getGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetUrl(evaluationId, proposalId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse
+}
+
+/**
+ * @summary Upsert Score
+ */
+export type upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse200 =
+  {
+    data: ScoreResponse
+    status: 200
+  }
+
+export type upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponseSuccess =
+  upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse200 & {
+    headers: Headers
+  }
+export type upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponseError =
+  upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse422 & {
+    headers: Headers
+  }
+
+export type upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse =
+  | upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponseSuccess
+  | upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponseError
+
+export const getUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutUrl =
+  (evaluationId: string, proposalId: string, requirementId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/scores/${requirementId}`
+  }
+
+export const upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut =
+  async (
+    evaluationId: string,
+    proposalId: string,
+    requirementId: string,
+    scoreWriteRequest: ScoreWriteRequest,
+    options?: RequestInit,
+  ): Promise<upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse> => {
+    const res = await fetch(
+      getUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutUrl(
+        evaluationId,
+        proposalId,
+        requirementId,
+      ),
+      {
+        ...options,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(scoreWriteRequest),
+      },
+    )
+
+    const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+    const data: upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse['data'] =
+      body ? JSON.parse(body) : {}
+    return {
+      data,
+      status: res.status,
+      headers: res.headers,
+    } as upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse
+  }
+
+/**
+ * @summary Get Results
+ */
+export type getResultsApiV1EvaluationsEvaluationIdResultsGetResponse200 = {
+  data: ResultsResponse
+  status: 200
+}
+
+export type getResultsApiV1EvaluationsEvaluationIdResultsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getResultsApiV1EvaluationsEvaluationIdResultsGetResponseSuccess =
+  getResultsApiV1EvaluationsEvaluationIdResultsGetResponse200 & {
+    headers: Headers
+  }
+export type getResultsApiV1EvaluationsEvaluationIdResultsGetResponseError =
+  getResultsApiV1EvaluationsEvaluationIdResultsGetResponse422 & {
+    headers: Headers
+  }
+
+export type getResultsApiV1EvaluationsEvaluationIdResultsGetResponse =
+  | getResultsApiV1EvaluationsEvaluationIdResultsGetResponseSuccess
+  | getResultsApiV1EvaluationsEvaluationIdResultsGetResponseError
+
+export const getGetResultsApiV1EvaluationsEvaluationIdResultsGetUrl = (evaluationId: string) => {
+  return `/api/v1/evaluations/${evaluationId}/results`
+}
+
+export const getResultsApiV1EvaluationsEvaluationIdResultsGet = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<getResultsApiV1EvaluationsEvaluationIdResultsGetResponse> => {
+  const res = await fetch(getGetResultsApiV1EvaluationsEvaluationIdResultsGetUrl(evaluationId), {
+    ...options,
+    method: 'GET',
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: getResultsApiV1EvaluationsEvaluationIdResultsGetResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getResultsApiV1EvaluationsEvaluationIdResultsGetResponse
+}
+
+/**
+ * @summary Complete Evaluation
+ */
+export type completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponseSuccess =
+  completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse200 & {
+    headers: Headers
+  }
+export type completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponseError =
+  completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse422 & {
+    headers: Headers
+  }
+
+export type completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse =
+  | completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponseSuccess
+  | completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponseError
+
+export const getCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/complete`
+}
+
+export const completeEvaluationApiV1EvaluationsEvaluationIdCompletePost = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse> => {
+  const res = await fetch(
+    getCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse
+}
+
+/**
+ * @summary List Proposals
+ */
+export type listProposalsApiV1VendorPortalProposalsGetResponse200 = {
+  data: VendorProposalSummaryResponse[]
+  status: 200
+}
+
+export type listProposalsApiV1VendorPortalProposalsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listProposalsApiV1VendorPortalProposalsGetResponseSuccess =
+  listProposalsApiV1VendorPortalProposalsGetResponse200 & {
+    headers: Headers
+  }
+export type listProposalsApiV1VendorPortalProposalsGetResponseError =
+  listProposalsApiV1VendorPortalProposalsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listProposalsApiV1VendorPortalProposalsGetResponse =
+  | listProposalsApiV1VendorPortalProposalsGetResponseSuccess
+  | listProposalsApiV1VendorPortalProposalsGetResponseError
+
+export const getListProposalsApiV1VendorPortalProposalsGetUrl = () => {
+  return `/api/v1/vendor-portal/proposals`
+}
+
+export const listProposalsApiV1VendorPortalProposalsGet = async (
+  options?: RequestInit,
+): Promise<listProposalsApiV1VendorPortalProposalsGetResponse> => {
+  const res = await fetch(getListProposalsApiV1VendorPortalProposalsGetUrl(), {
+    ...options,
+    method: 'GET',
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: listProposalsApiV1VendorPortalProposalsGetResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listProposalsApiV1VendorPortalProposalsGetResponse
+}
+
+/**
+ * @summary Get Proposal
+ */
+export type getProposalApiV1VendorPortalProposalsProposalIdGetResponse200 = {
+  data: VendorProposalDetailResponse
+  status: 200
+}
+
+export type getProposalApiV1VendorPortalProposalsProposalIdGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getProposalApiV1VendorPortalProposalsProposalIdGetResponseSuccess =
+  getProposalApiV1VendorPortalProposalsProposalIdGetResponse200 & {
+    headers: Headers
+  }
+export type getProposalApiV1VendorPortalProposalsProposalIdGetResponseError =
+  getProposalApiV1VendorPortalProposalsProposalIdGetResponse422 & {
+    headers: Headers
+  }
+
+export type getProposalApiV1VendorPortalProposalsProposalIdGetResponse =
+  | getProposalApiV1VendorPortalProposalsProposalIdGetResponseSuccess
+  | getProposalApiV1VendorPortalProposalsProposalIdGetResponseError
+
+export const getGetProposalApiV1VendorPortalProposalsProposalIdGetUrl = (proposalId: string) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}`
+}
+
+export const getProposalApiV1VendorPortalProposalsProposalIdGet = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<getProposalApiV1VendorPortalProposalsProposalIdGetResponse> => {
+  const res = await fetch(getGetProposalApiV1VendorPortalProposalsProposalIdGetUrl(proposalId), {
+    ...options,
+    method: 'GET',
+  })
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: getProposalApiV1VendorPortalProposalsProposalIdGetResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getProposalApiV1VendorPortalProposalsProposalIdGetResponse
+}
+
+/**
+ * @summary Update Answer
+ */
+export type updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse200 = {
+  data: VendorProposalDetailResponse
+  status: 200
+}
+
+export type updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponseSuccess =
+  updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse200 & {
+    headers: Headers
+  }
+export type updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponseError =
+  updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse422 & {
+    headers: Headers
+  }
+
+export type updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse =
+  | updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponseSuccess
+  | updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponseError
+
+export const getUpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutUrl = (
+  proposalId: string,
+  requirementId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/answers/${requirementId}`
+}
+
+export const updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut = async (
+  proposalId: string,
+  requirementId: string,
+  answerWriteRequest: AnswerWriteRequest,
+  options?: RequestInit,
+): Promise<updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse> => {
+  const res = await fetch(
+    getUpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutUrl(
+      proposalId,
+      requirementId,
+    ),
+    {
+      ...options,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(answerWriteRequest),
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse['data'] =
+    body ? JSON.parse(body) : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse
+}
+
+/**
+ * @summary Submit Proposal
+ */
+export type submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse200 = {
+  data: VendorProposalDetailResponse
+  status: 200
+}
+
+export type submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponseSuccess =
+  submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse200 & {
+    headers: Headers
+  }
+export type submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponseError =
+  submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse422 & {
+    headers: Headers
+  }
+
+export type submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse =
+  | submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponseSuccess
+  | submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponseError
+
+export const getSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostUrl = (
+  proposalId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/submit`
+}
+
+export const submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost = async (
+  proposalId: string,
+  submitRequest: SubmitRequest,
+  options?: RequestInit,
+): Promise<submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse> => {
+  const res = await fetch(
+    getSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostUrl(proposalId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(submitRequest),
+    },
+  )
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+
+  const data: submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse['data'] = body
+    ? JSON.parse(body)
+    : {}
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse
 }
