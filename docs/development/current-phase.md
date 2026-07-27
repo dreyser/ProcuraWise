@@ -30,6 +30,16 @@
 
 **Resultado de las pruebas:** `make lint` ✅, `make typecheck` ✅ (0 errores), `make test` ✅ (27 passed backend + 1 passed frontend), `make test-integration` ✅ (**32 passed**, 27 deselected — incluye 19 casos de `test_tenant_collection.py`: `$set` válido, reemplazo válido con/sin `tenant_id` explícito, reemplazo con `tenant_id` distinto rechazado, documento mixto rechazado sin tocar la base, documento de entrada no mutado, filtro con colisión de `tenant_id` rechazado, intento cross-tenant sin efecto tanto por operador como por reemplazo, `upsert` sin escape de tenant tanto por operador como por reemplazo), `make contracts` ✅ (sin diff de contenido). `git diff --check` reporta únicamente el whitespace preexistente de `client.ts` descrito arriba — no bloqueante, no relacionado con este fallo.
 
+### Fallo no determinista encontrado por CI y corregido (2026-07-27)
+
+**Síntoma:** el workflow `Integration` de GitHub Actions, corriendo contra el PR de VS-2A (commit `93c4e43`), falló en `tests/security/test_tenant_isolation.py::test_vendor_contact_me_resolves_vendor_org_id` con `KeyError` — no reproducía de forma confiable en local.
+
+**Causa raíz:** el helper `_tenant_ids()` de la prueba etiqueta "tenant_a"/"tenant_b" por **orden alfabético de sus UUID aleatorios** (`sorted(...)`), una etiqueta sin correlación con cuál tenant es semánticamente `dev-tenant-a`/`dev-tenant-b` en `dev_seed.py`. `test_vendor_contact_me_resolves_vendor_org_id` asumía que "tenant_a" (el que ordena primero) siempre tiene la membership `vendor_contact` — pero esa membership solo existe en el tenant `dev-tenant-a` del seed, cuyo UUID puede ordenar antes o después del de `dev-tenant-b` en cada corrida. Defecto de la prueba, no de `TenantCollection`/`dev_seed.py`/identidad de desarrollo — el código de producción quedó intacto.
+
+**Corrección:** nuevo helper `_unique_actor_by_role(seeded_actors, role)` en `test_tenant_isolation.py` — busca la(s) entrada(s) de `seeded_actors` por rol y afirma que existe exactamente una, en vez de inferirlo por posición de orden. La prueba afectada ahora resuelve `(tenant_id, membership_id)` del `vendor_contact` así, y además afirma `tenant_id` en la respuesta (aserción nueva). Se revisaron los otros 3 usos de `_tenant_ids()`: todos seleccionan `evaluation_owner`, presente en ambos tenants del seed, sin la misma falla — no requirieron cambios.
+
+**Resultado de las pruebas:** `make lint` ✅, `make typecheck` ✅, `make test` ✅ (27 + 1), `make test-integration` ✅ (**32 passed**), prueba afectada x5 corridas seguidas → **5/5 en verde, 8/8 casos cada una**, `make contracts` ✅ (sin diff), `git diff --check` ✅ (limpio).
+
 ## Fase 1 — Fundación técnica
 
 **Estado: ✅ Completed** (2026-07-18) — las 3 sub-fases técnicas (1A, 1B, 1C) están cerradas.
@@ -120,7 +130,7 @@ Cualquier lógica de dominio de negocio (evaluations, vendors, proposals, scorin
 
 ## Último commit relevante
 
-`d59fb40 fix(ci): point pnpm/action-setup at apps/web/package.json`, rama `main`, precedido por `bfe6626 feat(ci): add GitHub Actions CI/CD and pipeline security (Fase 1C)`. Ambos comiteados y pusheados; los 3 workflows corren en verde contra `main`. **El código de VS-2A (esta sesión, incluida la corrección del bug de `TenantCollection.update_one`) está implementado y verificado en el árbol de trabajo pero todavía no comiteado** — pendiente de que el founder lo revise y pida el commit.
+`93c4e43 feat(identity): establish tenant isolation and development identity` (VS-2A, comiteado y pusheado por el founder entre sesiones, PR abierto contra `main`), precedido por `2a4d60c`/`d59fb40`/`bfe6626`. **El fix de esta sesión (prueba no determinista en `test_vendor_contact_me_resolves_vendor_org_id`) está aplicado y verificado en el árbol de trabajo pero todavía no comiteado** — pendiente de que el founder lo revise y pida el commit.
 
 ## Próximos pasos
 
