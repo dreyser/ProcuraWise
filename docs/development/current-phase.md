@@ -1,5 +1,52 @@
 # Fase actual
 
+## VS-2B — Núcleo backend de evaluaciones, proveedores, propuestas y scoring
+
+**Estado: ✅ Implementado y verificado con Docker real** (2026-07-27) — `make lint`/`make typecheck`/`make test`/`make test-integration`/`make contracts` en verde contra Mongo+Azurite reales, en la misma sesión (Docker estaba disponible). **Todavía sin comitear** — pendiente de que el founder lo revise (mismo patrón que VS-2A).
+
+Planeado en Plan Mode con revisión del founder en dos rondas (la primera propuesta fue rechazada con correcciones concretas de arquitectura y concurrencia — ver plan aprobado en `~/.claude/plans/act-a-como-arquitecto-principal-quiet-pike.md`, fuera del repo). Cierra el vertical slice de negocio junto con VS-2A/VS-2C: owner→requirement→vendor→proposal→submit→score→result→complete, 100% backend, usando la identidad de desarrollo de VS-2A.
+
+**Contenido entregado:**
+- `service/procurawise/evaluations/` (nuevo): `Evaluation`+`Requirement` embebidos, `linked_vendor_count` (contador de reserva atómica), máquina de estados `draft→collecting_responses→evaluating→completed` sin saltos ni retrocesos; requirements solo editables en `draft`; `start-collection` exige ≥1 requirement `functional` y ≥1 `technical` con pesos que suman exactamente 40/20 (escala global de 100 puntos, no renormalizada por dimensión) y ≥1 proveedor vinculado.
+- `service/procurawise/proposals/` (nuevo): `Proposal` **es** la asociación Evaluation↔VendorOrganization (no existe colección `evaluation_vendors` — decisión explícita del founder tras rechazar la primera versión del plan); `version` optimista en cada escritura (`expected_version` en el body, 409 si no coincide); snapshot inmutable construido en la misma escritura atómica que el `submit` (nunca congela un estado más viejo que el `expected_version`); validación por `response_type` (`compliant_status`, `text`, `single_choice`, `multi_choice`, `number`, `percentage`, `date`, `url`, `comment`, `currency` — `file`/`structured_table` explícitamente no soportados en este slice).
+- `service/procurawise/vendor_portal/` (nuevo, router físicamente separado bajo `/api/v1/vendor-portal/*`): schemas propios (nunca reutilizan los del comprador), autorización vendor-scoped delegando a `proposals.service`.
+- `service/procurawise/scoring/` (nuevo): `Score` canónico único por `(tenant_id, evaluation_id, proposal_id, snapshot_id, requirement_id)` — sin `membership_id` en el índice, sin consenso/promedio entre evaluadores; `version` optimista; `GET /results` con subtotales **por propuesta** (no un agregado cruzando vendors, que no sería matemáticamente coherente — desviación explícita y documentada del shape que el founder había aprobado inicialmente, ver `docs/development/session-handoff.md`), propuestas `draft` listadas aparte sin restar puntos, `economic.status="not_available"`, `partial_result` sobre 60 sin renormalizar a 100, alerta `mandatory_alert=(priority=="mandatory" and score<5)` sin bloquear `complete`.
+- Límite de 6 proveedores protegido con reserva atómica (`$inc` condicionado en `Evaluation.linked_vendor_count`, no `count_documents`+insert) — verificado bajo carrera real con 10 threads concurrentes en `tests/integration/test_vendor_link_concurrency.py`.
+- `service/procurawise/shared/context.py`: `require_role(*roles)` (dependency factory nueva, no existía en VS-2A).
+- `service/migrations/0002_evaluations_proposals_scoring_indexes.py`: 5 índices (único en `proposals(tenant_id,evaluation_id,vendor_org_id)`, único en `scores` por clave natural completa, más índices de listado).
+- `service/procurawise/dev_seed.py`: extendido con una `Evaluation(draft)` + `Proposal(draft)` de ejemplo bajo `dev-tenant-a`/`vendor_org_a`.
+- Tests nuevos (98 casos añadidos a los 32 de VS-2A más pruebas frontend, total suite: **106 passed** sin Docker+Docker combinados en esta sesión): `tests/unit/{test_evaluation_models,test_proposal_models,test_score_model,test_answer_validators}.py`; `tests/integration/{test_vendor_link_concurrency,test_proposal_version_concurrency}.py` (concurrencia real contra Mongo, con threads); `tests/security/test_vendor_isolation.py` (11 casos: aislamiento cruzado de vendor_org, mass assignment, version obsoleta, score fuera del snapshot); `tests/api/test_vertical_slice_happy_path.py` (flujo completo end-to-end vía API real). `tests/conftest.py` ganó las fixtures compartidas `seeded_actors`/`client` y los helpers `tenant_ids`/`unique_actor_by_role` (antes vivían solo en `test_tenant_isolation.py`, movidos para reutilizarse entre archivos de test nuevos).
+- Contratos: `apps/web/openapi.json` y `apps/web/src/api/client.ts` regenerados vía `make contracts` (routers `evaluations`/`proposals`/`scoring`/`vendor-portal` nuevos).
+
+**Correcciones aplicadas tras el rechazo del founder en la revisión del plan (antes de implementar, no bugs encontrados en código):** eliminación de `evaluation_vendors` como colección independiente; reserva atómica en vez de `count_documents`+insert para el límite de 6; `version` optimista agregado a `Proposal` (antes solo estaba en `Score`); umbral de `mandatory_alert` corregido de "score 0-1" a "score<5"; catálogo de `response_type` concretado con `currency` incluido y `file`/`structured_table` explícitamente excluidos; `start-collection` corregido para exigir al menos un requirement de cada dimensión, no solo pesos sumando correctamente; `GET /results` corregido para separar `draft`/`submitted` y funcionar en `evaluating`+`completed`.
+
+**Desviación de diseño encontrada durante la implementación — ✅ aprobada explícitamente por el founder (2026-07-27):** el shape de `GET /results` que el founder había aprobado en la sesión de planeación tenía `functional`/`technical`/`economic`/`partial_result` como un único objeto a nivel de evaluación — matemáticamente incoherente cuando hay más de una `Proposal` (cada vendor tiene su propio conjunto de scores). Se movieron esos campos, junto con el detalle de scores por requirement, a **dentro de cada `proposals[]`** (uno por propuesta), sin cambiar sus nombres ni unidades. El founder confirmó explícitamente: *"functional, technical, economic, partial_result y requirement_scores deben existir dentro de cada proposal, porque cada proveedor tiene su propio resultado"*. **Contrato de `/results` cerrado.**
+
+### Corrección del trailing whitespace en `apps/web/src/api/client.ts` (2026-07-27, post-aprobación del founder)
+
+**Diagnóstico:** el trailing whitespace **sí es regenerado por `make contracts` en cada corrida** (no era un artefacto congelado ni azaroso) — es un quirk del propio template del cliente `fetch` de `orval` 7.21.0 al emitir bloques de comentario/JSDoc (confirmado corriendo `make contracts` dos veces seguidas y comparando byte a byte: el patrón de líneas con espacios sueltos se reproduce idéntico en ambas corridas). No proviene de la especificación OpenAPI ni de código propio. `.prettierignore` excluía explícitamente `src/api`, así que nunca se corregía.
+
+**Causa raíz confirmada:** template interno de orval, no configuración del proyecto ni del input.
+
+**Solución aplicada (opción 2 de la jerarquía pedida — mecanismo oficial del generador, no un postproceso manual):** `orval` 7.21.0 soporta nativamente `output.prettier: true`, que ejecuta `prettier --write` sobre cada archivo generado inmediatamente después de escribirlo (confirmado leyendo el código fuente de `orval` en `node_modules/.pnpm/orval@7.21.0.../dist/generate-*.js`). Se activó esa opción en `apps/web/orval.config.ts` y se quitó `src/api` de `.prettierignore` (ya no tiene sentido excluirlo de Prettier: ahora se mantiene limpio automáticamente en cada generación, y dejarlo en el `.prettierignore` habría impedido que `prettier --write` lo tocara). Esto no es un postproceso ad-hoc del repo — es la integración prettier↔orval documentada por la propia herramienta.
+
+**Verificación de reproducibilidad:**
+- `make contracts` (1ª corrida) → `client.ts` con 0 líneas de trailing whitespace; `git diff --check` → **verde (exit 0)**.
+- `make contracts` (2ª corrida, consecutiva) → `diff` byte a byte contra la 1ª corrida → **archivo idéntico**; `git diff --check` → **verde (exit 0)**.
+- `pnpm format` (`prettier --check .`, ahora sí cubre `src/api` al quitarlo de `.prettierignore`) → limpio — esto además deja una red de seguridad permanente: si una versión futura de orval reintrodujera whitespace sucio, `make lint-frontend` lo detectaría en cualquier PR, no solo `git diff --check` post-hoc.
+
+**Archivos tocados por esta corrección (únicamente):** `apps/web/orval.config.ts` (+`prettier: true`), `apps/web/.prettierignore` (se quitó la línea `src/api`), `apps/web/src/api/client.ts` (regenerado, ahora limpio). Ningún contrato de API ni lógica de VS-2B cambió — mismo `openapi.json`, mismos endpoints, mismos tipos.
+
+**Resultado de pruebas de esta sesión (tras la corrección):**
+- `make contracts` → regenerado sin errores (2 corridas consecutivas, salida idéntica).
+- `git diff --check` → **verde (exit 0)**, corrido dos veces (una por cada `make contracts`).
+- `make lint` → verde (backend: ruff check + format; frontend: eslint 0 errores/19 warnings preexistentes en `client.ts`, no relacionados con whitespace; `pnpm format` limpio incluyendo `src/api`).
+- `make typecheck` → verde (mypy 0 errores sobre 52 archivos backend; `tsc -b` sin errores).
+- `make test` → verde (59 passed backend + 1 passed frontend).
+- `make test-integration` → **47 passed** contra Mongo real (Docker disponible en esta sesión).
+
+**Pendiente para la siguiente sesión:** decidir si se comitea VS-2B (y VS-2A, tampoco comiteado); iniciar VS-2C (frontend) en una sesión separada.
+
 ## VS-2A — Dominio, identidad de desarrollo y aislamiento
 
 **Estado: ✅ Verificado con Docker real** (2026-07-27) — `make lint`/`make typecheck`/`make test`/`make test-integration`/`make contracts` en verde contra Mongo+Azurite reales. La primera corrida de `make test-integration` encontró un bug real en `TenantCollection.update_one` (ver "Fallo real encontrado y corregido" abajo), ya corregido y reverificado en verde. Reemplaza y amplía lo que el backlog numeraba como "Fase 1 — `identity`"; ver la nota de IDs en la tabla E1 de `backlog.md` para la reconciliación completa con la numeración anterior (`VS-2A`/`VS-2B`/`VS-2C`/`AUTH-PROD`).
@@ -134,13 +181,14 @@ Cualquier lógica de dominio de negocio (evaluations, vendors, proposals, scorin
 
 ## Próximos pasos
 
-1. **VS-2A queda verificado con Docker real** — `make test-integration` en verde (32/32). El founder decide si comitea VS-2A (no se ha hecho ningún commit todavía).
-2. Abrir una nueva sesión para **VS-2B — Flujo backend del vertical slice** (`evaluations`/`requirements`/`vendors`/`proposals`/`scoring`, máquina de estados de las 8 reglas, router `/vendor-portal/*` físicamente separado). No implementar VS-2B en la misma sesión que VS-2A (regla explícita del plan de Fase 2).
-3. A partir de VS-2A, todo cambio pasa por PR real contra `main` — la branch protection ya exige los 5 checks en verde y rama actualizada antes de mergear.
+1. **VS-2A y VS-2B quedan implementados y verificados con Docker real en el árbol de trabajo, ninguno de los dos comiteado todavía.** El founder decide el orden/agrupación de los commits.
+2. Contrato de `GET /results` cerrado — el founder aprobó explícitamente el shape por-propuesta (ver sección VS-2B arriba). Sin acción pendiente.
+3. Abrir una nueva sesión para **VS-2C — Frontend del vertical slice** (consume los endpoints de VS-2B vía el cliente TS regenerado). No mezclar con trabajo de backend adicional en la misma sesión.
+4. A partir de VS-2A, todo cambio pasa por PR real contra `main` — la branch protection ya exige los 5 checks en verde y rama actualizada antes de mergear.
 
 ## Bloqueos
 
-Ninguno. VS-2A está implementado y verificado con Docker real (`make test-integration` 32/32 passed).
+Ninguno. VS-2A y VS-2B están implementados y verificados con Docker real (`make test-integration`: 32/32 en VS-2A, 47/47 en VS-2B sobre la suite ampliada).
 
 ## Deuda técnica no bloqueante
 

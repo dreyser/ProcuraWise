@@ -2,62 +2,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 from procurawise.api.main import app
-from procurawise.dev_seed import SEEDED_COLLECTIONS, seed
+from procurawise.dev_seed import seed
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
 from procurawise.identity.models import VendorOrganization
 from procurawise.identity.repository import VendorOrganizationRepository
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.tenant_collection import TenantCollection
+from tests.conftest import tenant_ids as _tenant_ids
+from tests.conftest import unique_actor_by_role as _unique_actor_by_role
 
 pytestmark = pytest.mark.docker
-
-
-@pytest.fixture
-def seeded_actors(mongo_test_settings: Settings, mongo_test_db):
-    memberships = seed(mongo_test_settings)
-    by_key = {(m.tenant_id, m.role): m.id for m in memberships}
-    yield by_key
-    for name in SEEDED_COLLECTIONS:
-        mongo_test_db[name].drop()
-
-
-@pytest.fixture
-def client(mongo_test_settings: Settings, seeded_actors):
-    app.dependency_overrides[get_settings] = lambda: mongo_test_settings
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
-
-
-def _tenant_ids(seeded_actors: dict[tuple[str, str], str]) -> tuple[str, str]:
-    """Returns two arbitrary, distinct tenant ids from the seed. The labels
-    "tenant_a"/"tenant_b" only mean "some tenant" / "some other tenant" -
-    tenant/membership ids are random UUIDs, so this sorted order carries no
-    semantic meaning (it is not guaranteed to match `dev_seed.py`'s own
-    "dev-tenant-a"/"dev-tenant-b" slugs). Only use this where a test needs
-    two distinct tenants but doesn't care which one is which - never to infer
-    that a specific role lives in "the first" tenant (see
-    `_unique_actor_by_role` for that)."""
-    tenants = {tenant_id for tenant_id, _role in seeded_actors}
-    tenant_a, tenant_b = sorted(tenants)
-    return tenant_a, tenant_b
-
-
-def _unique_actor_by_role(seeded_actors: dict[tuple[str, str], str], role: str) -> tuple[str, str]:
-    """Resolves (tenant_id, membership_id) for the seeded actor with this
-    role, asserting there is exactly one. Selecting by role is deterministic
-    regardless of how tenant/membership UUIDs happen to sort; assuming a role
-    lives in whichever tenant sorts first is not (that was the bug this
-    replaced)."""
-    matches = [
-        (tenant_id, membership_id)
-        for (tenant_id, actor_role), membership_id in seeded_actors.items()
-        if actor_role == role
-    ]
-    assert len(matches) == 1, (
-        f"expected exactly one seeded actor with role={role!r}, found {len(matches)}: {matches}"
-    )
-    return matches[0]
 
 
 def test_dev_actor_header_missing_returns_401(client) -> None:

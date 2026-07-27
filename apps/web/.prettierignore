@@ -3,4 +3,3 @@ node_modules
 coverage
 pnpm-lock.yaml
 openapi.json
-src/api

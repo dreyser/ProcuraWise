@@ -32,6 +32,65 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-27 — VS-2B: núcleo backend de evaluaciones, proveedores, propuestas y scoring
+
+**Resumen:** Sesión de planeación (Plan Mode) seguida de implementación completa de VS-2B, ambas en la misma sesión con aprobación explícita del founder para pasar de una a otra. El plan inicial fue rechazado por el founder con 8 correcciones concretas de arquitectura/concurrencia (ver detalle abajo); el plan corregido fue aprobado y se implementó en los 5 bloques planeados. Docker estuvo disponible, así que se verificó contra Mongo real en la misma sesión (no quedó pendiente para una sesión futura, a diferencia de VS-2A).
+
+**Rechazo del plan inicial y correcciones del founder (antes de escribir código):**
+1. Eliminar `evaluation_vendors` como colección independiente — `Proposal` es la asociación Evaluation↔VendorOrganization.
+2. Resolver la carrera del límite de 6 proveedores con protección atómica (no `count_documents`+insert).
+3. Agregar optimistic concurrency (`version`/`expected_version`) a `Proposal`, no solo a `Score`.
+4. Corregir el umbral de `mandatory_alert` de "score 0-1" a "score<5".
+5. Definir validación concreta por `response_type`, incluyendo `currency`, excluyendo `file`/`structured_table`.
+6. `start-collection` debe exigir al menos un requirement `functional` y uno `technical`, no solo pesos correctos.
+7. `GET /results` debe separar propuestas `draft`/`submitted` y funcionar en `evaluating`+`completed`.
+8. Matriz de pruebas ampliada con casos específicos de concurrencia (vinculación de vendors, versión de Proposal).
+
+Las 8 correcciones se incorporaron al plan, que fue re-presentado y aprobado.
+
+**Decisión tomada durante la implementación, no en el plan — ✅ aprobada explícitamente por el founder en el turno siguiente de esta misma sesión:** el shape de `GET /results` aprobado por el founder en la sesión de planeación anterior tenía `functional`/`technical`/`economic`/`partial_result` como un único objeto a nivel de evaluación. Al implementar se detectó que esto es matemáticamente incoherente en cuanto hay más de una `Proposal` — cada vendor tiene su propio conjunto de `Score`, sumarlos cruzando propuestas no representa nada válido. Se movieron esos campos, junto con el detalle de scores por requirement, a **dentro de cada entrada de `proposals[]`** en vez de a nivel de evaluación, sin cambiar nombres/unidades de los campos. El founder confirmó: *"functional, technical, economic, partial_result y requirement_scores deben existir dentro de cada proposal, porque cada proveedor tiene su propio resultado"*. Contrato cerrado, sin acción pendiente.
+
+**Archivos tocados (resumen — ver árbol completo en el plan y en `git status`):**
+- Nuevos: `service/procurawise/{evaluations,proposals,vendor_portal,scoring}/*`, `service/migrations/0002_evaluations_proposals_scoring_indexes.py`, `service/tests/{unit/test_evaluation_models,unit/test_proposal_models,unit/test_score_model,unit/test_answer_validators,integration/test_vendor_link_concurrency,integration/test_proposal_version_concurrency,security/test_vendor_isolation,api/test_vertical_slice_happy_path}.py`.
+- Modificados: `service/procurawise/api/main.py` (4 routers nuevos montados), `service/procurawise/dev_seed.py` (evaluación+propuesta de ejemplo), `service/procurawise/identity/repository.py` (`VendorOrganizationRepository.find_by_id` agregado), `service/procurawise/shared/context.py` (`require_role` nuevo), `service/tests/conftest.py` (fixtures `seeded_actors`/`client` y helpers movidos aquí desde `test_tenant_isolation.py` para reutilizarse en los archivos de test nuevos), `service/tests/security/test_tenant_isolation.py` (imports ajustados a los helpers movidos, sin cambios de comportamiento), `apps/web/openapi.json`, `apps/web/src/api/client.ts`.
+
+**Resultado de pruebas (primera corrida, antes del fix de whitespace descrito abajo):**
+- `make lint` → verde.
+- `make typecheck` → verde (mypy 0 errores, `tsc -b` sin errores).
+- `make test-backend` → 59 passed, 47 deselected.
+- `make test-integration` (Docker real) → **47 passed**, incluye concurrencia real con threads (límite de 6 proveedores bajo 10 intentos concurrentes, edición de `Proposal` concurrente con misma `expected_version`).
+- `make test` (backend+frontend) → verde.
+- `make contracts` → regenerado sin errores; `git diff --check` señalaba trailing whitespace en `client.ts` — investigado y corregido en el mismo turno de sesión, ver subsección siguiente.
+
+#### Corrección del trailing whitespace en `apps/web/src/api/client.ts` (mismo día, a pedido explícito del founder)
+
+El founder pidió no aceptar `git diff --check` fallando como estado final y determinar la causa raíz antes de cerrar VS-2B.
+
+**Diagnóstico:** corriendo `make contracts` dos veces seguidas y comparando el archivo resultante byte a byte, se confirmó que el trailing whitespace **es regenerado de forma determinista en cada corrida** por el propio template del cliente `fetch` de `orval` 7.21.0 (no es un artefacto congelado de una corrida anterior, no depende del `openapi.json` de entrada, no es aleatorio). `.prettierignore` excluía `src/api`, así que nunca se limpiaba.
+
+**Solución:** se activó la opción nativa `output.prettier: true` de `orval` (confirmada leyendo el código fuente del paquete instalado — ejecuta `prettier --write` sobre cada archivo generado inmediatamente después de escribirlo) en `apps/web/orval.config.ts`, y se quitó `src/api` de `apps/web/.prettierignore` para que Prettier deje de ignorarlo. Es el mecanismo oficial de integración prettier↔orval, no un postproceso ad-hoc — se prefirió sobre escribir un script de limpieza manual porque además deja a `pnpm format`/`make lint-frontend` vigilando el archivo generado en cada PR futuro, no solo en el momento de generarlo.
+
+**Verificación de reproducibilidad (pedida explícitamente):**
+- `make contracts` → `git diff --check` → verde (exit 0).
+- `make contracts` (2ª corrida consecutiva) → archivo idéntico byte a byte a la 1ª corrida → `git diff --check` → verde (exit 0).
+- `make lint` → verde (incluye `pnpm format` ahora cubriendo `src/api/client.ts`).
+- `make typecheck` → verde.
+- `make test` → verde (59 passed backend + 1 passed frontend).
+- `make test-integration` → **47 passed** (Docker real).
+
+**Archivos tocados por esta corrección:** `apps/web/orval.config.ts`, `apps/web/.prettierignore`, `apps/web/src/api/client.ts` (regenerado). Ningún contrato de API ni lógica de VS-2B cambió.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** la desviación de `/results` (por-propuesta vs. agregado único), ✅ aprobada por el founder — candidata a documentarse formalmente como ADR corto si se quiere dejar registro fuera de este handoff. El resto de decisiones (reserva atómica de vendors, `version` optimista en Proposal, catálogo de `response_type`, `output.prettier: true` en orval) ya fueron decisiones explícitas del founder o correcciones directamente pedidas durante la sesión, no ad-hoc silenciosas.
+
+**Deuda técnica introducida:** Ninguna nueva. La ventana de inconsistencia aceptada en `linked_vendor_count` tras un fallo entre `delete_one` y el `$inc` de liberación (documentada en el plan, riesgo aceptado explícitamente para VS-2B) es un riesgo de diseño conocido, no deuda no documentada.
+
+**Instrucciones para la siguiente sesión:**
+- Contrato de `GET /results` cerrado — sin acción pendiente.
+- `git diff --check` queda verde de forma reproducible (mecanismo `output.prettier: true` de orval, no un parche puntual) — no debería volver a fallar tras futuras corridas de `make contracts`, pero si algún día orval deja de respetar esa opción, revisar primero `orval.config.ts` antes de tocar `client.ts` a mano.
+- Decidir si se comitea VS-2B (y VS-2A, que tampoco está comiteado todavía) — ningún commit se hizo en esta sesión, instrucción implícita de esperar aprobación del founder como en sesiones anteriores.
+- Siguiente paso de código: **VS-2C — Frontend del vertical slice**, en una sesión separada.
+- No tocar: auth productiva (`AUTH-PROD`).
+
 ### Sesión — 2026-07-27 — VS-2A: fix de prueba no determinista detectada por el workflow Integration del PR
 
 **✅ Corrección puntual, sin tocar código de producción.** Alcance acotado por el founder: corregir exclusivamente el fallo no determinista que el workflow `Integration` de GitHub Actions detectó en el PR de VS-2A (commit `93c4e43`, ya comiteado y pusheado por el founder entre sesiones), sin iniciar VS-2B ni comitear.

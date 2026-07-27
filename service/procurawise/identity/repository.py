@@ -84,5 +84,8 @@ class VendorOrganizationRepository:
     def find_by_name(self, tenant_id: str, name: str) -> dict[str, Any] | None:
         return TenantCollection(self._collection, tenant_id).find_one({"name": name})
 
+    def find_by_id(self, tenant_id: str, vendor_org_id: str) -> dict[str, Any] | None:
+        return TenantCollection(self._collection, tenant_id).find_one({"_id": vendor_org_id})
+
     def insert(self, tenant_id: str, document: dict[str, Any]) -> None:
         TenantCollection(self._collection, tenant_id).insert_one(document)
