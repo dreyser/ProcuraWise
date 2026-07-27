@@ -1,8 +1,38 @@
 # Fase actual
 
+## VS-2A — Dominio, identidad de desarrollo y aislamiento
+
+**Estado: ✅ Verificado con Docker real** (2026-07-27) — `make lint`/`make typecheck`/`make test`/`make test-integration`/`make contracts` en verde contra Mongo+Azurite reales. La primera corrida de `make test-integration` encontró un bug real en `TenantCollection.update_one` (ver "Fallo real encontrado y corregido" abajo), ya corregido y reverificado en verde. Reemplaza y amplía lo que el backlog numeraba como "Fase 1 — `identity`"; ver la nota de IDs en la tabla E1 de `backlog.md` para la reconciliación completa con la numeración anterior (`VS-2A`/`VS-2B`/`VS-2C`/`AUTH-PROD`).
+
+**Contenido entregado:**
+- `service/procurawise/identity/` (bounded context nuevo): `models.py` (`Tenant`, `User`, `Membership`, `VendorOrganization` — dataclasses con `_id` UUID string, sin mezclar `ObjectId`), `repository.py`, `service.py` (`IdentityService.resolve_actor_context`/`list_dev_actors`), `dev_provider.py` (`DevelopmentIdentityProvider`: header `X-Dev-Membership-Id`, gate `environment in (local, test)` → 404 en cualquier otro caso), `router.py` (`GET /api/v1/dev/actors`, `GET /api/v1/me`), `schemas.py`.
+- `service/procurawise/shared/tenant_collection.py`: `TenantCollection` con reglas estrictas — fuerza/rechaza `tenant_id` en `insert_one`, rechaza colisión de filtro en `find`/`find_one`/`count_documents`/`delete_one`, rechaza `$set`/`$setOnInsert`/`$unset` sobre `tenant_id` en actualizaciones por operador, y para reemplazos completos (documento sin operadores `$`) usa `Collection.replace_one` — no `update_one`, que PyMongo rechaza para documentos sin operadores (ver "Fallo real encontrado y corregido" abajo); rechaza documentos que mezclen operadores `$` con campos planos; sin exponer la `Collection` de PyMongo ni passthrough genérico.
+- `service/procurawise/shared/context.py` (`ActorContext`) y `shared/api_models.py` (`APIModel`, `extra="forbid"` — base para mass assignment de toda Fase VS-2A/VS-2B en adelante).
+- `service/procurawise/shared/mongo.py`: se agregó `get_database(settings)`.
+- `service/procurawise/dev_seed.py`: `make seed-dev`/`make seed-reset` (idempotente, solo `environment in (local, test)`, 2 tenants + owner/evaluator/vendor_contact + un usuario con 2 memberships para demostrar que un `User` admite múltiples `Membership`).
+- `service/migrations/0001_identity_indexes.py`: primer migración real (antes solo scaffold no-op) — índices únicos `tenants.slug`, `memberships(tenant_id,user_id,role,vendor_org_id)`, índice `vendor_organizations.tenant_id`.
+- `Makefile`: targets `seed-dev`/`seed-reset` (mismo patrón `CONFIRM=yes` que `dev-reset`).
+- Tests: `tests/unit/test_identity_models.py`, `tests/unit/test_dev_provider.py` (verificados, en verde), `tests/integration/test_tenant_collection.py` (19 casos tras la corrección del bug — incluye `$set` válido, reemplazo válido con/sin `tenant_id` explícito, reemplazo con `tenant_id` distinto rechazado, documento mixto operador+plano rechazado, documento de entrada no mutado, intento cross-tenant sin efecto vía operador y vía reemplazo, `upsert` sin escape de tenant vía operador y vía reemplazo), `tests/security/test_tenant_isolation.py` (8 casos: header ausente→401, membership desconocida→401, resolución correcta de tenant/rol/vendor_org_id, dev identity rechazada en `environment=production`, aislamiento de `VendorOrganization` vía `TenantCollection`, `seed-dev` idempotente) — **ambos marcados `@pytest.mark.docker`, ejecutados y en verde contra Mongo real (32/32 pruebas Docker del repo completo)**.
+- Contratos: `apps/web/openapi.json` y `apps/web/src/api/client.ts` regenerados vía `make contracts` (nuevos endpoints `/api/v1/dev/actors`, `/api/v1/me`); `pnpm lint`/`pnpm typecheck`/`pnpm format` verdes en el frontend tras la regeneración (sin cambios de UI todavía — eso es VS-2C).
+- **Pre-commit explícitamente excluido de este alcance** (decisión de la sesión de planeación de Fase 2: CI ya aplica lint/format/typecheck en cada PR vía branch protection; se retoma como mejora independiente en el futuro).
+
+**Historial de verificación de VS-2A:**
+1. **Sesión de implementación (2026-07-27, sin Docker disponible):** verificó todo lo que no requiere Docker — `make lint` (ruff check + format), `make typecheck` (mypy, 0 errores), `make test-backend` (27 passed, 23 deselected por marcador `docker`), `make contracts` (regenerado sin diff estructural, cliente TS con los 2 endpoints nuevos), `pnpm lint`/`typecheck`/`format` en frontend. No pudo correr `make test-integration` (requiere Mongo/Azurite reales vía Docker, no disponible en el entorno de esta sesión).
+2. **Validación con Docker real (2026-07-27, ronda 2):** `make test-integration` **falló** en `tests/integration/test_tenant_collection.py::test_update_one_replacement_forces_resolved_tenant_id` — ver "Fallo real encontrado y corregido" abajo. Corregido y reverificado: `make lint`/`make typecheck`/`make test` (27 backend + 1 frontend) → verde; `make test-integration` → **32/32 passed** (incluye las 19 de `test_tenant_collection.py` y las 8 de `test_tenant_isolation.py`); `make contracts` → regenerado sin diff de contenido (`git diff --exit-code` limpio, que es el gate real de CI); `git diff --check` → solo señala trailing whitespace preexistente dentro de comentarios JSDoc autogenerados por `orval` en `apps/web/src/api/client.ts` (14 líneas ya en `HEAD` antes de esta sesión, ahora 28 por los nuevos endpoints con docstring multilínea) — no es parte del bug corregido, no se modifica un archivo generado a mano, y CI no usa `git diff --check` para este archivo (usa `git diff --exit-code`, que sí pasa limpio).
+
+### Fallo real encontrado y corregido (2026-07-27)
+
+**Síntoma:** `make test-integration` fallaba en `test_update_one_replacement_forces_resolved_tenant_id` con un error de PyMongo.
+
+**Causa raíz:** `TenantCollection.update_one` enviaba *todo* — tanto actualizaciones por operador (`{"$set": {...}}`) como reemplazos completos (`{"name": "z"}`, sin operadores `$`) — a `Collection.update_one()` de PyMongo. PyMongo rechaza explícitamente un documento de actualización sin operadores `$`: un reemplazo completo de documento debe ejecutarse vía `Collection.replace_one()`, no `update_one()`. El diseño original de VS-2A no distinguía este requisito del driver.
+
+**Corrección:** `service/procurawise/shared/tenant_collection.py` — `update_one` ahora detecta si el `update` recibido tiene claves con operador `$`, claves planas, o ambas mezcladas (rechazado con `TenantScopeError`, caso nuevo no contemplado antes). Si es un reemplazo completo, construye la copia con `tenant_id` forzado (misma lógica que ya usaba `insert_one`, vía `_forced_tenant_document`) y lo envía a `self._collection.replace_one(scoped_filter, replacement, **kwargs)`. Si es una actualización por operador, sigue el camino anterior (`_rejecting_tenant_mutation` + `self._collection.update_one(...)`). El filtro sigue siempre resuelto por `_scoped_filter` en ambos casos; ninguna protección multi-tenant se debilitó — se añadió una protección nueva (rechazo de documentos mixtos).
+
+**Resultado de las pruebas:** `make lint` ✅, `make typecheck` ✅ (0 errores), `make test` ✅ (27 passed backend + 1 passed frontend), `make test-integration` ✅ (**32 passed**, 27 deselected — incluye 19 casos de `test_tenant_collection.py`: `$set` válido, reemplazo válido con/sin `tenant_id` explícito, reemplazo con `tenant_id` distinto rechazado, documento mixto rechazado sin tocar la base, documento de entrada no mutado, filtro con colisión de `tenant_id` rechazado, intento cross-tenant sin efecto tanto por operador como por reemplazo, `upsert` sin escape de tenant tanto por operador como por reemplazo), `make contracts` ✅ (sin diff de contenido). `git diff --check` reporta únicamente el whitespace preexistente de `client.ts` descrito arriba — no bloqueante, no relacionado con este fallo.
+
 ## Fase 1 — Fundación técnica
 
-**Estado: ✅ Completed** (2026-07-18) — las 3 sub-fases técnicas (1A, 1B, 1C) están cerradas. Sigue la sub-fase `identity` (ver tabla E1 de `backlog.md`).
+**Estado: ✅ Completed** (2026-07-18) — las 3 sub-fases técnicas (1A, 1B, 1C) están cerradas.
 
 > Este documento se actualiza al cierre de cada sesión de Claude Code. Es, junto con `session-handoff.md`, el único mecanismo de continuidad entre sesiones sin memoria compartida.
 >
@@ -43,9 +73,8 @@ Cualquier lógica de dominio de negocio (evaluations, vendors, proposals, scorin
 - ✅ Entorno local reproducible con `make dev-up` (Mongo + Azurite vía Docker Compose) — verificado con Docker real por el founder, ambos servicios healthy (Fase 1B).
 - ✅ Configuración tipada por ambiente, health checks de dependencias, logging estructurado, `make migrate` (scaffold) — verificado (Fase 1B).
 - ✅ CI en GitHub Actions (`ci.yml`, `integration.yml`, `security.yml`), secret + dependency scanning, Dependabot — verificado localmente (`actionlint`, `gitleaks`, `pip-audit`, `pnpm audit`, `make lint/typecheck/test/contracts/test-integration`); verificación contra un run real en GitHub pendiente de que el founder autorice el push (Fase 1C).
-- Esqueleto de los 15 bounded contexts, pre-commit hooks locales (Fase `identity`, pendiente).
-- `identity` funcional con aislamiento de tenant probado (Fase 1, pendiente).
-- Login funcional (local + OIDC) sin MFA (Fase 2, pendiente).
+- `identity` funcional con aislamiento de tenant probado — implementado en VS-2A (ver sección arriba), pendiente de verificación con Docker real. Pre-commit y el esqueleto de los 15 bounded contexts **ya no forman parte de este entregable** (ver exclusión explícita en VS-2A).
+- Login funcional (local + OIDC) sin MFA (`AUTH-PROD`, pospuesto hasta después de VS-2C — ver `backlog.md`).
 
 ## Criterios de aceptación
 
@@ -58,8 +87,8 @@ Cualquier lógica de dominio de negocio (evaluations, vendors, proposals, scorin
 - ✅ `ci.yml`/`integration.yml`/`security.yml` sintácticamente válidos (`actionlint` en verde) y reproducen exactamente `make lint`/`make typecheck`/`make test`/`make contracts`/`make test-integration` — verificado localmente. **Pendiente:** confirmar en un PR real de GitHub (los 5 checks bloqueantes en verde) una vez el founder autorice el primer push de esta sub-fase — ver "Próximos pasos".
 - ✅ `security / secret-scan` (`gitleaks` + `.gitleaks.toml`) corrido localmente contra el repo completo: cero hallazgos, con y sin el allowlist (las reglas default no marcan `UseDevelopmentStorage=true` ni la clave pública de Azurite, el allowlist queda como protección documentada a futuro).
 - ✅ `security / python-deps` (`pip-audit`) y `security / frontend-deps` (`pnpm audit`) corridos localmente — `pip-audit`: sin hallazgos; `pnpm audit`: 3 hallazgos transitivos en la cadena de dependencias de `orval` (herramienta de build, no código de producción), confirman que la política "informativo, no bloqueante" definida para esta fase es la correcta.
-- Crear tenant + usuario vía API funciona; test negativo confirma que un token de tenant A no puede leer datos de tenant B — pendiente (Fase 1).
-- Login exitoso vía email+password y vía OIDC; el JWT emitido contiene el `tenant_id` correcto — pendiente (Fase 2).
+- Crear tenant + usuario vía API funciona; test negativo confirma que una Membership de tenant A no puede leer datos de tenant B — implementado en VS-2A (`GET /api/v1/me`, `make seed-dev`, `tests/security/test_tenant_isolation.py`), **pendiente de correr contra Mongo real** (sin Docker en esta sesión).
+- Login exitoso vía email+password y vía OIDC; el JWT emitido contiene el `tenant_id` correcto — pendiente (`AUTH-PROD`, pospuesto hasta después de VS-2C).
 
 **Ningún criterio de aceptación de Fase 1B o Fase 1C queda pendiente de implementación** (la única verificación pendiente de Fase 1C es correrla contra GitHub real, fuera del alcance de esta sesión hasta que el founder autorice el push — ver "Próximos pasos").
 
@@ -71,8 +100,9 @@ Cualquier lógica de dominio de negocio (evaluations, vendors, proposals, scorin
 - ✅ `InMemoryMessageBus` publish/consume, formato de logging JSON, ausencia de secretos en logs (`service/tests/unit/`) — verificado.
 - ✅ Test mínimo de frontend (`apps/web/src/App.test.tsx`).
 - ✅ Cobertura medida (`pytest-cov`, `--cov-report=term-missing`/`xml`, sin umbral global — ver justificación en el plan de Fase 1C) — 19 tests, 64-65% sobre `procurawise` (esperable sin lógica de dominio todavía).
-- Verificación de que `pre-commit` bloquea código mal formateado — pendiente (sub-fase `identity`, no existe pre-commit todavía; movido fuera de Fase 1C, ver nota de redefinición arriba).
-- `tests/security/test_tenant_isolation.py` (introducido en Fase 1, corre en cada PR desde entonces) — no aplica aún, no hay datos de negocio ni tenant todavía.
+- `tests/security/test_tenant_isolation.py` (introducido en VS-2A, corre en cada PR desde entonces) — 8 casos escritos, marcados `@pytest.mark.docker`, **pendientes de correr contra Mongo real** (sin Docker en esta sesión).
+- `tests/integration/test_tenant_collection.py` (9 casos: fuerza/rechaza `tenant_id` en insert, colisión de filtro, `$set`/`$unset`/reemplazo sobre `tenant_id`, `count_documents` tenant-scoped) — mismo estado pendiente.
+- `tests/unit/test_identity_models.py`, `tests/unit/test_dev_provider.py` — ✅ verificados, en verde sin Docker.
 
 ## Decisiones pendientes de aprobación
 
@@ -90,17 +120,19 @@ Cualquier lógica de dominio de negocio (evaluations, vendors, proposals, scorin
 
 ## Último commit relevante
 
-`d59fb40 fix(ci): point pnpm/action-setup at apps/web/package.json`, rama `main`, precedido por `bfe6626 feat(ci): add GitHub Actions CI/CD and pipeline security (Fase 1C)`. Ambos comiteados y pusheados; los 3 workflows corren en verde contra `main`.
+`d59fb40 fix(ci): point pnpm/action-setup at apps/web/package.json`, rama `main`, precedido por `bfe6626 feat(ci): add GitHub Actions CI/CD and pipeline security (Fase 1C)`. Ambos comiteados y pusheados; los 3 workflows corren en verde contra `main`. **El código de VS-2A (esta sesión, incluida la corrección del bug de `TenantCollection.update_one`) está implementado y verificado en el árbol de trabajo pero todavía no comiteado** — pendiente de que el founder lo revise y pida el commit.
 
 ## Próximos pasos
 
-1. Abrir una nueva sesión de Claude Code con instrucción explícita de ejecutar la sub-fase **`identity`**: `Tenant`/`User`/`Membership` + `TenantCollection` + middleware que extrae `tenant_id` del JWT — incluye, al inicio, pre-commit hooks locales y los 15 subpaquetes vacíos de bounded contexts (movidos aquí desde la Fase 1C original). No repetir el trabajo de Fase 1A/1B/1C.
-2. A partir de `identity`, todo cambio pasa por PR real contra `main` — la branch protection ya exige los 5 checks en verde y rama actualizada antes de mergear.
+1. **VS-2A queda verificado con Docker real** — `make test-integration` en verde (32/32). El founder decide si comitea VS-2A (no se ha hecho ningún commit todavía).
+2. Abrir una nueva sesión para **VS-2B — Flujo backend del vertical slice** (`evaluations`/`requirements`/`vendors`/`proposals`/`scoring`, máquina de estados de las 8 reglas, router `/vendor-portal/*` físicamente separado). No implementar VS-2B en la misma sesión que VS-2A (regla explícita del plan de Fase 2).
+3. A partir de VS-2A, todo cambio pasa por PR real contra `main` — la branch protection ya exige los 5 checks en verde y rama actualizada antes de mergear.
 
 ## Bloqueos
 
-Ninguno. Fase 1 — Fundación técnica está formalmente cerrada.
+Ninguno. VS-2A está implementado y verificado con Docker real (`make test-integration` 32/32 passed).
 
 ## Deuda técnica no bloqueante
 
-- **Advertencia de deprecación `StarletteDeprecationWarning`** al correr `service/tests/integration/test_health.py` (y otros tests que usan `fastapi.testclient.TestClient`): "Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead." No falla ningún test, no afecta comportamiento en runtime (solo aparece en la suite de tests). No bloquea Fase 1C. Revisar cuando FastAPI/Starlette publiquen una migración estable a `httpx2`, o al tocar de nuevo las dependencias de testing del backend.
+- **Advertencia de deprecación `StarletteDeprecationWarning`** al correr `service/tests/integration/test_health.py` (y otros tests que usan `fastapi.testclient.TestClient`): "Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead." No falla ningún test, no afecta comportamiento en runtime (solo aparece en la suite de tests). Revisar cuando FastAPI/Starlette publiquen una migración estable a `httpx2`, o al tocar de nuevo las dependencias de testing del backend.
+- **Pre-commit hooks locales**: excluidos deliberadamente del alcance de VS-2A/VS-2B/VS-2C (CI ya cubre lint/format/typecheck en cada PR) — no es deuda técnica, es una exclusión de alcance documentada en el plan de Fase 2; se retoma como mejora independiente si el founder lo pide.

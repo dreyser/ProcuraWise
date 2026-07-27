@@ -32,6 +32,76 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-27 — VS-2A: corrección de bug real encontrado en validación con Docker
+
+**✅ VS-2A queda verificado con Docker real tras corregir un bug encontrado en la primera corrida de `make test-integration`.** Sesión de alcance estrictamente acotado por el founder: corregir exclusivamente el fallo observado, sin iniciar VS-2B ni hacer commit.
+
+**Resumen:** `make test-integration` (con Docker real, Mongo+Azurite) falló en `test_update_one_replacement_forces_resolved_tenant_id`: PyMongo rechaza `Collection.update_one()` cuando el documento de actualización no tiene operadores `$` (un reemplazo completo debe ir por `Collection.replace_one()`). `TenantCollection.update_one` no distinguía esto — enviaba tanto operaciones `$set`/`$unset` como reemplazos completos al mismo método del driver. Se corrigió detectando la forma del `update` recibido (operador, reemplazo, o mezcla de ambos —rechazada como caso nuevo) y enrutando cada uno al método correcto de PyMongo, preservando intactas todas las protecciones de tenant ya existentes (filtro siempre resuelto, `tenant_id` nunca alterable, documento del caller nunca mutado).
+
+**Archivos tocados:**
+- `service/procurawise/shared/tenant_collection.py` — `update_one` ahora distingue actualización por operador (vía `Collection.update_one`) de reemplazo completo (vía `Collection.replace_one`); rechaza documentos que mezclan claves `$` con campos planos.
+- `service/tests/integration/test_tenant_collection.py` — ampliado de 9 a 19 casos: `$set` válido, reemplazo válido con/sin `tenant_id` explícito coincidente, reemplazo con `tenant_id` distinto rechazado, documento mixto rechazado sin tocar la base, documento de entrada no mutado, filtro con colisión de `tenant_id` rechazado (vía `update_one`), intento cross-tenant sin efecto tanto por operador como por reemplazo, `upsert` sin escape de tenant tanto por operador como por reemplazo.
+- `docs/development/current-phase.md` — estado de VS-2A actualizado a verificado con Docker real; nueva sub-sección "Fallo real encontrado y corregido".
+- `docs/development/session-handoff.md` (este archivo) — nueva entrada.
+
+**Resultado de pruebas:**
+- `make lint` → verde (ruff check + format, backend y frontend).
+- `make typecheck` → verde (mypy 0 errores; `tsc -b` sin errores).
+- `make test` → verde, 27 passed backend + 1 passed frontend.
+- `make test-integration` → verde, **32 passed** (0 fallos) — incluye las 19 pruebas nuevas/ampliadas de `test_tenant_collection.py` y las 8 de `test_tenant_isolation.py` (sin cambios, ya pasaban).
+- `make contracts` → regenerado sin diff de contenido (`git diff --exit-code` sobre `apps/web/src/api/client.ts` limpio, que es el gate real de `ci/contracts`).
+- `git diff --check` → reporta trailing whitespace dentro de comentarios JSDoc autogenerados por `orval` en `apps/web/src/api/client.ts` (14 líneas ya presentes en `HEAD` antes de esta sesión, ahora 28 por los nuevos endpoints de VS-2A con docstring multilínea). **No corregido deliberadamente**: es un archivo generado (se sobreescribiría en el próximo `make contracts`), no forma parte del bug corregido, y CI no usa `git diff --check` para este archivo — usa `git diff --exit-code`, que sí pasa limpio.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna. El whitespace de `client.ts` es preexistente al proyecto (característica del generador `orval`), no deuda nueva.
+
+**Instrucciones para la siguiente sesión:**
+- VS-2A está completo y verificado. El founder decide si comitea (no se hizo ningún commit en esta sesión ni en la anterior).
+- Siguiente paso de código: **VS-2B — Flujo backend del vertical slice**, en una sesión separada.
+- No tocar: frontend (VS-2C), auth productiva (`AUTH-PROD`).
+
+### Sesión — 2026-07-27 — VS-2A: Dominio, identidad de desarrollo y aislamiento
+
+**🔄 VS-2A — Implementado, pendiente de verificación con Docker (no disponible en esta sesión).** Precedida por una sesión de planeación en Plan Mode (mismo día) que dividió el vertical slice de Fase 2 en `VS-2A`/`VS-2B`/`VS-2C` (más `AUTH-PROD` pospuesto) y resolvió 10 ajustes de diseño exigidos por el founder tras revisar el plan: identidad de desarrollo por `Membership` (no `user_id`), reglas estrictas de `TenantCollection`, mass assignment con `extra="forbid"`, separación física estricta del router de proveedor, IDs de backlog no ambiguos, enums internos en inglés, reglas de estado explícitas, snapshot como fuente de verdad del scoring, pre-commit fuera de alcance, y estrategia de IDs UUID string consistente. Esta sesión implementó exactamente ese plan ya ajustado.
+
+**Resumen:** Primer código de dominio real del proyecto. Se creó el bounded context `identity` (`Tenant`/`User`/`Membership`/`VendorOrganization`), el wrapper `TenantCollection` con reglas de rechazo estrictas (nunca solo un filtro por convención — se prueban 9 casos negativos), el `DevelopmentIdentityProvider` (header `X-Dev-Membership-Id`, gateado a `environment in (local, test)`), `make seed-dev`/`seed-reset`, y la primera migración real de índices. Se montaron 2 endpoints nuevos bajo `/api/v1` (`/dev/actors`, `/me`) y se regeneraron los contratos OpenAPI/orval. No se implementó VS-2B ni VS-2C — quedan para sesiones futuras separadas, tal como exige el plan.
+
+**Archivos tocados:**
+- `service/procurawise/identity/` (nuevo paquete) — `models.py`, `repository.py`, `service.py`, `dev_provider.py`, `router.py`, `schemas.py`.
+- `service/procurawise/shared/tenant_collection.py` (nuevo) — `TenantCollection`/`TenantScopeError`.
+- `service/procurawise/shared/context.py` (nuevo) — `ActorContext`.
+- `service/procurawise/shared/api_models.py` (nuevo) — `APIModel` (`extra="forbid"`, base de todo schema de escritura futuro).
+- `service/procurawise/shared/mongo.py` — agrega `get_database(settings)`.
+- `service/procurawise/api/main.py` — monta `identity_router` bajo `/api/v1`.
+- `service/procurawise/dev_seed.py` (nuevo) — `seed()`/`reset()`, invocado por `make seed-dev`/`make seed-reset`.
+- `service/migrations/0001_identity_indexes.py` (nuevo) — primera migración real (antes el runner era no-op).
+- `Makefile` — targets `seed-dev`, `seed-reset` (patrón `CONFIRM=yes` igual que `dev-reset`).
+- `service/pyproject.toml` — `[tool.ruff.lint.flake8-bugbear] extend-immutable-calls = ["fastapi.Depends", "fastapi.Header"]` (evita falso positivo B008 de ruff contra el patrón de inyección de dependencias de FastAPI, ya usado en `identity/dev_provider.py` y `identity/router.py`).
+- `service/tests/unit/test_identity_models.py`, `service/tests/unit/test_dev_provider.py` (nuevos, verificados en verde).
+- `service/tests/integration/test_tenant_collection.py` (nuevo, 9 casos, `@pytest.mark.docker`).
+- `service/tests/security/` (paquete nuevo) `test_tenant_isolation.py` (nuevo, 8 casos, `@pytest.mark.docker`).
+- `apps/web/openapi.json` (no versionado, gitignored) y `apps/web/src/api/client.ts` — regenerados vía `make contracts`.
+- `docs/development/current-phase.md`, `docs/development/session-handoff.md` (este archivo), `docs/development/backlog.md`, `docs/product/roadmap.md` — actualizados con la restructuración de IDs (`VS-2A`/`VS-2B`/`VS-2C`/`AUTH-PROD`) y el estado de VS-2A.
+
+**Resultado de pruebas:**
+- `uv run ruff check .` → verde. `uv run ruff format --check .` → verde (tras agregar `extend-immutable-calls`).
+- `uv run mypy procurawise` → verde, 0 errores (27 archivos).
+- `uv run pytest -m "not docker"` → **27 passed**, 23 deselected (marcador `docker`). Incluye los tests nuevos de `identity`/`dev_provider`.
+- `python -m procurawise.api.export_openapi` + `pnpm contracts` (orval) → regenerado sin errores; `pnpm lint`/`pnpm typecheck`/`pnpm format` en `apps/web` → verdes tras la regeneración.
+- **No ejecutado en esta sesión** (Docker no disponible en el entorno): `make test-integration` — cubre `tests/integration/test_tenant_collection.py` (9 casos) y `tests/security/test_tenant_isolation.py` (8 casos), además de `make seed-dev`/`make migrate` contra Mongo real. Queda como verificación pendiente, mismo patrón que la Fase 1B (verificación en dos rondas).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna nueva — todas las decisiones de diseño de VS-2A ya habían sido resueltas explícitamente en la sesión de planeación previa (10 ajustes del founder) y no tocan ninguna de las áreas que `CLAUDE.md` §3 reserva para ADR (monolito, DB, hosting, patrón de comunicación).
+
+**Deuda técnica introducida:**
+- Ninguna nueva. Pre-commit sigue fuera de alcance (exclusión de alcance documentada, no deuda). La verificación con Docker real queda pendiente (ver "Resultado de pruebas") — no es deuda, es el siguiente paso obligatorio antes de considerar VS-2A formalmente cerrado.
+
+**Instrucciones para la siguiente sesión:**
+- Primero: correr `make dev-up && make migrate && make seed-dev && make test-integration` y confirmar en verde las 17 pruebas Docker nuevas (9 de `test_tenant_collection.py` + 8 de `test_tenant_isolation.py`). Revisar la tabla de actores que imprime `seed-dev`.
+- Si todo pasa, el founder decide si comitea VS-2A (no se comiteó nada en esta sesión) y luego abre una sesión nueva para **VS-2B — Flujo backend del vertical slice**.
+- No tocar todavía: frontend (VS-2C), auth productiva (`AUTH-PROD`), ni ninguna lógica de `evaluations`/`vendors`/`proposals`/`scoring` (eso es VS-2B).
+
 ### Sesión — 2026-07-18 — Fase 1C: Integración continua y seguridad de pipeline (cierre de Fase 1 — Fundación técnica)
 
 **✅ Fase 1C — Completed (redefinida).** Planeada en Plan Mode (2 preguntas bloqueantes resueltas vía `AskUserQuestion`: alcance acotado a CI/CD + seguridad de pipeline, sin pre-commit ni bounded contexts; repo asumido privado sin GitHub Advanced Security) y aprobada por el founder. Implementada y verificada localmente en la misma sesión. **Fase 1 — Fundación técnica queda formalmente cerrada** a nivel de código local; falta únicamente que el founder autorice el primer push para verificar los workflows contra GitHub real.

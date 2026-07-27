@@ -1,6 +1,7 @@
 import logging
 
 from pymongo import MongoClient
+from pymongo.database import Database
 from pymongo.errors import PyMongoError
 
 from procurawise.shared.config import Settings
@@ -31,3 +32,8 @@ def ping_mongo(client: MongoClient) -> bool:
         return True
     except PyMongoError:
         return False
+
+
+def get_database(settings: Settings) -> Database:
+    client = get_mongo_client(settings)
+    return client[settings.mongodb_db_name]

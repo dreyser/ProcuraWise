@@ -10,27 +10,26 @@ Estado por fase se actualiza en [`docs/development/current-phase.md`](current-ph
 
 ### E1 — Fundación técnica (Bloque 0)
 
-| Fase | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
-|---|---|---|---|---|---|
-| 0 | Bootstrap: docker-compose (mongo+azurite+redis+mailhog), `pyproject.toml`+uv, FastAPI `/health`, React hello-world, pre-commit, CI lint+test skeleton | P0 | — | `docker compose up` levanta todo; CI verde en PR vacío; `/health` responde 200 | ✅ Completed (2026-07-18, ejecutada como 3 sesiones — 1A/1B/1C, ver `current-phase.md`; pre-commit se movió a la Fase 1 `identity`; "CI verde en PR vacío" verificado localmente, verificación en GitHub real pendiente del founder) |
-| 1 | `identity`: Tenant/User/Membership + `TenantCollection` + middleware que extrae `tenant_id` del JWT | P0 | 0 | Crear tenant+usuario vía API; test negativo: tenant A no lee datos de tenant B | Not Started |
-| 2 | Auth local (email+password) + OIDC Microsoft/Google (authlib) + JWT propio + login/logout en frontend. Excluye MFA | P0 | 1 | Login exitoso ambos flujos; JWT contiene `tenant_id` correcto; sesión expira | Not Started |
+**Nota de IDs (2026-07-27):** las antiguas Fases 1 ("`identity`") y 2 ("Auth local") se restructuran para reflejar que el vertical slice se construye con un `DevelopmentIdentityProvider`, no con auth productiva. Los IDs `VS-2A`/`VS-2B`/`VS-2C`/`AUTH-PROD` reemplazan la numeración contradictoria; los números de fase ya cerrados u operativos (`0`, `8`-`28`) no se renumeran. Ver el plan de planeación correspondiente para el detalle completo de este cambio.
 
-### E2 — Vertical slice RFP básico (Bloque 1) — cierra en la Fase 7 con el primer demo end-to-end
-
-| Fase | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
+| Fase/ID | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
 |---|---|---|---|---|---|
-| 3 | `evaluations` CRUD + máquina de estados mínima (Borrador→Publicado→Cerrado) | P0 | 2 | Crear/editar evaluación en Borrador; transición de estado validada | Not Started |
-| 4 | `requirements` alta manual (categoría, prioridad, eliminatorio, 3 tipos de respuesta, peso) | P0 | 3 | Requerimiento asociado a evaluación; pesos visibles | Not Started |
-| 5 | `vendors` invitación simulada (email→log) + portal proveedor vía token, router `/vendor-portal` + captura `country`/`region` + mock de pantallas NDA/conflicto de interés (sin `Agreement` formal todavía) | P0 | 4 | Token de invitación da acceso solo a esa evaluación; proveedor no ve otras evaluaciones | Not Started |
-| 6 | `proposals` respuesta de proveedor, borrador, envío formal con snapshot inmutable | P0 | 5 | Envío crea snapshot; edición posterior al envío bloqueada | Not Started |
-| 7 | `scoring` básico manual 0-5 + tabla comparativa. **→ Cierre del vertical slice** | P0 | 6 | Comprador califica y ve comparativo de todos los proveedores invitados | Not Started |
+| 0 | Bootstrap: docker-compose (mongo+azurite+redis+mailhog), `pyproject.toml`+uv, FastAPI `/health`, React hello-world, pre-commit, CI lint+test skeleton | P0 | — | `docker compose up` levanta todo; CI verde en PR vacío; `/health` responde 200 | ✅ Completed (2026-07-18, ejecutada como 3 sesiones — 1A/1B/1C, ver `current-phase.md`; pre-commit se movió fuera de esta fase — ver nota en VS-2A abajo, no forma parte de su alcance; "CI verde en PR vacío" verificado localmente, verificación en GitHub real pendiente del founder) |
+| **VS-2A** (antes "Fase 1 — `identity`") | Tenant/User/Membership/VendorOrganization + `TenantCollection` (reglas estrictas: fuerza/rechaza `tenant_id` en insert, rechaza colisión de filtro y mutación de `tenant_id` vía `$set`/`$unset`/reemplazo, sin passthrough del driver) + `DevelopmentIdentityProvider` (`X-Dev-Membership-Id`, solo `environment=local\|test`) + `make seed-dev`/`seed-reset`. **Pre-commit explícitamente fuera de alcance** (CI ya cubre lint/format/typecheck) | P0 | 0 | Crear tenant+usuario+membership vía seed; `GET /api/v1/me` resuelve el actor correcto; una Membership de tenant A no lee recursos de tenant B (404); dev identity rechazada con `environment=production`; `make seed-dev` idempotente | 🔄 Implementado y verificado sin Docker (lint/typecheck/unit tests en verde, `make contracts` sin diff); **pendiente verificación de `make test-integration` contra Mongo real** (no había Docker disponible en la sesión de implementación) — mismo patrón de verificación en dos rondas que se usó en la Fase 1B, ver "Próximos pasos" en `current-phase.md` |
+| **AUTH-PROD** (antes "Fase 2 — Auth local") | Auth local (email+password) + OIDC Microsoft/Google (authlib) + JWT propio + login/logout en frontend, sustituyendo a `DevelopmentIdentityProvider`. Excluye MFA | P0 | VS-2C | Login exitoso ambos flujos; JWT contiene `tenant_id` correcto; sesión expira | Not Started — **pospuesta deliberadamente hasta después de VS-2C** (antes dependía de la Fase 1, ahora depende del cierre completo del vertical slice) |
+
+### E2 — Vertical slice RFP básico (Bloque 1) — cierra en VS-2C con el primer demo end-to-end
+
+| Fase/ID | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
+|---|---|---|---|---|---|
+| **VS-2B** (antes Fases 3-6) | Backend: `evaluations`+`requirements` (embebidos), `vendors`/`evaluation_vendors`, `proposals`+`answers` con snapshot inmutable al enviar, `scoring` 0-5. Máquina de estados con las 8 reglas explícitas (requirements/vendors solo en `draft`, answers solo en `collecting_responses`+`draft`, scores solo en `evaluating`, snapshot como fuente de verdad del cálculo). Mass assignment: `extra="forbid"` en todo schema de escritura. Router de proveedor físicamente separado bajo `/api/v1/vendor-portal/*`, sin acceso a `GET /api/v1/evaluations/{id}` | P0 | VS-2A | Flujo owner→requirement→vendor→proposal→submit→score→result funcional vía API; snapshot inmutable; proveedor no invitado→404; `vendor_contact` nunca accede a rutas de comprador; campo prohibido en body→422 | Not Started |
+| **VS-2C** (antes Fase 7 + frontend de 3-6) | Frontend: selector de Membership dev, páginas por rol, cliente OpenAPI regenerado, Playwright E2E (1 spec del flujo completo). **→ Cierre del vertical slice** | P0 | VS-2B | Demo manual de los 9 pasos desde la UI; Playwright verde; loading/empty/error visibles; actor activo siempre visible | Not Started |
 
 ### E3 — Colaboración interna y auditoría (Bloque 2, parte 1)
 
 | Fase | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
 |---|---|---|---|---|---|
-| 8 | `audit` AuditEvent append-only, instrumentado retroactivamente en fases 1-7 | P0 | 7 | Toda mutación relevante de fases 1-7 genera un `AuditEvent` consultable | Not Started |
+| 8 | `audit` AuditEvent append-only, instrumentado retroactivamente en VS-2A/VS-2B/VS-2C | P0 | VS-2C | Toda mutación relevante del vertical slice genera un `AuditEvent` consultable | Not Started |
 | 9 | RBAC completo (todos los roles del §4 de la spec) + `Assignment` por sección | P0 | 8 | Usuario sin rol adecuado recibe 403 en acción restringida | Not Started |
 
 ### E4 — Wizard y biblioteca de requerimientos (Bloque 2, parte 2)
@@ -98,6 +97,7 @@ Estado por fase se actualiza en [`docs/development/current-phase.md`](current-ph
 
 ## Notas explícitas de alcance del backlog
 
-- **La integración de IA (E5) no es requisito para completar el primer vertical slice (E2, fases 0-7).** El vertical slice usa scoring 100% manual, sin `AIProvider`.
+- **La integración de IA (E5) no es requisito para completar el primer vertical slice (E2, VS-2A/VS-2B/VS-2C).** El vertical slice usa scoring 100% manual, sin `AIProvider`.
 - **Stripe, correo real y Azure productivo no son requisito de la primera fase (E1) ni del vertical slice (E2).** Stripe llega en la Fase 25 (P1), correo real en la Fase 24, Azure real en la Fase 27 — todas muy posteriores al cierre del vertical slice.
+- **Auth productiva (`AUTH-PROD`) no es requisito para completar el vertical slice.** El vertical slice usa `DevelopmentIdentityProvider` (`X-Dev-Membership-Id`), gateado a `environment in (local, test)` — ver VS-2A.
 - Cada fase, al cerrar sesión, actualiza `docs/development/current-phase.md` y `docs/development/session-handoff.md` — único mecanismo de continuidad entre sesiones sin memoria compartida.
