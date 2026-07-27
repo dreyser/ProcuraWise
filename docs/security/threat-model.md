@@ -36,9 +36,27 @@ Marcado como riesgo crítico en la especificación (§24). Mitigación estructur
 - `tenant_id` exclusivamente del claim JWT (nunca body/query/header del cliente).
 - Wrapper `TenantCollection` inyecta automáticamente el filtro de tenant en cada operación Mongo.
 - Router disjunto `/vendor-portal/*` sin `tenant_id` de comprador en el JWT de proveedor.
-- `tests/security/test_tenant_isolation.py` y `test_vendor_isolation.py` corren en **cada PR desde la Fase 1**, no solo antes del piloto: token de tenant A contra IDs de tenant B → 404 (no 403, para no confirmar existencia).
+- `tests/security/test_tenant_isolation.py` y `test_vendor_isolation.py` corren en **cada PR desde VS-2A**, no solo antes del piloto: recurso de tenant A consultado desde tenant B → 404 (no 403, para no confirmar existencia).
 
 Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-multi-tenant-mongodb.md).
+
+**Estado de implementación (VS-2A, 2026-07-27):** `TenantCollection` (`service/procurawise/shared/tenant_collection.py`) implementado con las reglas descritas arriba más un control adicional: rechaza explícitamente cualquier intento de alterar `tenant_id` vía `$set`/`$setOnInsert`/`$unset` o reemplazo de documento, no solo vía filtro de lectura. El mecanismo de identidad (`DevelopmentIdentityProvider`, ver riesgo "Dev identity fuera de development" abajo) resuelve `tenant_id` desde una `Membership` persistida seleccionada por su propio `_id` (`X-Dev-Membership-Id`), nunca desde un valor de tenant enviado por el cliente. Pendiente de verificación contra Mongo real (sin Docker en la sesión de implementación) — ver `docs/development/current-phase.md`.
+
+## Riesgos específicos del vertical slice (VS-2A/VS-2B)
+
+| Riesgo | Mitigación | Estado |
+|---|---|---|
+| IDOR (acceso a un recurso de otro tenant por ID) | `TenantCollection` inyecta/valida `tenant_id` en cada operación; 404 uniforme | VS-2A implementado |
+| Tenant escape vía colección compartida | `TenantCollection` rechaza colisión de filtro y mutación de `tenant_id` (`$set`/`$unset`/reemplazo) | VS-2A implementado |
+| Enumeración de proveedores | `VendorOrganization` tenant-scoped (no hay directorio cross-tenant que enumerar) | VS-2A implementado |
+| Escalación de rol | Rol resuelto server-side desde `Membership` por `membership_id`; el cliente nunca envía `tenant_id` ni `role` | VS-2A implementado |
+| `DevelopmentIdentityProvider` habilitado fuera de development/test | Gate por `environment in (local, test)` → 404 en cualquier otro valor; test de integración explícito con `environment=production` | VS-2A implementado |
+| Mass assignment (campos gestionados por el servidor enviados por el cliente) | Todo schema de escritura hereda `APIModel` (`extra="forbid"`) → 422 | VS-2A (`APIModel` base); pruebas por endpoint de escritura llegan con VS-2B (primeros endpoints de escritura de negocio) |
+| NoSQL injection | Validación Pydantic de toda entrada antes de construir filtros Mongo | VS-2A (schemas de identity); se extiende en VS-2B |
+| Manipulación de estado (saltar transiciones de `Evaluation`/`Proposal`) | Transiciones solo vía endpoints dedicados que validan el estado origen server-side (las 8 reglas explícitas del diseño) | Diseñado, implementación en VS-2B |
+| Manipulación de score fuera de rango o por actor no autorizado | Solo `evaluator`/`owner`, solo durante `Evaluation.evaluating`, rango 0-5 validado, `requirement_id` debe existir en el `snapshot` de la propuesta | Diseñado, implementación en VS-2B |
+| Fuga de información hacia el proveedor (scores, comentarios, otros proveedores) | Router de proveedor (`/vendor-portal/*`) físicamente separado, con schemas de respuesta propios que nunca incluyen `Score`/comentarios/otros proveedores | Diseñado, implementación en VS-2B |
+| Logging de respuestas de propuesta | Disciplina de no pasar `answer.value`/`comment` como campo `extra` de logging estructurado | Diseñado, implementación en VS-2B |
 
 ## STRIDE por módulo crítico (resumen, se detalla en Fase 26)
 

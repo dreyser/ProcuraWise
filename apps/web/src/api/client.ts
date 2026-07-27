@@ -4,6 +4,49 @@
  * ProcuraWise API
  * OpenAPI spec version: 0.1.0
  */
+export type ActorContextResponseVendorOrgId = string | null;
+
+export interface ActorContextResponse {
+  membership_id: string;
+  user_id: string;
+  tenant_id: string;
+  tenant_name: string;
+  role: string;
+  vendor_org_id?: ActorContextResponseVendorOrgId;
+  display_name: string;
+}
+
+export type DevActorSummaryVendorOrgId = string | null;
+
+/**
+ * One selectable development actor for the `/dev` picker. `actor_id` is
+an alias for the underlying Membership id - selecting an actor means
+selecting a Membership, not a user.
+ */
+export interface DevActorSummary {
+  actor_id: string;
+  display_name: string;
+  tenant_name: string;
+  role: string;
+  vendor_org_id?: DevActorSummaryVendorOrgId;
+}
+
+export interface HTTPValidationError {
+  detail?: ValidationError[];
+}
+
+export type ValidationErrorLocItem = string | number;
+
+export type ValidationErrorCtx = { [key: string]: unknown };
+
+export interface ValidationError {
+  loc: ValidationErrorLocItem[];
+  msg: string;
+  type: string;
+  input?: unknown;
+  ctx?: ValidationErrorCtx;
+}
+
 export type LiveHealthLiveGet200 = {[key: string]: string};
 
 export type ReadyHealthReadyGet200 = { [key: string]: unknown };
@@ -88,4 +131,95 @@ export const readyHealthReadyGet = async ( options?: RequestInit): Promise<ready
   
   const data: readyHealthReadyGetResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as readyHealthReadyGetResponse
+}
+
+
+
+/**
+ * @summary List Dev Actors
+ */
+export type listDevActorsApiV1DevActorsGetResponse200 = {
+  data: DevActorSummary[]
+  status: 200
+}
+    
+export type listDevActorsApiV1DevActorsGetResponseSuccess = (listDevActorsApiV1DevActorsGetResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listDevActorsApiV1DevActorsGetResponse = (listDevActorsApiV1DevActorsGetResponseSuccess)
+
+export const getListDevActorsApiV1DevActorsGetUrl = () => {
+
+
+  
+
+  return `/api/v1/dev/actors`
+}
+
+export const listDevActorsApiV1DevActorsGet = async ( options?: RequestInit): Promise<listDevActorsApiV1DevActorsGetResponse> => {
+  
+  const res = await fetch(getListDevActorsApiV1DevActorsGetUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: listDevActorsApiV1DevActorsGetResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listDevActorsApiV1DevActorsGetResponse
+}
+
+
+
+/**
+ * @summary Get Me
+ */
+export type getMeApiV1MeGetResponse200 = {
+  data: ActorContextResponse
+  status: 200
+}
+
+export type getMeApiV1MeGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+    
+export type getMeApiV1MeGetResponseSuccess = (getMeApiV1MeGetResponse200) & {
+  headers: Headers;
+};
+export type getMeApiV1MeGetResponseError = (getMeApiV1MeGetResponse422) & {
+  headers: Headers;
+};
+
+export type getMeApiV1MeGetResponse = (getMeApiV1MeGetResponseSuccess | getMeApiV1MeGetResponseError)
+
+export const getGetMeApiV1MeGetUrl = () => {
+
+
+  
+
+  return `/api/v1/me`
+}
+
+export const getMeApiV1MeGet = async ( options?: RequestInit): Promise<getMeApiV1MeGetResponse> => {
+  
+  const res = await fetch(getGetMeApiV1MeGetUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getMeApiV1MeGetResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getMeApiV1MeGetResponse
 }

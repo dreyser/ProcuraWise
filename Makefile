@@ -1,4 +1,4 @@
-.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration
+.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration seed-dev seed-reset
 
 dev:
 	@trap 'kill 0' EXIT INT TERM; \
@@ -36,6 +36,17 @@ contracts:
 
 migrate:
 	cd service && uv run python -m procurawise.shared.migrations
+
+seed-dev:
+	cd service && uv run python -m procurawise.dev_seed
+
+seed-reset:
+	@if [ "$(CONFIRM)" != "yes" ]; then \
+		echo "ADVERTENCIA: seed-reset borra tenants/users/memberships/vendor_organizations de desarrollo en la base local."; \
+		echo "Vuelve a correr con 'make seed-reset CONFIRM=yes' si estas seguro."; \
+		exit 1; \
+	fi
+	cd service && uv run python -m procurawise.dev_seed --reset
 
 dev-up:
 	docker compose up -d --wait

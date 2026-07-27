@@ -10,8 +10,10 @@ Ver desglose fase-por-fase con historias y criterios de aceptación en [`docs/de
 
 | Bloque | Fases | Objetivo |
 |---|---|---|
-| 0 — Fundación | 0-2 | Bootstrap, `identity`/multi-tenant, auth |
-| 1 — Vertical slice | 3-7 | Evaluación → requerimiento → invitación simulada → propuesta → scoring manual → **primer demo end-to-end** |
+| 0 — Fundación | 0, VS-2A, AUTH-PROD | Bootstrap, `identity`/multi-tenant con identidad de desarrollo (VS-2A), auth productiva (AUTH-PROD) |
+| 1 — Vertical slice | VS-2A, VS-2B, VS-2C | Evaluación → requerimiento → invitación simulada → propuesta → scoring manual → **primer demo end-to-end**, usando identidad de desarrollo en vez de auth productiva |
+
+> **Nota de secuencia (2026-07-27):** el vertical slice (antes numerado como Fases 1, 3-7) se construye con un `DevelopmentIdentityProvider` en vez de auth real, por lo que `AUTH-PROD` (antes "Fase 2 — Auth local") se pospone hasta después de cerrar VS-2C. Ver el detalle de IDs y trazabilidad en la tabla E1/E2 de [`backlog.md`](../development/backlog.md).
 | 2 — Colaboración y auditoría | 8-12 | Audit trail, RBAC completo, wizard estático, biblioteca de requerimientos, publicación con snapshot |
 | 3 — IA y proveedores reales | 13-16 | `AIProvider` real (biblioteca interna), `ResearchProvider` completo (Foundry tras flag), NDA/conflicto de interés reales, documentos |
 | 4 — Q&A y validación | 17-18 | Q&A, evaluación asistida por IA |
