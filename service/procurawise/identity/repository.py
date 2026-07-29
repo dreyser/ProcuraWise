@@ -42,6 +42,14 @@ class UserRepository:
     def insert(self, document: dict[str, Any]) -> None:
         self._collection.insert_one(document)
 
+    def update_oidc_identities(self, user_id: str, oidc_identities: list[dict[str, Any]]) -> None:
+        """Just-in-time-link step of the OIDC callback (AUTH-PROD): replaces
+        the whole embedded list, never appended to piecemeal by an operator
+        other than the identity module itself."""
+        self._collection.update_one(
+            {"_id": user_id}, {"$set": {"oidc_identities": oidc_identities}}
+        )
+
 
 class MembershipRepository:
     """`find_by_id` and `list_all_for_dev` deliberately read outside any
@@ -72,6 +80,16 @@ class MembershipRepository:
 
     def list_all_for_dev(self) -> list[dict[str, Any]]:
         return list(self._collection.find({}))
+
+    def find_all_for_user(self, user_id: str) -> list[dict[str, Any]]:
+        """Every Membership row for a user across all tenants/roles - reads
+        outside any single tenant's scope for the same reason
+        `list_all_for_dev`/`find_by_id` do (see class docstring): resolving
+        "which tenants can this authenticated user act in" has no tenant to
+        scope by yet. Used by AUTH-PROD's GET /auth/memberships, gated to the
+        caller's own user_id (proven by their pre-session/access token), never
+        client-supplied."""
+        return list(self._collection.find({"user_id": user_id}))
 
     def insert(self, document: dict[str, Any]) -> None:
         self._collection.insert_one(document)

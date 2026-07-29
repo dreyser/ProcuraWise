@@ -3,8 +3,11 @@ from fastapi.testclient import TestClient
 
 from procurawise.api.main import app
 from procurawise.dev_seed import SEEDED_COLLECTIONS, seed
+from procurawise.identity.jwt_provider import create_access_token
+from procurawise.identity.repository import MembershipRepository, TenantRepository, UserRepository
+from procurawise.identity.service import IdentityService
 from procurawise.shared.config import Settings, get_settings
-from procurawise.shared.mongo import get_mongo_client
+from procurawise.shared.mongo import get_database, get_mongo_client
 from procurawise.shared.storage import AzureBlobStorage
 
 TEST_MONGO_DB_NAME = "procurawise_test"
@@ -54,6 +57,26 @@ def tenant_ids(seeded_actors: dict[tuple[str, str], str]) -> tuple[str, str]:
     tenants = {tenant_id for tenant_id, _role in seeded_actors}
     tenant_a, tenant_b = sorted(tenants)
     return tenant_a, tenant_b
+
+
+def bearer_headers_for(membership_id: str, mongo_test_settings: Settings) -> dict[str, str]:
+    """Mints a real access token for a seeded buyer Membership, in-process
+    (no HTTP round trip through /auth/login + /auth/switch-tenant) - existing
+    business-logic tests only need "a valid token for actor X", not to
+    exercise the login flow itself (see tests/api/test_auth_router.py for
+    that). AUTH-PROD replaced the dev-header mechanism for every route that
+    goes through shared.context.require_role (evaluations/proposals/scoring/
+    vendor-organizations), so those tests' owner/evaluator headers now come
+    from here. vendor_contact actors keep using DEV_ACTOR_HEADER unchanged
+    (AUTH-PROD scope decision #1 - vendor_portal still depends on
+    identity.dev_provider directly)."""
+    db = get_database(mongo_test_settings)
+    identity_service = IdentityService(
+        tenants=TenantRepository(db), users=UserRepository(db), memberships=MembershipRepository(db)
+    )
+    context = identity_service.resolve_actor_context(membership_id)
+    token, _ = create_access_token(context, mongo_test_settings)
+    return {"Authorization": f"Bearer {token}"}
 
 
 def unique_actor_by_role(seeded_actors: dict[tuple[str, str], str], role: str) -> tuple[str, str]:

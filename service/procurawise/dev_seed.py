@@ -5,6 +5,7 @@ from dataclasses import replace
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.models import Membership, Role, Tenant, User, VendorOrganization
+from procurawise.identity.passwords import hash_password
 from procurawise.identity.repository import (
     MembershipRepository,
     TenantRepository,
@@ -18,6 +19,12 @@ from procurawise.shared.logging import configure_logging
 from procurawise.shared.mongo import get_database
 
 logger = logging.getLogger("procurawise.dev_seed")
+
+# Known local-dev password for every seeded buyer user (AUTH-PROD) - lets a
+# developer exercise the real POST /auth/login form without registering real
+# OIDC apps. Never used outside local/test (this whole module is gated to
+# that), never a production credential.
+DEV_BUYER_PASSWORD = "dev-password-2026"
 
 # Collections this script owns. `make seed-reset` drops exactly these, nothing
 # from a future bounded context - keep this list in sync as seed-dev grows.
@@ -49,11 +56,14 @@ def _get_or_create_tenant(tenants: TenantRepository, slug: str, name: str) -> Te
     return tenant
 
 
-def _get_or_create_user(users: UserRepository, email: str, display_name: str) -> User:
+def _get_or_create_user(
+    users: UserRepository, email: str, display_name: str, password: str | None = None
+) -> User:
     existing = users.find_by_email(email)
     if existing is not None:
         return User.from_document(existing)
-    user = User.create(display_name=display_name, email=email)
+    password_hash = hash_password(password) if password else None
+    user = User.create(display_name=display_name, email=email, password_hash=password_hash)
     users.insert(user.to_document())
     return user
 
@@ -157,11 +167,23 @@ def seed(settings: Settings) -> list[Membership]:
     tenant_a = _get_or_create_tenant(tenants, "dev-tenant-a", "Acme Compradora (dev)")
     tenant_b = _get_or_create_tenant(tenants, "dev-tenant-b", "Globex Compradora (dev)")
 
-    owner_a = _get_or_create_user(users, "owner.a@dev.procurawise.local", "Owner A")
-    evaluator_a = _get_or_create_user(users, "evaluator.a@dev.procurawise.local", "Evaluator A")
+    # Buyer users get a known local-dev password (DEV_BUYER_PASSWORD) so
+    # POST /auth/login is exercisable without real OIDC apps. vendor_user_a
+    # stays without one - the vendor portal keeps using the interim dev-header
+    # mechanism (X-Dev-Membership-Id) until Fase 15, not real login.
+    owner_a = _get_or_create_user(
+        users, "owner.a@dev.procurawise.local", "Owner A", DEV_BUYER_PASSWORD
+    )
+    evaluator_a = _get_or_create_user(
+        users, "evaluator.a@dev.procurawise.local", "Evaluator A", DEV_BUYER_PASSWORD
+    )
     vendor_user_a = _get_or_create_user(users, "vendor.a@dev.procurawise.local", "Vendor Contact A")
-    owner_b = _get_or_create_user(users, "owner.b@dev.procurawise.local", "Owner B")
-    evaluator_b = _get_or_create_user(users, "evaluator.b@dev.procurawise.local", "Evaluator B")
+    owner_b = _get_or_create_user(
+        users, "owner.b@dev.procurawise.local", "Owner B", DEV_BUYER_PASSWORD
+    )
+    evaluator_b = _get_or_create_user(
+        users, "evaluator.b@dev.procurawise.local", "Evaluator B", DEV_BUYER_PASSWORD
+    )
 
     vendor_org_a = _get_or_create_vendor_org(vendor_orgs, tenant_a, "Proveedor Uno (dev)")
 

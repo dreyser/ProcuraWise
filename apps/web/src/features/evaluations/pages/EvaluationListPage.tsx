@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useListEvaluationsApiV1EvaluationsGet, type EvaluationSummaryResponse } from '@/api/client'
-import { useActor } from '@/actor/ActorContext'
+import { useAuth } from '@/auth/AuthContext'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { EmptyState } from '@/components/EmptyState'
@@ -19,7 +19,7 @@ import { normalizeApiError } from '@/lib/errors'
 import { unwrapData } from '@/lib/http'
 
 export function EvaluationListPage() {
-  const { actor } = useActor()
+  const { actor } = useAuth()
   const isOwner = actor?.role === 'evaluation_owner'
   const { data: response, isLoading, error } = useListEvaluationsApiV1EvaluationsGet()
   const data = unwrapData<EvaluationSummaryResponse[]>(response)

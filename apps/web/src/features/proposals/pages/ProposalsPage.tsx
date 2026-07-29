@@ -12,7 +12,7 @@ import {
   type VendorOrganizationListResponse,
 } from '@/api/client'
 import { ApiError, unwrapData } from '@/lib/http'
-import { useActor } from '@/actor/ActorContext'
+import { useAuth } from '@/auth/AuthContext'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
@@ -33,7 +33,7 @@ import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTa
 
 export function ProposalsPage() {
   const { evaluationId } = useParams<{ evaluationId: string }>()
-  const { actor } = useActor()
+  const { actor } = useAuth()
   const isOwner = actor?.role === 'evaluation_owner'
   const queryClient = useQueryClient()
 

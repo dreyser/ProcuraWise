@@ -11,7 +11,7 @@ import {
   type RequirementResponse,
 } from '@/api/client'
 import { ApiError, unwrapData } from '@/lib/http'
-import { useActor } from '@/actor/ActorContext'
+import { useAuth } from '@/auth/AuthContext'
 import { StatusBadge } from '@/components/StatusBadge'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -43,7 +43,7 @@ type FormTarget =
 
 export function RequirementsPage() {
   const { evaluationId } = useParams<{ evaluationId: string }>()
-  const { actor } = useActor()
+  const { actor } = useAuth()
   const isOwner = actor?.role === 'evaluation_owner'
   const queryClient = useQueryClient()
 

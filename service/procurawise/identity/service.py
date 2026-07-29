@@ -1,6 +1,8 @@
 import base64
 import json
 
+from fastapi import Depends
+
 from procurawise.identity.models import Membership, VendorOrganization
 from procurawise.identity.repository import (
     MembershipRepository,
@@ -8,7 +10,9 @@ from procurawise.identity.repository import (
     UserRepository,
     VendorOrganizationRepository,
 )
+from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext
+from procurawise.shared.mongo import get_database
 
 
 class ActorNotFoundError(Exception):
@@ -46,6 +50,19 @@ class IdentityService:
         )
         return [context for context in contexts if context is not None]
 
+    def list_memberships_for_user(
+        self, user_id: str, *, roles: tuple[str, ...]
+    ) -> list[ActorContext]:
+        """Used by AUTH-PROD's GET /auth/memberships: every Membership the
+        authenticated user holds, filtered to `roles` (buyer roles only, in
+        practice - defense in depth against a vendor_contact Membership ever
+        being offered through the buyer login flow, see auth_router.py)."""
+        contexts = (
+            self._build_context(Membership.from_document(doc))
+            for doc in self._memberships.find_all_for_user(user_id)
+        )
+        return [context for context in contexts if context is not None and context.role in roles]
+
     def _build_context(self, membership: Membership) -> ActorContext | None:
         tenant_doc = self._tenants.find_by_id(membership.tenant_id)
         user_doc = self._users.find_by_id(membership.user_id)
@@ -60,6 +77,19 @@ class IdentityService:
             vendor_org_id=membership.vendor_org_id,
             display_name=user_doc["display_name"],
         )
+
+
+def get_identity_service(settings: Settings = Depends(get_settings)) -> IdentityService:
+    """Shared factory - used by the dev-header provider (identity/dev_provider.py,
+    still the vendor_contact mechanism) and by AUTH-PROD's identity/auth_router.py
+    alike. Lives here, not in either of those, since both depend on it rather
+    than on each other."""
+    db = get_database(settings)
+    return IdentityService(
+        tenants=TenantRepository(db),
+        users=UserRepository(db),
+        memberships=MembershipRepository(db),
+    )
 
 
 def _encode_vendor_organization_cursor(name: str, vendor_org_id: str) -> str:

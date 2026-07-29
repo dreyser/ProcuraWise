@@ -34,11 +34,60 @@ def test_settings_storage_api_version_can_be_set_by_field_name() -> None:
     assert settings.storage_api_version == "2024-08-04"
 
 
+_VALID_PRODUCTION_AUTH_OVERRIDES = {
+    "jwt_secret": "x" * 32,
+    "oidc_microsoft_client_id": "mid",
+    "oidc_microsoft_client_secret": "msecret",
+    "oidc_google_client_id": "gid",
+    "oidc_google_client_secret": "gsecret",
+}
+
+
 def test_settings_production_rejects_memory_queue() -> None:
+    # Valid auth config alongside, so only the queue-backend check is
+    # exercised here - the auth validator has its own tests below.
     with pytest.raises(ValidationError, match="queue_backend=memory"):
-        Settings(_env_file=None, environment="production", queue_backend="memory")
+        Settings(
+            _env_file=None,
+            environment="production",
+            queue_backend="memory",
+            **_VALID_PRODUCTION_AUTH_OVERRIDES,
+        )
 
 
 def test_settings_production_allows_service_bus_queue() -> None:
-    settings = Settings(_env_file=None, environment="production", queue_backend="service_bus")
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        queue_backend="service_bus",
+        **_VALID_PRODUCTION_AUTH_OVERRIDES,
+    )
     assert settings.queue_backend == "service_bus"
+
+
+def test_settings_local_allows_default_jwt_secret() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.jwt_secret  # default present, no error outside production
+
+
+def test_settings_production_rejects_default_jwt_secret() -> None:
+    overrides = {**_VALID_PRODUCTION_AUTH_OVERRIDES}
+    del overrides["jwt_secret"]
+    with pytest.raises(ValidationError, match="jwt_secret"):
+        Settings(_env_file=None, environment="production", queue_backend="service_bus", **overrides)
+
+
+def test_settings_production_rejects_short_jwt_secret() -> None:
+    overrides = {**_VALID_PRODUCTION_AUTH_OVERRIDES, "jwt_secret": "too-short"}
+    with pytest.raises(ValidationError, match="jwt_secret"):
+        Settings(_env_file=None, environment="production", queue_backend="service_bus", **overrides)
+
+
+def test_settings_production_requires_oidc_credentials() -> None:
+    with pytest.raises(ValidationError, match="oidc"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            queue_backend="service_bus",
+            jwt_secret="x" * 32,
+        )

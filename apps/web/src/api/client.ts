@@ -169,10 +169,37 @@ export interface HTTPValidationError {
   detail?: ValidationError[]
 }
 
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface MembershipOption {
+  membership_id: string
+  tenant_id: string
+  tenant_name: string
+  role: string
+  display_name: string
+}
+
+export interface MembershipsResponse {
+  memberships: MembershipOption[]
+}
+
 export interface PartialResult {
   earned_points: number
   maximum_points: number
   model_coverage_percent: number
+}
+
+/**
+ * Issued by POST /auth/login (and, from Bloque 3, the OIDC callback) -
+proves "this is a real user", nothing about tenant/role yet.
+ */
+export interface PreSessionResponse {
+  pre_session_token: string
+  token_type?: string
+  expires_in: number
 }
 
 export type ProposalDetailResponseStatus =
@@ -514,6 +541,21 @@ export interface SubmitRequest {
   expected_version: number
 }
 
+export interface SwitchTenantRequest {
+  membership_id: string
+}
+
+/**
+ * The final access token, scoped to exactly one tenant/role - "one JWT =
+one tenant" (ADR 0002).
+ */
+export interface TokenResponse {
+  access_token: string
+  token_type?: string
+  expires_in: number
+  actor: ActorContextResponse
+}
+
 export type ValidationErrorLocItem = string | number
 
 export type ValidationErrorCtx = { [key: string]: unknown }
@@ -664,6 +706,11 @@ export interface VendorRequirementResponse {
 export type LiveHealthLiveGet200 = { [key: string]: string }
 
 export type ReadyHealthReadyGet200 = { [key: string]: unknown }
+
+export type OidcCallbackApiV1AuthOidcProviderCallbackGetParams = {
+  code: string
+  state: string
+}
 
 export type ListVendorOrganizationsApiV1VendorOrganizationsGetParams = {
   search?: string | null
@@ -913,6 +960,779 @@ export function useReadyHealthReadyGet<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getReadyHealthReadyGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Login
+ */
+export type loginApiV1AuthLoginPostResponse200 = {
+  data: PreSessionResponse
+  status: 200
+}
+
+export type loginApiV1AuthLoginPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type loginApiV1AuthLoginPostResponseSuccess = loginApiV1AuthLoginPostResponse200 & {
+  headers: Headers
+}
+export type loginApiV1AuthLoginPostResponseError = loginApiV1AuthLoginPostResponse422 & {
+  headers: Headers
+}
+
+export type loginApiV1AuthLoginPostResponse =
+  loginApiV1AuthLoginPostResponseSuccess | loginApiV1AuthLoginPostResponseError
+
+export const getLoginApiV1AuthLoginPostUrl = () => {
+  return `/api/v1/auth/login`
+}
+
+export const loginApiV1AuthLoginPost = async (
+  loginRequest: LoginRequest,
+  options?: RequestInit,
+): Promise<loginApiV1AuthLoginPostResponse> => {
+  return apiFetch<loginApiV1AuthLoginPostResponse>(getLoginApiV1AuthLoginPostUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(loginRequest),
+  })
+}
+
+export const getLoginApiV1AuthLoginPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+    TError,
+    { data: LoginRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+  TError,
+  { data: LoginRequest },
+  TContext
+> => {
+  const mutationKey = ['loginApiV1AuthLoginPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+    { data: LoginRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return loginApiV1AuthLoginPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type LoginApiV1AuthLoginPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>
+>
+export type LoginApiV1AuthLoginPostMutationBody = LoginRequest
+export type LoginApiV1AuthLoginPostMutationError = HTTPValidationError
+
+/**
+ * @summary Login
+ */
+export const useLoginApiV1AuthLoginPost = <TError = HTTPValidationError, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+      TError,
+      { data: LoginRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof loginApiV1AuthLoginPost>>,
+  TError,
+  { data: LoginRequest },
+  TContext
+> => {
+  const mutationOptions = getLoginApiV1AuthLoginPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Memberships
+ */
+export type listMembershipsApiV1AuthMembershipsGetResponse200 = {
+  data: MembershipsResponse
+  status: 200
+}
+
+export type listMembershipsApiV1AuthMembershipsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listMembershipsApiV1AuthMembershipsGetResponseSuccess =
+  listMembershipsApiV1AuthMembershipsGetResponse200 & {
+    headers: Headers
+  }
+export type listMembershipsApiV1AuthMembershipsGetResponseError =
+  listMembershipsApiV1AuthMembershipsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listMembershipsApiV1AuthMembershipsGetResponse =
+  | listMembershipsApiV1AuthMembershipsGetResponseSuccess
+  | listMembershipsApiV1AuthMembershipsGetResponseError
+
+export const getListMembershipsApiV1AuthMembershipsGetUrl = () => {
+  return `/api/v1/auth/memberships`
+}
+
+export const listMembershipsApiV1AuthMembershipsGet = async (
+  options?: RequestInit,
+): Promise<listMembershipsApiV1AuthMembershipsGetResponse> => {
+  return apiFetch<listMembershipsApiV1AuthMembershipsGetResponse>(
+    getListMembershipsApiV1AuthMembershipsGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListMembershipsApiV1AuthMembershipsGetQueryKey = () => {
+  return [`/api/v1/auth/memberships`] as const
+}
+
+export const getListMembershipsApiV1AuthMembershipsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListMembershipsApiV1AuthMembershipsGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>
+  > = () => listMembershipsApiV1AuthMembershipsGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListMembershipsApiV1AuthMembershipsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>
+>
+export type ListMembershipsApiV1AuthMembershipsGetQueryError = HTTPValidationError
+
+export function useListMembershipsApiV1AuthMembershipsGet<
+  TData = Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMembershipsApiV1AuthMembershipsGet<
+  TData = Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListMembershipsApiV1AuthMembershipsGet<
+  TData = Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Memberships
+ */
+
+export function useListMembershipsApiV1AuthMembershipsGet<
+  TData = Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listMembershipsApiV1AuthMembershipsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListMembershipsApiV1AuthMembershipsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Switch Tenant
+ */
+export type switchTenantApiV1AuthSwitchTenantPostResponse200 = {
+  data: TokenResponse
+  status: 200
+}
+
+export type switchTenantApiV1AuthSwitchTenantPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type switchTenantApiV1AuthSwitchTenantPostResponseSuccess =
+  switchTenantApiV1AuthSwitchTenantPostResponse200 & {
+    headers: Headers
+  }
+export type switchTenantApiV1AuthSwitchTenantPostResponseError =
+  switchTenantApiV1AuthSwitchTenantPostResponse422 & {
+    headers: Headers
+  }
+
+export type switchTenantApiV1AuthSwitchTenantPostResponse =
+  | switchTenantApiV1AuthSwitchTenantPostResponseSuccess
+  | switchTenantApiV1AuthSwitchTenantPostResponseError
+
+export const getSwitchTenantApiV1AuthSwitchTenantPostUrl = () => {
+  return `/api/v1/auth/switch-tenant`
+}
+
+export const switchTenantApiV1AuthSwitchTenantPost = async (
+  switchTenantRequest: SwitchTenantRequest,
+  options?: RequestInit,
+): Promise<switchTenantApiV1AuthSwitchTenantPostResponse> => {
+  return apiFetch<switchTenantApiV1AuthSwitchTenantPostResponse>(
+    getSwitchTenantApiV1AuthSwitchTenantPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(switchTenantRequest),
+    },
+  )
+}
+
+export const getSwitchTenantApiV1AuthSwitchTenantPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof switchTenantApiV1AuthSwitchTenantPost>>,
+    TError,
+    { data: SwitchTenantRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof switchTenantApiV1AuthSwitchTenantPost>>,
+  TError,
+  { data: SwitchTenantRequest },
+  TContext
+> => {
+  const mutationKey = ['switchTenantApiV1AuthSwitchTenantPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof switchTenantApiV1AuthSwitchTenantPost>>,
+    { data: SwitchTenantRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return switchTenantApiV1AuthSwitchTenantPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type SwitchTenantApiV1AuthSwitchTenantPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof switchTenantApiV1AuthSwitchTenantPost>>
+>
+export type SwitchTenantApiV1AuthSwitchTenantPostMutationBody = SwitchTenantRequest
+export type SwitchTenantApiV1AuthSwitchTenantPostMutationError = HTTPValidationError
+
+/**
+ * @summary Switch Tenant
+ */
+export const useSwitchTenantApiV1AuthSwitchTenantPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof switchTenantApiV1AuthSwitchTenantPost>>,
+      TError,
+      { data: SwitchTenantRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof switchTenantApiV1AuthSwitchTenantPost>>,
+  TError,
+  { data: SwitchTenantRequest },
+  TContext
+> => {
+  const mutationOptions = getSwitchTenantApiV1AuthSwitchTenantPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Oidc Login
+ */
+export type oidcLoginApiV1AuthOidcProviderLoginGetResponse200 = {
+  data: unknown
+  status: 200
+}
+
+export type oidcLoginApiV1AuthOidcProviderLoginGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type oidcLoginApiV1AuthOidcProviderLoginGetResponseSuccess =
+  oidcLoginApiV1AuthOidcProviderLoginGetResponse200 & {
+    headers: Headers
+  }
+export type oidcLoginApiV1AuthOidcProviderLoginGetResponseError =
+  oidcLoginApiV1AuthOidcProviderLoginGetResponse422 & {
+    headers: Headers
+  }
+
+export type oidcLoginApiV1AuthOidcProviderLoginGetResponse =
+  | oidcLoginApiV1AuthOidcProviderLoginGetResponseSuccess
+  | oidcLoginApiV1AuthOidcProviderLoginGetResponseError
+
+export const getOidcLoginApiV1AuthOidcProviderLoginGetUrl = (provider: 'microsoft' | 'google') => {
+  return `/api/v1/auth/oidc/${provider}/login`
+}
+
+export const oidcLoginApiV1AuthOidcProviderLoginGet = async (
+  provider: 'microsoft' | 'google',
+  options?: RequestInit,
+): Promise<oidcLoginApiV1AuthOidcProviderLoginGetResponse> => {
+  return apiFetch<oidcLoginApiV1AuthOidcProviderLoginGetResponse>(
+    getOidcLoginApiV1AuthOidcProviderLoginGetUrl(provider),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getOidcLoginApiV1AuthOidcProviderLoginGetQueryKey = (
+  provider?: 'microsoft' | 'google',
+) => {
+  return [`/api/v1/auth/oidc/${provider}/login`] as const
+}
+
+export const getOidcLoginApiV1AuthOidcProviderLoginGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getOidcLoginApiV1AuthOidcProviderLoginGetQueryKey(provider)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>
+  > = () => oidcLoginApiV1AuthOidcProviderLoginGet(provider)
+
+  return { queryKey, queryFn, enabled: !!provider, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type OidcLoginApiV1AuthOidcProviderLoginGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>
+>
+export type OidcLoginApiV1AuthOidcProviderLoginGetQueryError = HTTPValidationError
+
+export function useOidcLoginApiV1AuthOidcProviderLoginGet<
+  TData = Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcLoginApiV1AuthOidcProviderLoginGet<
+  TData = Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcLoginApiV1AuthOidcProviderLoginGet<
+  TData = Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Oidc Login
+ */
+
+export function useOidcLoginApiV1AuthOidcProviderLoginGet<
+  TData = Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcLoginApiV1AuthOidcProviderLoginGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getOidcLoginApiV1AuthOidcProviderLoginGetQueryOptions(provider, options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Oidc Callback
+ */
+export type oidcCallbackApiV1AuthOidcProviderCallbackGetResponse200 = {
+  data: unknown
+  status: 200
+}
+
+export type oidcCallbackApiV1AuthOidcProviderCallbackGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type oidcCallbackApiV1AuthOidcProviderCallbackGetResponseSuccess =
+  oidcCallbackApiV1AuthOidcProviderCallbackGetResponse200 & {
+    headers: Headers
+  }
+export type oidcCallbackApiV1AuthOidcProviderCallbackGetResponseError =
+  oidcCallbackApiV1AuthOidcProviderCallbackGetResponse422 & {
+    headers: Headers
+  }
+
+export type oidcCallbackApiV1AuthOidcProviderCallbackGetResponse =
+  | oidcCallbackApiV1AuthOidcProviderCallbackGetResponseSuccess
+  | oidcCallbackApiV1AuthOidcProviderCallbackGetResponseError
+
+export const getOidcCallbackApiV1AuthOidcProviderCallbackGetUrl = (
+  provider: 'microsoft' | 'google',
+  params: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+) => {
+  const normalizedParams = new URLSearchParams()
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  })
+
+  const stringifiedParams = normalizedParams.toString()
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/auth/oidc/${provider}/callback?${stringifiedParams}`
+    : `/api/v1/auth/oidc/${provider}/callback`
+}
+
+export const oidcCallbackApiV1AuthOidcProviderCallbackGet = async (
+  provider: 'microsoft' | 'google',
+  params: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+  options?: RequestInit,
+): Promise<oidcCallbackApiV1AuthOidcProviderCallbackGetResponse> => {
+  return apiFetch<oidcCallbackApiV1AuthOidcProviderCallbackGetResponse>(
+    getOidcCallbackApiV1AuthOidcProviderCallbackGetUrl(provider, params),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getOidcCallbackApiV1AuthOidcProviderCallbackGetQueryKey = (
+  provider?: 'microsoft' | 'google',
+  params?: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+) => {
+  return [`/api/v1/auth/oidc/${provider}/callback`, ...(params ? [params] : [])] as const
+}
+
+export const getOidcCallbackApiV1AuthOidcProviderCallbackGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  params: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getOidcCallbackApiV1AuthOidcProviderCallbackGetQueryKey(provider, params)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>
+  > = () => oidcCallbackApiV1AuthOidcProviderCallbackGet(provider, params)
+
+  return { queryKey, queryFn, enabled: !!provider, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type OidcCallbackApiV1AuthOidcProviderCallbackGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>
+>
+export type OidcCallbackApiV1AuthOidcProviderCallbackGetQueryError = HTTPValidationError
+
+export function useOidcCallbackApiV1AuthOidcProviderCallbackGet<
+  TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  params: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcCallbackApiV1AuthOidcProviderCallbackGet<
+  TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  params: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+          TError,
+          Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useOidcCallbackApiV1AuthOidcProviderCallbackGet<
+  TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  params: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Oidc Callback
+ */
+
+export function useOidcCallbackApiV1AuthOidcProviderCallbackGet<
+  TData = Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+  TError = HTTPValidationError,
+>(
+  provider: 'microsoft' | 'google',
+  params: OidcCallbackApiV1AuthOidcProviderCallbackGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof oidcCallbackApiV1AuthOidcProviderCallbackGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getOidcCallbackApiV1AuthOidcProviderCallbackGetQueryOptions(
+    provider,
+    params,
+    options,
+  )
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>

@@ -3,20 +3,22 @@ import pytest
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
 from procurawise.identity.models import VendorOrganization
 from procurawise.identity.repository import VendorOrganizationRepository
-from tests.conftest import tenant_ids, unique_actor_by_role
+from tests.conftest import bearer_headers_for, tenant_ids, unique_actor_by_role
 
 pytestmark = pytest.mark.docker
 
 
 def test_owner_lists_only_own_tenant_vendor_organizations(
-    client, seeded_actors, mongo_test_db
+    client, seeded_actors, mongo_test_db, mongo_test_settings
 ) -> None:
     # `tenant_ids()` labels are sorted-UUID order, not tied to which dev_seed
     # slug they came from (see its docstring) - never assume either label
     # carries the seeded "Proveedor Uno (dev)" baseline; insert known-named
     # organizations into both instead of relying on that baseline.
     tenant_a, tenant_b = tenant_ids(seeded_actors)
-    owner_a_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_a_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
 
     repo = VendorOrganizationRepository(mongo_test_db)
     own_tenant_vendor = VendorOrganization.create(
@@ -38,9 +40,13 @@ def test_owner_lists_only_own_tenant_vendor_organizations(
     assert all("tenant_id" not in item for item in body["items"])
 
 
-def test_evaluator_can_list_vendor_organizations(client, seeded_actors) -> None:
+def test_evaluator_can_list_vendor_organizations(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    evaluator_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluator")]}
+    evaluator_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+    )
 
     response = client.get("/api/v1/vendor-organizations", headers=evaluator_headers)
 
@@ -48,22 +54,30 @@ def test_evaluator_can_list_vendor_organizations(client, seeded_actors) -> None:
 
 
 def test_vendor_contact_cannot_list_vendor_organizations(client, seeded_actors) -> None:
+    # vendor_contact never gets a real access token for buyer routes (AUTH-PROD
+    # scope decision #1 - only the interim dev header, which the vendor
+    # portal itself understands, not shared.context.require_role anymore).
+    # Sending that dev header here now fails at authentication (401, missing
+    # bearer token), before role-checking (403) ever runs - a strictly
+    # stronger isolation guarantee than before.
     _tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
 
     response = client.get("/api/v1/vendor-organizations", headers=vendor_headers)
 
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 def test_search_with_unbalanced_regex_syntax_is_treated_as_a_literal(
-    client, seeded_actors, mongo_test_db
+    client, seeded_actors, mongo_test_db, mongo_test_settings
 ) -> None:
     """`(` alone is invalid, unbalanced regex syntax - if the search term
     were interpolated into the Mongo `$regex` unescaped, this would fail
     with a server-side regex compile error instead of a normal 200."""
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
 
     repo = VendorOrganizationRepository(mongo_test_db)
     tricky = VendorOrganization.create(tenant_id=tenant_a, name="Proveedor (Beta)")
@@ -80,9 +94,11 @@ def test_search_with_unbalanced_regex_syntax_is_treated_as_a_literal(
     assert "Proveedor (Beta)" in names
 
 
-def test_limit_above_maximum_is_rejected(client, seeded_actors) -> None:
+def test_limit_above_maximum_is_rejected(client, seeded_actors, mongo_test_settings) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
 
     response = client.get(
         "/api/v1/vendor-organizations", params={"limit": 101}, headers=owner_headers
@@ -91,9 +107,11 @@ def test_limit_above_maximum_is_rejected(client, seeded_actors) -> None:
     assert response.status_code == 422
 
 
-def test_invalid_cursor_is_rejected(client, seeded_actors) -> None:
+def test_invalid_cursor_is_rejected(client, seeded_actors, mongo_test_settings) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
 
     response = client.get(
         "/api/v1/vendor-organizations",
@@ -105,7 +123,7 @@ def test_invalid_cursor_is_rejected(client, seeded_actors) -> None:
 
 
 def test_tenant_without_vendor_organizations_returns_empty_page(
-    client, seeded_actors, mongo_test_db
+    client, seeded_actors, mongo_test_db, mongo_test_settings
 ) -> None:
     # Resolve "the tenant with zero vendor organizations" from the database
     # itself - dev_seed always leaves exactly one of the two tenants without
@@ -116,7 +134,9 @@ def test_tenant_without_vendor_organizations_returns_empty_page(
         for tenant_id in (tenant_a, tenant_b)
         if mongo_test_db["vendor_organizations"].count_documents({"tenant_id": tenant_id}) == 0
     )
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(empty_tenant, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(empty_tenant, "evaluation_owner")], mongo_test_settings
+    )
 
     response = client.get("/api/v1/vendor-organizations", headers=owner_headers)
 
@@ -125,10 +145,12 @@ def test_tenant_without_vendor_organizations_returns_empty_page(
 
 
 def test_pagination_across_pages_is_stable_and_exhaustive(
-    client, seeded_actors, mongo_test_db
+    client, seeded_actors, mongo_test_db, mongo_test_settings
 ) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
 
     initial_count = mongo_test_db["vendor_organizations"].count_documents({"tenant_id": tenant_a})
     inserted_names = ["Alfa Solutions", "Beta Software", "Gamma Systems", "Delta Tech"]

@@ -1,10 +1,24 @@
 // Mutator injected into every orval-generated call (see orval.config.ts
-// override.mutator). This is the single place that attaches the dev-actor
-// header - no component or feature hook may set it directly.
+// override.mutator). This is the single place that attaches identity
+// headers - no component or feature hook may set them directly.
+//
+// Two independent mechanisms coexist here (AUTH-PROD scope decision #1):
+// `activeMembershipId` is the interim dev-header mechanism vendor_contact
+// still uses (actor/ActorContext.tsx); `activeAccessToken` is the real JWT
+// buyer routes require (auth/AuthContext.tsx). They never apply to the same
+// request in practice - buyer and vendor routers are physically disjoint -
+// so both can be attached unconditionally without conflict.
 let activeMembershipId: string | null = null
+let activeAccessToken: string | null = null
 
 export function setActiveMembershipId(membershipId: string | null): void {
   activeMembershipId = membershipId
+}
+
+/** Never persisted (no localStorage/sessionStorage/cookies) - a page refresh
+ * always loses it, forcing a real relogin (AUTH-PROD scope decision #2). */
+export function setActiveAccessToken(token: string | null): void {
+  activeAccessToken = token
 }
 
 export class ApiError extends Error {
@@ -43,6 +57,14 @@ export async function apiFetch<T>(url: string, options: RequestInit = {}): Promi
   const headers = new Headers(options.headers)
   if (activeMembershipId) {
     headers.set('X-Dev-Membership-Id', activeMembershipId)
+  }
+  // Only applied if the caller didn't already set one explicitly - the
+  // pre-session-token calls in auth/AuthContext.tsx (GET /auth/memberships,
+  // POST /auth/switch-tenant) pass their own Authorization header via
+  // `options`, which must win over whatever access token (if any) is
+  // already active from a previous session.
+  if (activeAccessToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${activeAccessToken}`)
   }
 
   const response = await fetch(url, { ...options, headers })

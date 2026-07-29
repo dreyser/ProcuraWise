@@ -12,7 +12,7 @@ import {
   type ResultsResponse,
 } from '@/api/client'
 import { ApiError, unwrapData } from '@/lib/http'
-import { useActor } from '@/actor/ActorContext'
+import { useAuth } from '@/auth/AuthContext'
 import { StatusBadge } from '@/components/StatusBadge'
 import { PriorityBadge } from '@/components/PriorityBadge'
 import { UpdatedByBadge } from '@/components/UpdatedByBadge'
@@ -31,7 +31,7 @@ interface Draft {
 
 export function ScoringPage() {
   const { evaluationId, proposalId } = useParams<{ evaluationId: string; proposalId: string }>()
-  const { actor } = useActor()
+  const { actor } = useAuth()
   const queryClient = useQueryClient()
 
   const evaluationQuery = useGetEvaluationApiV1EvaluationsEvaluationIdGet(evaluationId!)

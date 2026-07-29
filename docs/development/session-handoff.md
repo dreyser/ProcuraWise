@@ -32,6 +32,83 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-29 — AUTH-PROD: auth productiva de comprador (email+password + OIDC Microsoft/Google)
+
+**Resumen:** Sesión de planeación (Plan Mode, con 3 agentes Explore en paralelo investigando backend/frontend/mecanismo de invitación de proveedores antes de diseñar) seguida de implementación completa en 5 bloques incrementales, cada uno verificado contra Docker real antes de avanzar. Reemplaza `DevelopmentIdentityProvider` como mecanismo de identidad para rutas de comprador (`evaluation_owner`/`evaluator`); `vendor_contact` se queda deliberadamente en el mecanismo interino hasta Fase 15.
+
+**Alcance confirmado por el founder antes de diseñar (4 preguntas vía `AskUserQuestion`), no reabierto durante la implementación:**
+1. Solo auth de comprador esta fase — `vendor_contact` se queda en `DevelopmentIdentityProvider` hasta Fase 15. Consecuencia aceptada: `/api/v1/vendor-portal/*` sigue devolviendo 404 en producción hasta esa fase.
+2. JWT de acceso corto (30 min) en memoria, sin refresh token, sin cookies, sin persistencia (`localStorage`/`sessionStorage`).
+3. Sin self-signup — provisión vía `dev_seed.py` (password conocida `dev-password-2026`) o `provisioning_cli.py`/`make provision-user` (cualquier ambiente, nunca vía HTTP).
+4. Sin recuperación de contraseña — no se agregó Mailhog/SMTP.
+
+**Archivos tocados (resumen — ver detalle completo en `docs/development/current-phase.md`, sección AUTH-PROD):**
+- Backend nuevo: `service/procurawise/identity/{passwords,jwt_provider,oidc,auth_schemas,auth_router}.py`, `service/procurawise/provisioning_cli.py`, `service/migrations/0003_users_auth_indexes.py`, `service/tests/{unit/test_passwords,unit/test_jwt_provider,integration/test_user_auth_indexes,api/test_auth_router,security/test_auth_tenant_isolation}.py`, `service/tests/fakes/fake_oidc_provider.py`.
+- Backend modificado: `identity/{models,repository,service,dev_provider,router}.py`, `shared/{config,context}.py`, `vendor_portal/router.py`, `api/main.py`, `dev_seed.py`, `pyproject.toml`, `.env.example`, `Makefile`; tests existentes actualizados para autenticar comprador vía JWT real en vez de `X-Dev-Membership-Id` (`tests/conftest.py` +`bearer_headers_for()`, `tests/api/{test_requirement_patch_validation,test_vendor_organizations,test_vertical_slice_happy_path}.py`, `tests/security/{test_tenant_isolation,test_vendor_isolation}.py`, `tests/unit/{test_config,test_dev_provider,test_identity_models}.py`).
+- Frontend nuevo: `apps/web/src/auth/{AuthContext,LoginPage,AuthCallbackPage,SelectWorkspacePage,LoginPage.test}.tsx`.
+- Frontend modificado: `lib/http.ts`, `actor/ActorContext.tsx`, `app/{guards,AppShell,router}.tsx`, `App.tsx`, las 7 páginas de `features/{evaluations,scoring,proposals}` que leían `useActor()` (migradas a `useAuth()`), `app/AppShell.test.tsx`, `App.test.tsx`, `App.integration.test.tsx`, `e2e/{vertical-slice,isolation}.spec.ts`.
+
+**Decisiones técnicas tomadas durante la implementación (dentro de los ADRs ya aprobados, no requieren ADR nuevo):** `argon2-cffi` sobre `passlib` (sin mantenimiento activo); `PyJWT` sobre `python-jose`; HS256 sobre RS256 (monolito de un proceso); diseño "fat JWT" (embebe `ActorContext` completo, sin round-trip a Mongo); `joserfc` sobre `authlib.jose` (deprecado desde authlib 1.7, confirmado por warning propio de la librería); `authlib.integrations.httpx_client.AsyncOAuth2Client` en vez de `authlib.integrations.starlette_client.OAuth` (esa integración exige `SessionMiddleware`/cookies, incompatible con la decisión de alcance #2); state/nonce OIDC embebidos en un JWT propio de vida corta en vez de sesión server-side (no hay session store en este diseño).
+
+**Bugs/hallazgos reales encontrados y corregidos (verificados contra Docker real, no hipotéticos):**
+- Índice único multikey sobre `oidc_identities` sin `sparse=True` rompía con `DuplicateKeyError` entre dos usuarios sin identidad OIDC (Mongo indexa un array vacío como `{null, null}`, no como "sin clave") — corregido con `sparse=True`, verificado con inserciones reales.
+- El fixture `seeded_actors` de otros tests borra (`.drop()`) la colección `users` en su teardown, destruyendo también los índices de la migración 0003 sin que `run_migrations()` lo detecte — `test_user_auth_indexes.py` corregido para llamar `apply()` de la migración directamente en cada test en vez de depender del tracking de migraciones ya aplicadas.
+- 25 tests backend existentes rotos por el swap de `require_role` (autenticaban comprador vía `X-Dev-Membership-Id`, ya no válido) — corregidos con un helper `bearer_headers_for()` que emite un JWT real in-process; dos de ellos cambiaron su expectativa de 403 a 401 (ausencia total de credenciales de comprador falla en autenticación antes que en rol — aislamiento más fuerte, no más débil).
+- Bug de test reintroducido: dos tests nuevos de `switch-tenant` asumieron que `tenant_ids()`'s etiqueta ordenada por UUID correspondía a un usuario específico — la misma clase de bug ya documentada y corregida en VS-2A para otro archivo. Corregido con `_membership_id_for(mongo_test_db, email, role)`.
+- `page.goto()` de Playwright recarga la página completa, lo que borra el access token en memoria del comprador (consecuencia esperada de la decisión de alcance #2) — los specs e2e reescritos usan navegación SPA (tabs `NavLink`) dentro de una misma sesión y relogin explícito tras cualquier `page.goto()` intermedio. `isolation.spec.ts` también actualizado: `/` ya no redirige a `/dev/select-actor` (ahora prioriza `/login`), y un `vendor_contact` visitando una ruta de comprador ahora recibe 401 (sin credenciales) en vez de 403 (rol incorrecto).
+
+**Resultado de pruebas de esta sesión (todas ejecutadas contra Docker real, ninguna asumida):**
+- `make lint` → 0 errores (backend + frontend). `make typecheck` → limpio (mypy 58 archivos backend incl. stubs `types-authlib`; `tsc -b` frontend).
+- `make test` → **76 passed backend + 79 passed frontend** (14 archivos).
+- `make test-integration` (Docker real) → **89 passed**.
+- `make test-e2e` (Docker + Playwright real) → **2 passed** (specs reescritos para login real de comprador), teardown limpio.
+- `make contracts` corrido dos veces consecutivas → idéntico byte a byte (`shasum` comparado).
+- `git diff --check` → limpio (exit 0).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna nueva de arquitectura — todas las decisiones técnicas (librerías, HS256, fat JWT, `joserfc`) son elección de implementación dentro de ADR 0003 ya aprobado, no cambios de arquitectura (monolito/DB/hosting/comunicación) que `CLAUDE.md` §3 reserve para ADR nuevo.
+
+**Deuda técnica introducida:**
+- Verificación manual de OIDC contra Microsoft/Google reales pendiente (requiere apps OAuth de prueba registradas) — no bloqueante, la lógica está implementada/tipada y verificada vía fake en tests automatizados.
+- Portal de proveedores inalcanzable en producción hasta Fase 15 — decisión de alcance documentada, no bug.
+
+**Instrucciones para la siguiente sesión:**
+- AUTH-PROD está completo y verificado, sin comitear — el founder decide si comitea/abre PR (mismo patrón que VS-2A/VS-2B/VS-2C).
+- Al planear Fase 15 (NDA/COI real), recordar que ese es el momento de reemplazar `DevelopmentIdentityProvider` para `vendor_contact` por invitación real por token — no antes.
+- Confirmar con el founder cuál es la siguiente fase de código después de AUTH-PROD (Fase 8/E3 parece desbloqueada, pero no se asume unilateralmente).
+- No tocar todavía: invitación de proveedores, self-signup, recuperación de contraseña, refresh tokens — todos explícitamente fuera de alcance de esta fase por decisión del founder.
+
+### Sesión — 2026-07-29 — Housekeeping: confirmación de merge real de VS-2C (PR #15) y actualización de continuidad
+
+**Resumen:** Sesión de solo verificación y documentación (sin funcionalidad nueva, sin refactors, sin ADRs, sin commit de código), continuación directa de la sesión de cierre formal de VS-2C de este mismo día (ver entrada siguiente). Se detectó que, entre esa sesión de cierre y esta, el founder comiteó el trabajo y abrió/mergeó el PR #15 (`phase-2/vs-2c` → `main`) fuera de una sesión de Claude Code documentada — dejando `current-phase.md`/`session-handoff.md` desactualizados (seguían diciendo "sin comitear"). Esta sesión cierra esa laguna de continuidad.
+
+**Verificación realizada (API pública de GitHub + git local, sin modificar código de producción):**
+- `git fetch origin --prune` → `origin/main` avanzó de `3136626` a `0b38ef7`.
+- `GET /repos/dreyser/ProcuraWise/pulls/15` → `state: closed`, `merged: true`, `merged_at: 2026-07-29T16:26:06Z`, `base: main` ← `head: phase-2/vs-2c`, `merge_commit_sha: 0b38ef7` (squash-merge, padre único `3136626`, consistente con `allow_squash_merge` como único método permitido en el repo).
+- `GET /repos/dreyser/ProcuraWise/commits/0b38ef7/check-runs` → **15/15 en `success`**: `backend`, `frontend`, `contracts`, `integration`, `e2e`, `secret-scan`, `python-deps`, `frontend-deps`, más 7 checks de `Dependabot`. Ninguno en `failure`/`pending` en el commit final mergeado.
+- `git diff` entre `main`(antiguo)/`origin/main`(nuevo) y entre `phase-2/vs-2c`/`origin/main` → vacíos/idénticos en conteo de archivos (100 archivos, +15321/-2238): el contenido fusionado es byte-idéntico al de la rama de trabajo, sin drift.
+- `git checkout main && git merge --ff-only origin/main` → fast-forward limpio `3136626..0b38ef7`, sin conflictos. Rama local devuelta a `phase-2/vs-2c` al terminar.
+
+**Hallazgo:** el check de "frontend" que el founder reportó como fallido durante el PR no aparece en la corrida final contra el commit que realmente se mergeó — o fue una corrida intermedia anterior a los commits de fix (`beadd6f`/`c1985ea`), o corresponde a una de las PRs de Dependabot abiertas para dependencias de `apps/web`, no relacionadas con PR #15. No bloqueó el merge; no se investigó más a fondo por ser un side-channel fuera del alcance de esta sesión.
+
+**Archivos tocados:**
+- `docs/development/current-phase.md` — sección VS-2C: nueva subsección "Actualización — merge confirmado a `main` (PR #15, 2026-07-29)"; "Último commit relevante", "Próximos pasos" (punto 1) y "Bloqueos" corregidos para reflejar el merge real.
+- `docs/development/session-handoff.md` (este archivo) — esta entrada nueva. La entrada de cierre formal de VS-2C (siguiente, mismo día) no se edita — queda como registro histórico de lo que era cierto en el momento en que se escribió (regla de la plantilla: no editar entradas pasadas salvo corrección de un error factual, y no era un error en ese momento).
+
+**Resultado de pruebas:** ninguna corrida nueva de `make test`/`lint`/`typecheck` — sesión de solo verificación de estado de git/GitHub y housekeeping documental, no de código.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** ninguna.
+
+**Deuda técnica introducida:** ninguna. Se cierra la deuda de continuidad detectada (documentación desactualizada respecto al merge real de VS-2C).
+
+**Estado real de VS-2C: ✅ cerrado formalmente y fusionado a `main`** (PR #15, `0b38ef7`, 2026-07-29T16:26:06Z). Sin pendientes de esta fase.
+
+**Próxima fase — sigue sin resolver, no es competencia de esta sesión:** `AUTH-PROD` vs. Fase 8/E3 — ver nota completa en la entrada siguiente y en `current-phase.md`, sección "Próximos pasos".
+
+**Instrucciones para la siguiente sesión:**
+- `main` local y remoto ya están sincronizados en `0b38ef7` — no repetir esta verificación.
+- Antes de iniciar código nuevo, el founder debe decidir entre `AUTH-PROD` y Fase 8/E3 (pregunta abierta #2 de la entrada siguiente, sigue vigente).
+- No tocar: identidad productiva ni `audit`/RBAC hasta que se resuelva esa decisión.
+
 ### Sesión — 2026-07-29 — VS-2C: cierre técnico formal (verificación, sin funcionalidad nueva)
 
 **Rol de la sesión:** responsable de cierre técnico. Solo verificación, documentación y preparación de cierre — sin funcionalidad nueva, sin refactors no relacionados, sin iniciar la siguiente fase, sin commit (todo explícitamente pedido por el founder).

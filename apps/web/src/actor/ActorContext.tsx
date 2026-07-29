@@ -1,6 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
-import { createAppQueryClient } from '@/lib/queryClient'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { setActiveMembershipId, ApiError } from '@/lib/http'
 import { getMeApiV1MeGet, type ActorContextResponse } from '@/api/client'
 
@@ -22,8 +29,22 @@ interface ActorContextValue {
 
 const ActorReactContext = createContext<ActorContextValue | null>(null)
 
+/**
+ * Interim dev-header identity mechanism (`X-Dev-Membership-Id`) - kept after
+ * AUTH-PROD as the vendor_contact mechanism until Fase 15 delivers real
+ * invitation-token auth for vendors (AUTH-PROD scope decision #1). Buyer
+ * routes use `auth/AuthContext.tsx` instead, mounted alongside this provider
+ * (not in place of it) in App.tsx - each governs a physically separate route
+ * tree (VendorLayout vs BuyerLayout in app/router.tsx).
+ *
+ * Requires a `QueryClientProvider` ancestor (App.tsx) - this no longer
+ * creates its own, it shares the single app-wide QueryClient via
+ * useQueryClient() so a buyer login/logout and a vendor actor switch can
+ * never each hold their own client and disagree about whose cache is
+ * "current".
+ */
 export function ActorProvider({ children }: { children: ReactNode }) {
-  const [queryClient, setQueryClient] = useState<QueryClient>(() => createAppQueryClient())
+  const queryClient = useQueryClient()
   const [actor, setActor] = useState<ActorContextResponse | null>(null)
   const [status, setStatus] = useState<ActorStatus>('loading')
 
@@ -50,43 +71,42 @@ export function ActorProvider({ children }: { children: ReactNode }) {
     // handled explicitly by selectActor/clearActor below, not by this effect.
   }, [])
 
-  const selectActor = async (membershipId: string): Promise<SelectActorResult> => {
-    setActiveMembershipId(membershipId)
-    try {
-      const response = await getMeApiV1MeGet()
-      if (response.status !== 200) throw new Error('unexpected /me response')
-      sessionStorage.setItem(STORAGE_KEY, membershipId)
-      setActor(response.data)
-      setStatus('ready')
-      setQueryClient(createAppQueryClient())
-      return { ok: true }
-    } catch (error) {
-      setActiveMembershipId(null)
-      if (error instanceof ApiError && error.status === 401) {
-        return { ok: false, message: 'Ese actor de desarrollo ya no es válido.' }
+  const selectActor = useCallback(
+    async (membershipId: string): Promise<SelectActorResult> => {
+      setActiveMembershipId(membershipId)
+      try {
+        const response = await getMeApiV1MeGet()
+        if (response.status !== 200) throw new Error('unexpected /me response')
+        sessionStorage.setItem(STORAGE_KEY, membershipId)
+        setActor(response.data)
+        setStatus('ready')
+        queryClient.clear()
+        return { ok: true }
+      } catch (error) {
+        setActiveMembershipId(null)
+        if (error instanceof ApiError && error.status === 401) {
+          return { ok: false, message: 'Ese actor de desarrollo ya no es válido.' }
+        }
+        return { ok: false, message: 'No se pudo seleccionar el actor. Intenta de nuevo.' }
       }
-      return { ok: false, message: 'No se pudo seleccionar el actor. Intenta de nuevo.' }
-    }
-  }
+    },
+    [queryClient],
+  )
 
-  const clearActor = () => {
+  const clearActor = useCallback(() => {
     sessionStorage.removeItem(STORAGE_KEY)
     setActiveMembershipId(null)
     setActor(null)
     setStatus('anonymous')
-    setQueryClient(createAppQueryClient())
-  }
+    queryClient.clear()
+  }, [queryClient])
 
   const value = useMemo<ActorContextValue>(
     () => ({ actor, status, selectActor, clearActor }),
-    [actor, status],
+    [actor, status, selectActor, clearActor],
   )
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ActorReactContext.Provider value={value}>{children}</ActorReactContext.Provider>
-    </QueryClientProvider>
-  )
+  return <ActorReactContext.Provider value={value}>{children}</ActorReactContext.Provider>
 }
 
 export function useActor(): ActorContextValue {

@@ -11,7 +11,7 @@ import {
   type EvaluationDetailResponse,
 } from '@/api/client'
 import { ApiError, unwrapData, unwrapDataOrThrow } from '@/lib/http'
-import { useActor } from '@/actor/ActorContext'
+import { useAuth } from '@/auth/AuthContext'
 import { StatusBadge } from '@/components/StatusBadge'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
@@ -32,7 +32,7 @@ type FormValues = z.infer<typeof schema>
 
 export function EvaluationDetailPage() {
   const { evaluationId } = useParams<{ evaluationId: string }>()
-  const { actor } = useActor()
+  const { actor } = useAuth()
   const isOwner = actor?.role === 'evaluation_owner'
   const queryClient = useQueryClient()
 
