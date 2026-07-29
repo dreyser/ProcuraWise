@@ -1,12 +1,7 @@
-# Pin bash explicitly: without this, make falls back to the system default
-# /bin/sh, which is a bash-derived shell on macOS (where this Makefile is
-# developed/verified) but dash on the GitHub Actions ubuntu-latest runner.
-# dash has known bugs in trap+background-job (`&`/`$!`) handling when the
-# trap itself spawns further processes - exactly the pattern `test-e2e` uses
-# (kill + two pkill -f + a nested $(MAKE) dev-down inside a single EXIT
-# trap) - which segfaulted dash in CI right after both Playwright specs
-# printed "2 passed", during the trap's cleanup. Never reproduced locally
-# because macOS's /bin/sh doesn't have this issue.
+# Pin bash explicitly so every recipe runs under the same shell locally
+# (macOS's /bin/sh is bash-derived) and in CI (ubuntu-latest's /bin/sh is
+# dash) - keeps behavior consistent even though, per the note on test-e2e
+# below, dash alone wasn't the cause of the segfault seen there.
 SHELL := /bin/bash
 
 .PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration test-e2e seed-dev seed-reset
@@ -84,37 +79,20 @@ test-integration: dev-up
 
 # Reproducible Playwright E2E run: infra -> deterministic seed -> API+Vite in
 # background -> wait for real readiness (not a fixed sleep) -> tests ->
-# guaranteed cleanup via trap, even on failure/Ctrl-C. Unlike the `dev`
-# target's `trap 'kill 0'` (fine there - `dev` is meant to run until
-# manually interrupted), `kill 0` here would also signal the very shell
-# running this trap, turning a clean pass/fail exit into a signal-based one
-# and re-entering the trap - kill the captured PIDs specifically instead.
-# `kill $$WEB_PID` alone isn't enough: pnpm forks vite as a grandchild that
-# doesn't share that PID, so it survives as an orphan on 5173 - confirmed by
-# hand (`ps`/`lsof -i :5173` after a run) - hence the `pkill -f` regex
-# safety net matched against the *actual* command line (`node
-# .../vite/bin/vite.js --port 5173`, not the literal "vite --port 5173").
-# `dev-up`/`seed-reset`/`seed-dev` are the same targets a human runs
-# locally - this just composes them non-interactively.
+# guaranteed cleanup, even on failure/Ctrl-C. The cleanup/wait/run logic
+# lives in scripts/test-e2e.sh, not inline here - a previous inline version
+# (single `trap '...' EXIT INT TERM` one-liner, backslash-continued across
+# the whole recipe, calling `$(MAKE) dev-down` recursively from *inside*
+# the trap) segfaulted in CI (GitHub Actions ubuntu-latest) right after both
+# specs printed "passed", during that trap's cleanup - never reproduced
+# locally. Pinning SHELL to bash (above) didn't fix it, which rules out a
+# plain dash-vs-bash difference and points at the recursive-make-inside-a-
+# trap nesting itself. Extracting to a real script removes that nesting
+# (calls `docker compose down` directly, not through `make`) and is
+# independently testable/shellcheck-able, unlike an inline Make recipe
+# string. `dev-up`/`seed-reset`/`seed-dev` stay here since a human runs
+# those same targets locally too - only the fragile part moved out.
 test-e2e: dev-up
 	$(MAKE) seed-reset CONFIRM=yes
 	$(MAKE) seed-dev
-	@trap 'kill $$API_PID $$WEB_PID 2>/dev/null; \
-		pkill -f "uvicorn.*procurawise.api.main:app.*--port 8000" 2>/dev/null; \
-		pkill -f "vite.*--port 5173" 2>/dev/null; \
-		$(MAKE) dev-down' EXIT INT TERM; \
-	(cd service && uv run uvicorn procurawise.api.main:app --port 8000 > /tmp/procurawise-e2e-api.log 2>&1) & API_PID=$$!; \
-	(cd apps/web && pnpm dev --port 5173 > /tmp/procurawise-e2e-web.log 2>&1) & WEB_PID=$$!; \
-	echo "Esperando a que la API este lista..."; \
-	i=0; until curl -sf http://localhost:8000/health/ready > /dev/null 2>&1; do \
-		i=$$((i + 1)); \
-		if [ $$i -ge 60 ]; then echo "La API no respondio a tiempo"; cat /tmp/procurawise-e2e-api.log; exit 1; fi; \
-		sleep 1; \
-	done; \
-	echo "Esperando a que el frontend este listo..."; \
-	i=0; until curl -sf http://localhost:5173/ > /dev/null 2>&1; do \
-		i=$$((i + 1)); \
-		if [ $$i -ge 60 ]; then echo "El frontend no respondio a tiempo"; cat /tmp/procurawise-e2e-web.log; exit 1; fi; \
-		sleep 1; \
-	done; \
-	(cd apps/web && pnpm exec playwright test)
+	bash scripts/test-e2e.sh
