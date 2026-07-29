@@ -1,3 +1,14 @@
+# Pin bash explicitly: without this, make falls back to the system default
+# /bin/sh, which is a bash-derived shell on macOS (where this Makefile is
+# developed/verified) but dash on the GitHub Actions ubuntu-latest runner.
+# dash has known bugs in trap+background-job (`&`/`$!`) handling when the
+# trap itself spawns further processes - exactly the pattern `test-e2e` uses
+# (kill + two pkill -f + a nested $(MAKE) dev-down inside a single EXIT
+# trap) - which segfaulted dash in CI right after both Playwright specs
+# printed "2 passed", during the trap's cleanup. Never reproduced locally
+# because macOS's /bin/sh doesn't have this issue.
+SHELL := /bin/bash
+
 .PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration test-e2e seed-dev seed-reset
 
 dev:
