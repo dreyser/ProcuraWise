@@ -1,8 +1,11 @@
+import re
 from typing import Any
 
 from pymongo.database import Database
 
 from procurawise.shared.tenant_collection import TenantCollection
+
+VendorOrganizationCursor = tuple[str, str]
 
 
 class TenantRepository:
@@ -89,3 +92,26 @@ class VendorOrganizationRepository:
 
     def insert(self, tenant_id: str, document: dict[str, Any]) -> None:
         TenantCollection(self._collection, tenant_id).insert_one(document)
+
+    def find_many(
+        self,
+        tenant_id: str,
+        *,
+        search: str | None,
+        limit: int,
+        cursor: VendorOrganizationCursor | None,
+    ) -> list[dict[str, Any]]:
+        """Stable-order (name, id) catalog page. Fetches `limit + 1` so the
+        caller can tell whether a next page exists without a second query."""
+        filter_: dict[str, Any] = {}
+        if search:
+            filter_["name"] = {"$regex": re.escape(search), "$options": "i"}
+        if cursor is not None:
+            cursor_name, cursor_id = cursor
+            filter_["$or"] = [
+                {"name": {"$gt": cursor_name}},
+                {"name": cursor_name, "_id": {"$gt": cursor_id}},
+            ]
+        scoped = TenantCollection(self._collection, tenant_id)
+        results = scoped.find(filter_).sort([("name", 1), ("_id", 1)]).limit(limit + 1)
+        return list(results)

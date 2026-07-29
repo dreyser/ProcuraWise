@@ -89,7 +89,9 @@ Infra real solo se aprovisiona en la Fase 27; todo el desarrollo de los Bloques 
 
 ## 8. Convenciones de API y contratos
 
-El contrato entre frontend y backend es el `openapi.json` que FastAPI genera desde `schemas.py`. `make contracts` corre `orval` para generar tipos TS + hooks React Query, comprometidos al repo; CI verifica que no estén desactualizados. No se crea `packages/contracts` ni `packages/ui` — abstracciones de monorepo innecesarias con un solo frontend y un solo backend. Ver [ADR 0007](decisions/0007-contratos-openapi-orval.md).
+El contrato entre frontend y backend es el `openapi.json` que FastAPI genera desde `schemas.py`. `make contracts` corre `orval` (`client: 'react-query'` desde VS-2C, sobre un mutator propio `apps/web/src/lib/http.ts`) para generar tipos TS + hooks de TanStack Query, comprometidos al repo; CI verifica que no estén desactualizados. No se crea `packages/contracts` ni `packages/ui` — abstracciones de monorepo innecesarias con un solo frontend y un solo backend. Ver [ADR 0007](decisions/0007-contratos-openapi-orval.md).
+
+`GET /api/v1/vendor-organizations` (módulo `identity`, agregado en VS-2C) es el único endpoint de catálogo con paginación por cursor opaco (`(name, id)` estable) en el MVP — patrón de referencia si otro bounded context necesita paginar un catálogo tenant-scoped en el futuro.
 
 ## 9. Estructura de repositorio
 

@@ -32,6 +32,99 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-29 — VS-2C: cierre técnico formal (verificación, sin funcionalidad nueva)
+
+**Rol de la sesión:** responsable de cierre técnico. Solo verificación, documentación y preparación de cierre — sin funcionalidad nueva, sin refactors no relacionados, sin iniciar la siguiente fase, sin commit (todo explícitamente pedido por el founder).
+
+**Commit/base desde donde inició VS-2C:** `3136626 feat(evaluations): implement vendor evaluation backend slice (#14)` — mismo commit que `origin/main` y que `merge-base HEAD origin/main` en esta sesión. Todo el trabajo de VS-2C (Bloques 1-5, sesión anterior del 2026-07-28) vive sin comitear en el árbol de trabajo.
+
+**Rama actual:** `phase-2/vs-2c` (coincide con `origin/phase-2/vs-2c`, que ya existe en el remoto en el mismo estado; 0 commits de diferencia respecto a `origin/main` — el diff completo es working-tree, no de historial).
+
+**Funcionalidad implementada:** ninguna nueva en esta sesión — se verificó la ya implementada en la sesión del 2026-07-28 (ver esa entrada y la sección VS-2C de `current-phase.md` para el detalle completo: selector de actor dev, shell por rol, CRUD de evaluaciones/requirements, `VendorCatalogPicker`, portal de proveedor con autosave secuencial, scoring con `Score.version`, resultados por-propuesta, `make test-e2e`).
+
+**Decisiones tomadas en esta sesión:** ninguna de diseño/arquitectura — sesión de auditoría. Única decisión operativa: cerrar el hallazgo de cobertura del E2E permanente (ver abajo) con una verificación suplementaria desechable en la misma sesión, en vez de dejarlo sin verificar o de ampliar la suite permanente sin autorización explícita (fuera del alcance pedido: "no agregues funcionalidad").
+
+**Dependencias agregadas:** ninguna — sesión de solo verificación. Las dependencias del frontend (confirmadas por lectura de `apps/web/package.json`, ya agregadas en la sesión del 2026-07-28) son: `react-router-dom@^7.18.1`, `@tanstack/react-query@^5.101.4`, `tailwindcss@^4.3.3` + `@tailwindcss/vite@^4.3.3`, `radix-ui@^1.6.7` (paquete unificado de shadcn) + `class-variance-authority@^0.7.1` + `clsx@^2.1.1` + `tailwind-merge@^3.6.0` + `lucide-react@^1.27.0` + `@fontsource-variable/geist@^5.3.0` + `tw-animate-css@^1.4.0` + `shadcn@^4.16.0` (scaffolding de ADR 0006), `react-hook-form@^7.83.0` + `zod@^4.4.3` + `@hookform/resolvers@^5.5.7`, `@playwright/test@^1.62.0` (dev) + `@testing-library/user-event@^14.6.1` (dev). Todas justificadas en el plan aprobado (§8), ninguna fuera de ese alcance.
+
+**Endpoints agregados (de la sesión anterior, confirmados por diff contra `origin/main` en esta sesión):** `GET /api/v1/vendor-organizations` (nuevo, `identity/router.py`); `RequirementScoreDetail.version`/`.comment` en `GET /api/v1/evaluations/{id}/results` (campos nuevos, mismo endpoint); `PATCH /api/v1/evaluations/{id}/requirements/{rid}` (endpoint existente, validación reforzada — ver hallazgo confirmado abajo).
+
+**Tests y resultados exactos de esta sesión (todos ejecutados, ninguno asumido):**
+- `git status` → 28 archivos modificados + 12 rutas nuevas (sin archivos fuera del alcance autorizado, revisado uno por uno contra el plan).
+- `git diff --check` → limpio, exit 0.
+- `make lint` → 0 errores (backend: ruff check + format limpio; frontend: eslint 0 errores/22 warnings preexistentes — 19 en `client.ts` generado por un quirk de plantilla de `orval`, 3 por la regla `react-refresh/only-export-components` en `ActorContext.tsx`/`badge.tsx`/`button.tsx`, ninguno de esta sesión; prettier limpio).
+- `make typecheck` → limpio (mypy 52 archivos backend; `tsc -b` frontend).
+- `make test` → **59 passed backend + 70 passed frontend** (13 archivos de test).
+- `make test-integration` (Docker real, Mongo+Azurite) → **61 passed**.
+- `make test-e2e` (Docker + Playwright real) → **2 passed** (`isolation.spec.ts`, `vertical-slice.spec.ts`); teardown limpio confirmado (`lsof -i :8000 -i :5173` vacío, `docker ps` sin contenedores).
+- `make contracts` corrido dos veces consecutivas → segunda corrida sin cambios (diff byte a byte idéntico entre ambas).
+- Verificación suplementaria no oficial (no listada en `CLAUDE.md` §9): `pnpm build` en `apps/web` → build de producción exitoso, único aviso no bloqueante de Rollup por tamaño de chunk (>500kB sin code-splitting).
+- Verificación suplementaria ad-hoc: script Playwright desechable (creado y borrado en esta sesión) que crea una evaluación nueva vía UI, agrega 1 requirement funcional (peso 40) + 1 técnico (peso 20), vincula "Proveedor Uno (dev)" vía `VendorCatalogPicker`/`GET /vendor-organizations` real, e inicia la recepción de propuestas → **1/1 passed** contra backend real. Cierra el hallazgo de que el E2E permanente no cubre esos 3 pasos (ver "Deuda" abajo).
+
+**Confirmaciones de código (lectura directa, no solo resultados de test) para el checklist pedido por el founder:**
+- Backend gap `GET /vendor-organizations`: `require_role("evaluation_owner","evaluator")`, filtro `re.escape()` en búsqueda, cursor opaco base64 `(name, id)`, `TenantCollection` en el repositorio — aislamiento de tenant estructural, no por convención.
+- `PATCH Requirement`: `evaluations/service.py::update_requirement` valida el documento **resultante** (merge existente+patch) antes de persistir, con la misma regla `single_choice`/`multi_choice`↔`options` que `create` — confirmado en el diff línea por línea contra `origin/main`.
+- Concurrencia: `AnswerAutosaveController` serializa una escritura a la vez por Proposal (`processing` flag), limpia toda la cola y no reintenta ante un 409 real; botón "Enviar propuesta" deshabilitado mientras `pendingCount>0`; `ScoringPage` envía `Score.version` en cada `PUT` y muestra un banner con botón "Recargar" ante 409.
+- Resultados: `ResultsPage` — funcional/40, técnico/20, económico siempre "No disponible" (nunca 0), parcial/60 sin normalizar a 100, leyenda "no es un ranking ni implica adjudicación", diálogo de completar reitera "No se declara ganador".
+- Separación buyer/vendor: `router.tsx` usa `BuyerLayout`/`VendorLayout` físicamente distintos con `RequireRole`; `grep` confirma cero imports cruzados entre `features/vendor-portal` y `features/{evaluations,proposals,scoring}`; `vendor_portal/schemas.py` no expone `Score` ni datos de otros proveedores; `e2e/isolation.spec.ts` prueba un 403 real de backend, no solo el redirect de UI.
+
+**Riesgos/deuda conocidos (nuevos de esta sesión + heredados, todos no bloqueantes):**
+- **Nuevo:** `e2e/vertical-slice.spec.ts` no cubre "crear evaluación"/"crear requerimientos"/"vincular proveedor" contra backend real de forma reproducible (arranca de datos pre-sembrados). Verificado por otra vía en esta sesión; recomendado ampliar la suite permanente en una futura sesión.
+- Heredados (sin cambios): `StarletteDeprecationWarning` de `httpx`/`starlette.testclient`; pre-commit hooks locales fuera de alcance (exclusión documentada, no deuda); bundle de producción sin code-splitting (advertencia de Rollup, no error).
+
+**Estado real de VS-2C: ✅ cerrado formalmente.** Ningún criterio de aceptación abierto. Sin commit (pendiente de decisión del founder).
+
+**Próxima fase según roadmap/backlog — discrepancia reportada, no resuelta unilateralmente:** `roadmap.md` agrupa `AUTH-PROD` bajo "Bloque 0 — Fundación" y dice que se pospuso "hasta después de cerrar VS-2C" (ya ocurrió); `backlog.md` confirma esa dependencia. Pero la Fase 8 (`E3`, inicio de "Bloque 2 — Colaboración y auditoría") también depende únicamente de `VS-2C` en `backlog.md`, sin que ningún documento ordene explícitamente una antes que la otra. El founder debe decidir entre `AUTH-PROD` y Fase 8/E3 — ver la nota completa en `current-phase.md`, sección "Próximos pasos".
+
+**Archivos que debe leer la siguiente sesión:** `docs/development/current-phase.md` (sección VS-2C completa, incl. "Sesión de cierre formal de VS-2C"), esta entrada, `docs/development/backlog.md` (filas `AUTH-PROD` y Fase 8/E3 para decidir cuál sigue), `docs/product/roadmap.md` (nota de secuencia).
+
+**Comandos oficiales para comenzar:** `make dev-up && make seed-dev && make dev` para levantar el entorno; `make test && make test-integration && make test-e2e` para reverificar antes de tocar código nuevo.
+
+**Preguntas todavía abiertas:**
+1. ¿El founder comitea VS-2C ahora (y en qué agrupación de commits/PR), o sigue esperando?
+2. ¿Cuál es la siguiente fase — `AUTH-PROD` o Fase 8/E3 — dado que ambas solo dependen de VS-2C y ningún documento las ordena entre sí?
+3. ¿Se justifica ampliar `vertical-slice.spec.ts` (o agregar un spec nuevo) para cubrir "crear evaluación/requerimientos/vincular proveedor" de forma reproducible, o se acepta el riesgo documentado como está?
+
+### Sesión — 2026-07-28 — VS-2C: frontend del vertical slice de evaluación (cierre del vertical slice)
+
+**Resumen:** Sesión de planeación (Plan Mode) seguida de implementación completa de VS-2C en 5 bloques incrementales, con aprobación explícita del founder para pasar de cada bloque al siguiente. El plan inicial fue rechazado con 11 correcciones concretas (identidad de dev nunca usada para resolver nombres de negocio; el gap de `PATCH Requirement` corregido en **backend**, no solo con validación cliente; estrategia de escritura secuencial explícita para `ProposalAnswer` dado que `Proposal.version` es global; contrato de `GET /vendor-organizations` cerrado con cursor desde el día uno; currency codes derivados del validador real del backend, no inventados; manejo detallado de infraestructura/procesos para `make test-e2e`; confirmar versión de Tailwind/shadcn antes de configurar; edición individual de `display_order` en vez de PATCH-en-cadena pretendiendo atomicidad; confirmaciones UX explícitas en las 4 transiciones irreversibles del flujo; `@hookform/resolvers` para que zod realmente valide vía react-hook-form; preservar el contrato de `/results` por-propuesta ya cerrado en VS-2B). El plan corregido fue aprobado y se implementó completo. Docker estuvo disponible en toda la sesión.
+
+**Dos ajustes de backend, resueltos en Bloque 2/4 antes de construir la UI dependiente:**
+1. `GET /api/v1/vendor-organizations` (nuevo endpoint, módulo `identity`) — catálogo de proveedores del tenant para el picker de vinculación, con paginación por cursor implementada desde el día uno (no diferida).
+2. `PATCH Requirement` — `evaluations/service.py::update_requirement` ahora valida el documento **resultante** (merge existente+patch), no solo los campos enviados, para la regla `single_choice`/`multi_choice` ↔ `options` no vacío.
+3. (Encontrado durante el Bloque 4, no en el plan original) `RequirementScoreDetail` ganó `version`/`comment` en `/results` — sin esto no había forma de leer el `Score.version` necesario para una actualización optimista desde el cliente.
+
+**Archivos tocados (resumen — ver árbol completo en `git status` y en el plan):**
+- Backend: `service/procurawise/{evaluations/service.py,evaluations/router.py,identity/{repository,service,router,schemas}.py,scoring/{schemas,service}.py}`; tests nuevos `tests/api/{test_requirement_patch_validation,test_vendor_organizations}.py`, `tests/security/test_tenant_isolation.py` (+1 caso), `tests/api/test_vertical_slice_happy_path.py` (+aserciones de `version`/`comment` en resultados).
+- Frontend (nuevo, prácticamente todo `apps/web/src/` fuera de `api/client.ts` generado): `lib/{http,errors,enumLabels,queryClient,answerAutosaveController}.ts`, `actor/{ActorContext,SelectActorPage}.tsx`, `app/{AppShell,router,guards,roleHomePath,...}.tsx`, `components/*` (shadcn copiados + compuestos propios), `features/{evaluations,proposals,scoring,vendor-portal}/**`, `App.integration.test.tsx`, `e2e/{vertical-slice,isolation}.spec.ts`, `playwright.config.ts`, `testUtils/mockFetchRouter.ts`.
+- Infraestructura: `apps/web/{orval.config.ts,vite.config.ts,tsconfig*.json,.gitignore}`, `Makefile` (+`test-e2e`), `.github/workflows/integration.yml` (+job `e2e`).
+
+**Resultado de pruebas (verificación final):**
+- Frontend: `CI=true pnpm test` → **70 passed** (13 archivos). `pnpm typecheck` → limpio. `pnpm lint` → 0 errores. `pnpm format` → limpio.
+- Backend: `make test-backend` → **59 passed**. `make test-integration` (Docker real) → **61 passed**.
+- `make test-e2e` → **2 specs Playwright passed**, teardown limpio verificado (`lsof`/`docker ps` vacíos tras la corrida).
+- Demo manual de los 13 pasos verificada repetidamente vía Playwright contra backend real; E2E negativo confirma un 403 real de servidor, no solo un redirect de guard de ruta.
+
+**Bugs reales encontrados y corregidos (todos vía verificación contra Docker real o corridas reales de Vitest/Playwright, no por inspección):**
+1. Deep-link `?next=` sobrevivía a un cambio de actor hacia un rol incompatible → `isNextPathAllowedForRole`.
+2. Respuesta de vendor recién guardada no se reflejaba en UI (el controller no empujaba la respuesta del servidor al cache de React Query) → callback `onDetail` en `AnswerAutosaveController`.
+3. Controles de `ScoreInput`/`AnswerField` "rebotaban" entre click y confirmación del servidor → estado de draft local optimista en todos los controles, no solo continuos.
+4. 409 auto-infligido al recargar la página de vendor (versión del controller sembrada con placeholder antes de que la query real resolviera) → `useEffect` de resincronización solo cuando el controller está idle sin escrituras pendientes.
+5. `make test-e2e` inicialmente usaba `trap 'kill 0'`, matando el propio proceso de `make` (exit 144, `dev-down` corriendo 5 veces) → PIDs capturados + `pkill -f` con regex correcta.
+6. Proceso Vite huérfano sobreviviendo en el puerto 5173 tras `make test-e2e` (el patrón `pkill -f` original no matcheaba el comando real) → corregido y re-verificado con `lsof`/`docker ps` limpios.
+7. Falta de auto-cleanup de Testing Library entre tests (Vitest no tiene `test.globals`) → `afterEach(() => cleanup())` en `setupTests.ts`, con valor repo-wide.
+8. `new Response(...)` colgaba indefinidamente en jsdom dentro del mock de `fetch` → `mockFetchRouter.ts` devuelve objetos planos, no `Response` real.
+9. `tenant_ids()` en tests de backend etiqueta tenants por orden alfabético de UUID, sin relación con el slug del seed → tests de `vendor-organizations` corregidos para no asumir esa correspondencia.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna nueva de arquitectura (CLAUDE.md §3 solo exige ADR para monolito/DB/hosting/comunicación) — todas las decisiones de este bloque son de implementación bajo ADRs ya aprobados (0006 shadcn/Tailwind, 0007 orval+react-query, 0017 SPA React).
+
+**Deuda técnica introducida:** Ninguna nueva. Se **cerró** deuda previa: `orval.config.ts` ahora genera hooks de React Query (ya no `client: 'fetch'`), tal como especificaba ADR 0007 desde Fase 1A.
+
+**Instrucciones para la siguiente sesión:**
+- **El vertical slice queda cerrado end-to-end.** No repetir VS-2A/VS-2B/VS-2C.
+- Decidir si se comitea VS-2C (ningún commit se hizo en esta sesión) — mismo patrón que sesiones anteriores, se espera aprobación explícita del founder.
+- Siguiente paso de código sugerido: `AUTH-PROD` (sustituye `DevelopmentIdentityProvider`) o E3 (`audit`/RBAC completo) — ver `docs/development/backlog.md` para el orden de dependencias.
+- No tocar: IA (E5), billing (E11), infraestructura Azure real (Fase 27) — todas muy posteriores en el roadmap.
+
 ### Sesión — 2026-07-27 — VS-2B: núcleo backend de evaluaciones, proveedores, propuestas y scoring
 
 **Resumen:** Sesión de planeación (Plan Mode) seguida de implementación completa de VS-2B, ambas en la misma sesión con aprobación explícita del founder para pasar de una a otra. El plan inicial fue rechazado por el founder con 8 correcciones concretas de arquitectura/concurrencia (ver detalle abajo); el plan corregido fue aprobado y se implementó en los 5 bloques planeados. Docker estuvo disponible, así que se verificó contra Mongo real en la misma sesión (no quedó pendiente para una sesión futura, a diferencia de VS-2A).

@@ -4,6 +4,23 @@
  * ProcuraWise API
  * OpenAPI spec version: 0.1.0
  */
+import { useMutation, useQuery } from '@tanstack/react-query'
+import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
+  MutationFunction,
+  QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
+} from '@tanstack/react-query'
+
+import { apiFetch } from '../lib/http'
 export type ActorContextResponseVendorOrgId = string | null
 
 export interface ActorContextResponse {
@@ -348,14 +365,25 @@ export const RequirementScoreDetailDimension = {
   technical: 'technical',
 } as const
 
+export type RequirementScoreDetailComment = string | null
+
+/**
+ * `version`/`comment` round out this as the only read surface a client
+has for an existing Score (there is no dedicated list-scores-by-proposal
+endpoint) - the scoring UI needs `version` to build a valid update
+(ScoreWriteRequest.version must echo the current value or the write is
+rejected as stale, see scoring/service.py:upsert_score).
+ */
 export interface RequirementScoreDetail {
   requirement_id: string
   dimension: RequirementScoreDetailDimension
   title: string
   priority: string
   raw_score: number
+  comment: RequirementScoreDetailComment
   requirement_weight: number
   weighted_points: number
+  version: number
   evaluator_membership_id: string
   mandatory_alert: boolean
 }
@@ -511,6 +539,22 @@ export interface VendorLinkRequest {
   vendor_org_id: string
 }
 
+export type VendorOrganizationListResponseNextCursor = string | null
+
+export interface VendorOrganizationListResponse {
+  items: VendorOrganizationSummary[]
+  next_cursor?: VendorOrganizationListResponseNextCursor
+}
+
+/**
+ * Deliberately minimal: no tenant_id, no created_at - this is a picker
+catalog, not the full VendorOrganization record.
+ */
+export interface VendorOrganizationSummary {
+  id: string
+  name: string
+}
+
 export type VendorProposalDetailResponseStatus =
   (typeof VendorProposalDetailResponseStatus)[keyof typeof VendorProposalDetailResponseStatus]
 
@@ -621,6 +665,16 @@ export type LiveHealthLiveGet200 = { [key: string]: string }
 
 export type ReadyHealthReadyGet200 = { [key: string]: unknown }
 
+export type ListVendorOrganizationsApiV1VendorOrganizationsGetParams = {
+  search?: string | null
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number
+  cursor?: string | null
+}
+
 /**
  * @summary Live
  */
@@ -641,15 +695,106 @@ export const getLiveHealthLiveGetUrl = () => {
 export const liveHealthLiveGet = async (
   options?: RequestInit,
 ): Promise<liveHealthLiveGetResponse> => {
-  const res = await fetch(getLiveHealthLiveGetUrl(), {
+  return apiFetch<liveHealthLiveGetResponse>(getLiveHealthLiveGetUrl(), {
     ...options,
     method: 'GET',
   })
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getLiveHealthLiveGetQueryKey = () => {
+  return [`/health/live`] as const
+}
 
-  const data: liveHealthLiveGetResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as liveHealthLiveGetResponse
+export const getLiveHealthLiveGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof liveHealthLiveGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof liveHealthLiveGet>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getLiveHealthLiveGetQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof liveHealthLiveGet>>> = () =>
+    liveHealthLiveGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof liveHealthLiveGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type LiveHealthLiveGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof liveHealthLiveGet>>
+>
+export type LiveHealthLiveGetQueryError = unknown
+
+export function useLiveHealthLiveGet<
+  TData = Awaited<ReturnType<typeof liveHealthLiveGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof liveHealthLiveGet>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof liveHealthLiveGet>>,
+          TError,
+          Awaited<ReturnType<typeof liveHealthLiveGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useLiveHealthLiveGet<
+  TData = Awaited<ReturnType<typeof liveHealthLiveGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof liveHealthLiveGet>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof liveHealthLiveGet>>,
+          TError,
+          Awaited<ReturnType<typeof liveHealthLiveGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useLiveHealthLiveGet<
+  TData = Awaited<ReturnType<typeof liveHealthLiveGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof liveHealthLiveGet>>, TError, TData>>
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Live
+ */
+
+export function useLiveHealthLiveGet<
+  TData = Awaited<ReturnType<typeof liveHealthLiveGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof liveHealthLiveGet>>, TError, TData>>
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getLiveHealthLiveGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -672,15 +817,110 @@ export const getReadyHealthReadyGetUrl = () => {
 export const readyHealthReadyGet = async (
   options?: RequestInit,
 ): Promise<readyHealthReadyGetResponse> => {
-  const res = await fetch(getReadyHealthReadyGetUrl(), {
+  return apiFetch<readyHealthReadyGetResponse>(getReadyHealthReadyGetUrl(), {
     ...options,
     method: 'GET',
   })
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getReadyHealthReadyGetQueryKey = () => {
+  return [`/health/ready`] as const
+}
 
-  const data: readyHealthReadyGetResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as readyHealthReadyGetResponse
+export const getReadyHealthReadyGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof readyHealthReadyGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof readyHealthReadyGet>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getReadyHealthReadyGetQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof readyHealthReadyGet>>> = () =>
+    readyHealthReadyGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof readyHealthReadyGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ReadyHealthReadyGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof readyHealthReadyGet>>
+>
+export type ReadyHealthReadyGetQueryError = unknown
+
+export function useReadyHealthReadyGet<
+  TData = Awaited<ReturnType<typeof readyHealthReadyGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof readyHealthReadyGet>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof readyHealthReadyGet>>,
+          TError,
+          Awaited<ReturnType<typeof readyHealthReadyGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useReadyHealthReadyGet<
+  TData = Awaited<ReturnType<typeof readyHealthReadyGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof readyHealthReadyGet>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof readyHealthReadyGet>>,
+          TError,
+          Awaited<ReturnType<typeof readyHealthReadyGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useReadyHealthReadyGet<
+  TData = Awaited<ReturnType<typeof readyHealthReadyGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof readyHealthReadyGet>>, TError, TData>>
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Ready
+ */
+
+export function useReadyHealthReadyGet<
+  TData = Awaited<ReturnType<typeof readyHealthReadyGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof readyHealthReadyGet>>, TError, TData>>
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getReadyHealthReadyGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -704,19 +944,116 @@ export const getListDevActorsApiV1DevActorsGetUrl = () => {
 export const listDevActorsApiV1DevActorsGet = async (
   options?: RequestInit,
 ): Promise<listDevActorsApiV1DevActorsGetResponse> => {
-  const res = await fetch(getListDevActorsApiV1DevActorsGetUrl(), {
+  return apiFetch<listDevActorsApiV1DevActorsGetResponse>(getListDevActorsApiV1DevActorsGetUrl(), {
     ...options,
     method: 'GET',
   })
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getListDevActorsApiV1DevActorsGetQueryKey = () => {
+  return [`/api/v1/dev/actors`] as const
+}
 
-  const data: listDevActorsApiV1DevActorsGetResponse['data'] = body ? JSON.parse(body) : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listDevActorsApiV1DevActorsGetResponse
+export const getListDevActorsApiV1DevActorsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>, TError, TData>
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListDevActorsApiV1DevActorsGetQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>> = () =>
+    listDevActorsApiV1DevActorsGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListDevActorsApiV1DevActorsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>
+>
+export type ListDevActorsApiV1DevActorsGetQueryError = unknown
+
+export function useListDevActorsApiV1DevActorsGet<
+  TData = Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+  TError = unknown,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDevActorsApiV1DevActorsGet<
+  TData = Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDevActorsApiV1DevActorsGet<
+  TData = Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>, TError, TData>
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Dev Actors
+ */
+
+export function useListDevActorsApiV1DevActorsGet<
+  TData = Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>,
+  TError = unknown,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listDevActorsApiV1DevActorsGet>>, TError, TData>
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListDevActorsApiV1DevActorsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -746,15 +1083,301 @@ export const getGetMeApiV1MeGetUrl = () => {
 }
 
 export const getMeApiV1MeGet = async (options?: RequestInit): Promise<getMeApiV1MeGetResponse> => {
-  const res = await fetch(getGetMeApiV1MeGetUrl(), {
+  return apiFetch<getMeApiV1MeGetResponse>(getGetMeApiV1MeGetUrl(), {
     ...options,
     method: 'GET',
   })
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getGetMeApiV1MeGetQueryKey = () => {
+  return [`/api/v1/me`] as const
+}
 
-  const data: getMeApiV1MeGetResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getMeApiV1MeGetResponse
+export const getGetMeApiV1MeGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeApiV1MeGet>>, TError, TData>>
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetMeApiV1MeGetQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMeApiV1MeGet>>> = () =>
+    getMeApiV1MeGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetMeApiV1MeGetQueryResult = NonNullable<Awaited<ReturnType<typeof getMeApiV1MeGet>>>
+export type GetMeApiV1MeGetQueryError = HTTPValidationError
+
+export function useGetMeApiV1MeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeApiV1MeGet>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+          TError,
+          Awaited<ReturnType<typeof getMeApiV1MeGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMeApiV1MeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeApiV1MeGet>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+          TError,
+          Awaited<ReturnType<typeof getMeApiV1MeGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetMeApiV1MeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeApiV1MeGet>>, TError, TData>>
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Me
+ */
+
+export function useGetMeApiV1MeGet<
+  TData = Awaited<ReturnType<typeof getMeApiV1MeGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof getMeApiV1MeGet>>, TError, TData>>
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetMeApiV1MeGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary List Vendor Organizations
+ */
+export type listVendorOrganizationsApiV1VendorOrganizationsGetResponse200 = {
+  data: VendorOrganizationListResponse
+  status: 200
+}
+
+export type listVendorOrganizationsApiV1VendorOrganizationsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listVendorOrganizationsApiV1VendorOrganizationsGetResponseSuccess =
+  listVendorOrganizationsApiV1VendorOrganizationsGetResponse200 & {
+    headers: Headers
+  }
+export type listVendorOrganizationsApiV1VendorOrganizationsGetResponseError =
+  listVendorOrganizationsApiV1VendorOrganizationsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listVendorOrganizationsApiV1VendorOrganizationsGetResponse =
+  | listVendorOrganizationsApiV1VendorOrganizationsGetResponseSuccess
+  | listVendorOrganizationsApiV1VendorOrganizationsGetResponseError
+
+export const getListVendorOrganizationsApiV1VendorOrganizationsGetUrl = (
+  params?: ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams()
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  })
+
+  const stringifiedParams = normalizedParams.toString()
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/vendor-organizations?${stringifiedParams}`
+    : `/api/v1/vendor-organizations`
+}
+
+export const listVendorOrganizationsApiV1VendorOrganizationsGet = async (
+  params?: ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+  options?: RequestInit,
+): Promise<listVendorOrganizationsApiV1VendorOrganizationsGetResponse> => {
+  return apiFetch<listVendorOrganizationsApiV1VendorOrganizationsGetResponse>(
+    getListVendorOrganizationsApiV1VendorOrganizationsGetUrl(params),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListVendorOrganizationsApiV1VendorOrganizationsGetQueryKey = (
+  params?: ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+) => {
+  return [`/api/v1/vendor-organizations`, ...(params ? [params] : [])] as const
+}
+
+export const getListVendorOrganizationsApiV1VendorOrganizationsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListVendorOrganizationsApiV1VendorOrganizationsGetQueryKey(params)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>
+  > = () => listVendorOrganizationsApiV1VendorOrganizationsGet(params)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListVendorOrganizationsApiV1VendorOrganizationsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>
+>
+export type ListVendorOrganizationsApiV1VendorOrganizationsGetQueryError = HTTPValidationError
+
+export function useListVendorOrganizationsApiV1VendorOrganizationsGet<
+  TData = Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+  TError = HTTPValidationError,
+>(
+  params: undefined | ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListVendorOrganizationsApiV1VendorOrganizationsGet<
+  TData = Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListVendorOrganizationsApiV1VendorOrganizationsGet<
+  TData = Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Vendor Organizations
+ */
+
+export function useListVendorOrganizationsApiV1VendorOrganizationsGet<
+  TData = Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListVendorOrganizationsApiV1VendorOrganizationsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listVendorOrganizationsApiV1VendorOrganizationsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListVendorOrganizationsApiV1VendorOrganizationsGetQueryOptions(
+    params,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -791,21 +1414,83 @@ export const createEvaluationApiV1EvaluationsPost = async (
   evaluationCreateRequest: EvaluationCreateRequest,
   options?: RequestInit,
 ): Promise<createEvaluationApiV1EvaluationsPostResponse> => {
-  const res = await fetch(getCreateEvaluationApiV1EvaluationsPostUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(evaluationCreateRequest),
-  })
+  return apiFetch<createEvaluationApiV1EvaluationsPostResponse>(
+    getCreateEvaluationApiV1EvaluationsPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(evaluationCreateRequest),
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getCreateEvaluationApiV1EvaluationsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEvaluationApiV1EvaluationsPost>>,
+    TError,
+    { data: EvaluationCreateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEvaluationApiV1EvaluationsPost>>,
+  TError,
+  { data: EvaluationCreateRequest },
+  TContext
+> => {
+  const mutationKey = ['createEvaluationApiV1EvaluationsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: createEvaluationApiV1EvaluationsPostResponse['data'] = body ? JSON.parse(body) : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createEvaluationApiV1EvaluationsPostResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEvaluationApiV1EvaluationsPost>>,
+    { data: EvaluationCreateRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return createEvaluationApiV1EvaluationsPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateEvaluationApiV1EvaluationsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEvaluationApiV1EvaluationsPost>>
+>
+export type CreateEvaluationApiV1EvaluationsPostMutationBody = EvaluationCreateRequest
+export type CreateEvaluationApiV1EvaluationsPostMutationError = HTTPValidationError
+
+/**
+ * @summary Create Evaluation
+ */
+export const useCreateEvaluationApiV1EvaluationsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createEvaluationApiV1EvaluationsPost>>,
+      TError,
+      { data: EvaluationCreateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createEvaluationApiV1EvaluationsPost>>,
+  TError,
+  { data: EvaluationCreateRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateEvaluationApiV1EvaluationsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -841,19 +1526,120 @@ export const getListEvaluationsApiV1EvaluationsGetUrl = () => {
 export const listEvaluationsApiV1EvaluationsGet = async (
   options?: RequestInit,
 ): Promise<listEvaluationsApiV1EvaluationsGetResponse> => {
-  const res = await fetch(getListEvaluationsApiV1EvaluationsGetUrl(), {
-    ...options,
-    method: 'GET',
-  })
+  return apiFetch<listEvaluationsApiV1EvaluationsGetResponse>(
+    getListEvaluationsApiV1EvaluationsGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getListEvaluationsApiV1EvaluationsGetQueryKey = () => {
+  return [`/api/v1/evaluations`] as const
+}
 
-  const data: listEvaluationsApiV1EvaluationsGetResponse['data'] = body ? JSON.parse(body) : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listEvaluationsApiV1EvaluationsGetResponse
+export const getListEvaluationsApiV1EvaluationsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>, TError, TData>
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListEvaluationsApiV1EvaluationsGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>
+  > = () => listEvaluationsApiV1EvaluationsGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListEvaluationsApiV1EvaluationsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>
+>
+export type ListEvaluationsApiV1EvaluationsGetQueryError = HTTPValidationError
+
+export function useListEvaluationsApiV1EvaluationsGet<
+  TData = Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListEvaluationsApiV1EvaluationsGet<
+  TData = Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListEvaluationsApiV1EvaluationsGet<
+  TData = Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>, TError, TData>
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Evaluations
+ */
+
+export function useListEvaluationsApiV1EvaluationsGet<
+  TData = Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listEvaluationsApiV1EvaluationsGet>>, TError, TData>
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListEvaluationsApiV1EvaluationsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -890,21 +1676,151 @@ export const getEvaluationApiV1EvaluationsEvaluationIdGet = async (
   evaluationId: string,
   options?: RequestInit,
 ): Promise<getEvaluationApiV1EvaluationsEvaluationIdGetResponse> => {
-  const res = await fetch(getGetEvaluationApiV1EvaluationsEvaluationIdGetUrl(evaluationId), {
-    ...options,
-    method: 'GET',
-  })
+  return apiFetch<getEvaluationApiV1EvaluationsEvaluationIdGetResponse>(
+    getGetEvaluationApiV1EvaluationsEvaluationIdGetUrl(evaluationId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getGetEvaluationApiV1EvaluationsEvaluationIdGetQueryKey = (evaluationId?: string) => {
+  return [`/api/v1/evaluations/${evaluationId}`] as const
+}
 
-  const data: getEvaluationApiV1EvaluationsEvaluationIdGetResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getEvaluationApiV1EvaluationsEvaluationIdGetResponse
+export const getGetEvaluationApiV1EvaluationsEvaluationIdGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetEvaluationApiV1EvaluationsEvaluationIdGetQueryKey(evaluationId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>
+  > = () => getEvaluationApiV1EvaluationsEvaluationIdGet(evaluationId)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetEvaluationApiV1EvaluationsEvaluationIdGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>
+>
+export type GetEvaluationApiV1EvaluationsEvaluationIdGetQueryError = HTTPValidationError
+
+export function useGetEvaluationApiV1EvaluationsEvaluationIdGet<
+  TData = Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetEvaluationApiV1EvaluationsEvaluationIdGet<
+  TData = Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetEvaluationApiV1EvaluationsEvaluationIdGet<
+  TData = Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Evaluation
+ */
+
+export function useGetEvaluationApiV1EvaluationsEvaluationIdGet<
+  TData = Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getEvaluationApiV1EvaluationsEvaluationIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetEvaluationApiV1EvaluationsEvaluationIdGetQueryOptions(
+    evaluationId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -942,23 +1858,84 @@ export const updateEvaluationApiV1EvaluationsEvaluationIdPatch = async (
   evaluationUpdateRequest: EvaluationUpdateRequest,
   options?: RequestInit,
 ): Promise<updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse> => {
-  const res = await fetch(getUpdateEvaluationApiV1EvaluationsEvaluationIdPatchUrl(evaluationId), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(evaluationUpdateRequest),
-  })
+  return apiFetch<updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse>(
+    getUpdateEvaluationApiV1EvaluationsEvaluationIdPatchUrl(evaluationId),
+    {
+      ...options,
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(evaluationUpdateRequest),
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getUpdateEvaluationApiV1EvaluationsEvaluationIdPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEvaluationApiV1EvaluationsEvaluationIdPatch>>,
+    TError,
+    { evaluationId: string; data: EvaluationUpdateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEvaluationApiV1EvaluationsEvaluationIdPatch>>,
+  TError,
+  { evaluationId: string; data: EvaluationUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ['updateEvaluationApiV1EvaluationsEvaluationIdPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as updateEvaluationApiV1EvaluationsEvaluationIdPatchResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEvaluationApiV1EvaluationsEvaluationIdPatch>>,
+    { evaluationId: string; data: EvaluationUpdateRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return updateEvaluationApiV1EvaluationsEvaluationIdPatch(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UpdateEvaluationApiV1EvaluationsEvaluationIdPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEvaluationApiV1EvaluationsEvaluationIdPatch>>
+>
+export type UpdateEvaluationApiV1EvaluationsEvaluationIdPatchMutationBody = EvaluationUpdateRequest
+export type UpdateEvaluationApiV1EvaluationsEvaluationIdPatchMutationError = HTTPValidationError
+
+/**
+ * @summary Update Evaluation
+ */
+export const useUpdateEvaluationApiV1EvaluationsEvaluationIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateEvaluationApiV1EvaluationsEvaluationIdPatch>>,
+      TError,
+      { evaluationId: string; data: EvaluationUpdateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateEvaluationApiV1EvaluationsEvaluationIdPatch>>,
+  TError,
+  { evaluationId: string; data: EvaluationUpdateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateEvaluationApiV1EvaluationsEvaluationIdPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -998,7 +1975,7 @@ export const addRequirementApiV1EvaluationsEvaluationIdRequirementsPost = async 
   requirementCreateRequest: RequirementCreateRequest,
   options?: RequestInit,
 ): Promise<addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse> => {
-  const res = await fetch(
+  return apiFetch<addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse>(
     getAddRequirementApiV1EvaluationsEvaluationIdRequirementsPostUrl(evaluationId),
     {
       ...options,
@@ -1007,17 +1984,77 @@ export const addRequirementApiV1EvaluationsEvaluationIdRequirementsPost = async 
       body: JSON.stringify(requirementCreateRequest),
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getAddRequirementApiV1EvaluationsEvaluationIdRequirementsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addRequirementApiV1EvaluationsEvaluationIdRequirementsPost>>,
+    TError,
+    { evaluationId: string; data: RequirementCreateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addRequirementApiV1EvaluationsEvaluationIdRequirementsPost>>,
+  TError,
+  { evaluationId: string; data: RequirementCreateRequest },
+  TContext
+> => {
+  const mutationKey = ['addRequirementApiV1EvaluationsEvaluationIdRequirementsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as addRequirementApiV1EvaluationsEvaluationIdRequirementsPostResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addRequirementApiV1EvaluationsEvaluationIdRequirementsPost>>,
+    { evaluationId: string; data: RequirementCreateRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return addRequirementApiV1EvaluationsEvaluationIdRequirementsPost(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AddRequirementApiV1EvaluationsEvaluationIdRequirementsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addRequirementApiV1EvaluationsEvaluationIdRequirementsPost>>
+>
+export type AddRequirementApiV1EvaluationsEvaluationIdRequirementsPostMutationBody =
+  RequirementCreateRequest
+export type AddRequirementApiV1EvaluationsEvaluationIdRequirementsPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Add Requirement
+ */
+export const useAddRequirementApiV1EvaluationsEvaluationIdRequirementsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof addRequirementApiV1EvaluationsEvaluationIdRequirementsPost>>,
+      TError,
+      { evaluationId: string; data: RequirementCreateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof addRequirementApiV1EvaluationsEvaluationIdRequirementsPost>>,
+  TError,
+  { evaluationId: string; data: RequirementCreateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getAddRequirementApiV1EvaluationsEvaluationIdRequirementsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1061,7 +2098,7 @@ export const updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequiremen
   requirementUpdateRequest: RequirementUpdateRequest,
   options?: RequestInit,
 ): Promise<updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse> => {
-  const res = await fetch(
+  return apiFetch<updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse>(
     getUpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchUrl(
       evaluationId,
       requirementId,
@@ -1073,16 +2110,102 @@ export const updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequiremen
       body: JSON.stringify(requirementUpdateRequest),
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getUpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch
+        >
+      >,
+      TError,
+      { evaluationId: string; requirementId: string; data: RequirementUpdateRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch>
+    >,
+    TError,
+    { evaluationId: string; requirementId: string; data: RequirementUpdateRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
 
-  const data: updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse['data'] =
-    body ? JSON.parse(body) : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchResponse
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch
+        >
+      >,
+      { evaluationId: string; requirementId: string; data: RequirementUpdateRequest }
+    > = (props) => {
+      const { evaluationId, requirementId, data } = props ?? {}
+
+      return updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch(
+        evaluationId,
+        requirementId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type UpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch>
+    >
+  >
+export type UpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchMutationBody =
+  RequirementUpdateRequest
+export type UpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Update Requirement
+ */
+export const useUpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch
+        >
+      >,
+      TError,
+      { evaluationId: string; requirementId: string; data: RequirementUpdateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatch>
+  >,
+  TError,
+  { evaluationId: string; requirementId: string; data: RequirementUpdateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdPatchMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1125,7 +2248,7 @@ export const deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequiremen
   requirementId: string,
   options?: RequestInit,
 ): Promise<deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse> => {
-  const res = await fetch(
+  return apiFetch<deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse>(
     getDeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteUrl(
       evaluationId,
       requirementId,
@@ -1135,16 +2258,104 @@ export const deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequiremen
       method: 'DELETE',
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getDeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete
+        >
+      >,
+      TError,
+      { evaluationId: string; requirementId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete
+      >
+    >,
+    TError,
+    { evaluationId: string; requirementId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      'deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
 
-  const data: deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse['data'] =
-    body ? JSON.parse(body) : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteResponse
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete
+        >
+      >,
+      { evaluationId: string; requirementId: string }
+    > = (props) => {
+      const { evaluationId, requirementId } = props ?? {}
+
+      return deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete(
+        evaluationId,
+        requirementId,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type DeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete
+      >
+    >
+  >
+
+export type DeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Delete Requirement
+ */
+export const useDeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete
+        >
+      >,
+      TError,
+      { evaluationId: string; requirementId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof deleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete>
+  >,
+  TError,
+  { evaluationId: string; requirementId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getDeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDeleteMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1182,23 +2393,84 @@ export const linkVendorApiV1EvaluationsEvaluationIdVendorsPost = async (
   vendorLinkRequest: VendorLinkRequest,
   options?: RequestInit,
 ): Promise<linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse> => {
-  const res = await fetch(getLinkVendorApiV1EvaluationsEvaluationIdVendorsPostUrl(evaluationId), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(vendorLinkRequest),
-  })
+  return apiFetch<linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse>(
+    getLinkVendorApiV1EvaluationsEvaluationIdVendorsPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(vendorLinkRequest),
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getLinkVendorApiV1EvaluationsEvaluationIdVendorsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof linkVendorApiV1EvaluationsEvaluationIdVendorsPost>>,
+    TError,
+    { evaluationId: string; data: VendorLinkRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof linkVendorApiV1EvaluationsEvaluationIdVendorsPost>>,
+  TError,
+  { evaluationId: string; data: VendorLinkRequest },
+  TContext
+> => {
+  const mutationKey = ['linkVendorApiV1EvaluationsEvaluationIdVendorsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as linkVendorApiV1EvaluationsEvaluationIdVendorsPostResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof linkVendorApiV1EvaluationsEvaluationIdVendorsPost>>,
+    { evaluationId: string; data: VendorLinkRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return linkVendorApiV1EvaluationsEvaluationIdVendorsPost(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type LinkVendorApiV1EvaluationsEvaluationIdVendorsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof linkVendorApiV1EvaluationsEvaluationIdVendorsPost>>
+>
+export type LinkVendorApiV1EvaluationsEvaluationIdVendorsPostMutationBody = VendorLinkRequest
+export type LinkVendorApiV1EvaluationsEvaluationIdVendorsPostMutationError = HTTPValidationError
+
+/**
+ * @summary Link Vendor
+ */
+export const useLinkVendorApiV1EvaluationsEvaluationIdVendorsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof linkVendorApiV1EvaluationsEvaluationIdVendorsPost>>,
+      TError,
+      { evaluationId: string; data: VendorLinkRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof linkVendorApiV1EvaluationsEvaluationIdVendorsPost>>,
+  TError,
+  { evaluationId: string; data: VendorLinkRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getLinkVendorApiV1EvaluationsEvaluationIdVendorsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1239,7 +2511,7 @@ export const unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete = 
   vendorOrgId: string,
   options?: RequestInit,
 ): Promise<unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse> => {
-  const res = await fetch(
+  return apiFetch<unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse>(
     getUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteUrl(
       evaluationId,
       vendorOrgId,
@@ -1249,16 +2521,80 @@ export const unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete = 
       method: 'DELETE',
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete>>,
+    TError,
+    { evaluationId: string; vendorOrgId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete>>,
+  TError,
+  { evaluationId: string; vendorOrgId: string },
+  TContext
+> => {
+  const mutationKey = ['unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse['data'] =
-    body ? JSON.parse(body) : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete>>,
+    { evaluationId: string; vendorOrgId: string }
+  > = (props) => {
+    const { evaluationId, vendorOrgId } = props ?? {}
+
+    return unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete(
+      evaluationId,
+      vendorOrgId,
+    )
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete>>
+  >
+
+export type UnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Unlink Vendor
+ */
+export const useUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete>>,
+      TError,
+      { evaluationId: string; vendorOrgId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof unlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete>>,
+  TError,
+  { evaluationId: string; vendorOrgId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDeleteMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1297,24 +2633,84 @@ export const startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost = as
   evaluationId: string,
   options?: RequestInit,
 ): Promise<startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse> => {
-  const res = await fetch(
+  return apiFetch<startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse>(
     getStartCollectionApiV1EvaluationsEvaluationIdStartCollectionPostUrl(evaluationId),
     {
       ...options,
       method: 'POST',
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getStartCollectionApiV1EvaluationsEvaluationIdStartCollectionPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost>>,
+    TError,
+    { evaluationId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationKey = ['startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as startCollectionApiV1EvaluationsEvaluationIdStartCollectionPostResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost>>,
+    { evaluationId: string }
+  > = (props) => {
+    const { evaluationId } = props ?? {}
+
+    return startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost(evaluationId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type StartCollectionApiV1EvaluationsEvaluationIdStartCollectionPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost>>
+  >
+
+export type StartCollectionApiV1EvaluationsEvaluationIdStartCollectionPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Start Collection
+ */
+export const useStartCollectionApiV1EvaluationsEvaluationIdStartCollectionPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost>>,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof startCollectionApiV1EvaluationsEvaluationIdStartCollectionPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getStartCollectionApiV1EvaluationsEvaluationIdStartCollectionPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1353,24 +2749,84 @@ export const startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost = as
   evaluationId: string,
   options?: RequestInit,
 ): Promise<startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse> => {
-  const res = await fetch(
+  return apiFetch<startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse>(
     getStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostUrl(evaluationId),
     {
       ...options,
       method: 'POST',
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost>>,
+    TError,
+    { evaluationId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationKey = ['startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost>>,
+    { evaluationId: string }
+  > = (props) => {
+    const { evaluationId } = props ?? {}
+
+    return startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost(evaluationId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type StartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost>>
+  >
+
+export type StartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Start Evaluation
+ */
+export const useStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost>>,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof startEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1409,24 +2865,154 @@ export const listProposalsApiV1EvaluationsEvaluationIdProposalsGet = async (
   evaluationId: string,
   options?: RequestInit,
 ): Promise<listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse> => {
-  const res = await fetch(
+  return apiFetch<listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse>(
     getListProposalsApiV1EvaluationsEvaluationIdProposalsGetUrl(evaluationId),
     {
       ...options,
       method: 'GET',
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryKey = (
+  evaluationId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/proposals`] as const
+}
 
-  const data: listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listProposalsApiV1EvaluationsEvaluationIdProposalsGetResponse
+export const getListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryKey(evaluationId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>
+  > = () => listProposalsApiV1EvaluationsEvaluationIdProposalsGet(evaluationId)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>
+>
+export type ListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryError = HTTPValidationError
+
+export function useListProposalsApiV1EvaluationsEvaluationIdProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProposalsApiV1EvaluationsEvaluationIdProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProposalsApiV1EvaluationsEvaluationIdProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Proposals
+ */
+
+export function useListProposalsApiV1EvaluationsEvaluationIdProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1EvaluationsEvaluationIdProposalsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryOptions(
+    evaluationId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -1467,24 +3053,170 @@ export const getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet = asy
   proposalId: string,
   options?: RequestInit,
 ): Promise<getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse> => {
-  const res = await fetch(
+  return apiFetch<getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse>(
     getGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetUrl(evaluationId, proposalId),
     {
       ...options,
       method: 'GET',
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetQueryKey = (
+  evaluationId?: string,
+  proposalId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/proposals/${proposalId}`] as const
+}
 
-  const data: getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
+export const getGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetQueryKey(
+      evaluationId,
+      proposalId,
+    )
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>
+  > = () => getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet(evaluationId, proposalId)
+
   return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetResponse
+    queryKey,
+    queryFn,
+    enabled: !!(evaluationId && proposalId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>
+>
+export type GetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetQueryError =
+  HTTPValidationError
+
+export function useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Proposal
+ */
+
+export function useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGetQueryOptions(
+    evaluationId,
+    proposalId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -1528,7 +3260,7 @@ export const upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresReq
     scoreWriteRequest: ScoreWriteRequest,
     options?: RequestInit,
   ): Promise<upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse> => {
-    const res = await fetch(
+    return apiFetch<upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse>(
       getUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutUrl(
         evaluationId,
         proposalId,
@@ -1541,17 +3273,110 @@ export const upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresReq
         body: JSON.stringify(scoreWriteRequest),
       },
     )
-
-    const body = [204, 205, 304].includes(res.status) ? null : await res.text()
-
-    const data: upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse['data'] =
-      body ? JSON.parse(body) : {}
-    return {
-      data,
-      status: res.status,
-      headers: res.headers,
-    } as upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse
   }
+
+export const getUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut
+        >
+      >,
+      TError,
+      { evaluationId: string; proposalId: string; requirementId: string; data: ScoreWriteRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut
+      >
+    >,
+    TError,
+    { evaluationId: string; proposalId: string; requirementId: string; data: ScoreWriteRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut
+        >
+      >,
+      { evaluationId: string; proposalId: string; requirementId: string; data: ScoreWriteRequest }
+    > = (props) => {
+      const { evaluationId, proposalId, requirementId, data } = props ?? {}
+
+      return upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut(
+        evaluationId,
+        proposalId,
+        requirementId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type UpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut
+      >
+    >
+  >
+export type UpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutMutationBody =
+  ScoreWriteRequest
+export type UpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Upsert Score
+ */
+export const useUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut
+        >
+      >,
+      TError,
+      { evaluationId: string; proposalId: string; requirementId: string; data: ScoreWriteRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<
+      typeof upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut
+    >
+  >,
+  TError,
+  { evaluationId: string; proposalId: string; requirementId: string; data: ScoreWriteRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
+}
 
 /**
  * @summary Get Results
@@ -1587,21 +3412,154 @@ export const getResultsApiV1EvaluationsEvaluationIdResultsGet = async (
   evaluationId: string,
   options?: RequestInit,
 ): Promise<getResultsApiV1EvaluationsEvaluationIdResultsGetResponse> => {
-  const res = await fetch(getGetResultsApiV1EvaluationsEvaluationIdResultsGetUrl(evaluationId), {
-    ...options,
-    method: 'GET',
-  })
+  return apiFetch<getResultsApiV1EvaluationsEvaluationIdResultsGetResponse>(
+    getGetResultsApiV1EvaluationsEvaluationIdResultsGetUrl(evaluationId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getGetResultsApiV1EvaluationsEvaluationIdResultsGetQueryKey = (
+  evaluationId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/results`] as const
+}
 
-  const data: getResultsApiV1EvaluationsEvaluationIdResultsGetResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getResultsApiV1EvaluationsEvaluationIdResultsGetResponse
+export const getGetResultsApiV1EvaluationsEvaluationIdResultsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetResultsApiV1EvaluationsEvaluationIdResultsGetQueryKey(evaluationId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>
+  > = () => getResultsApiV1EvaluationsEvaluationIdResultsGet(evaluationId)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetResultsApiV1EvaluationsEvaluationIdResultsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>
+>
+export type GetResultsApiV1EvaluationsEvaluationIdResultsGetQueryError = HTTPValidationError
+
+export function useGetResultsApiV1EvaluationsEvaluationIdResultsGet<
+  TData = Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetResultsApiV1EvaluationsEvaluationIdResultsGet<
+  TData = Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+          TError,
+          Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetResultsApiV1EvaluationsEvaluationIdResultsGet<
+  TData = Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Results
+ */
+
+export function useGetResultsApiV1EvaluationsEvaluationIdResultsGet<
+  TData = Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getResultsApiV1EvaluationsEvaluationIdResultsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetResultsApiV1EvaluationsEvaluationIdResultsGetQueryOptions(
+    evaluationId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -1640,24 +3598,83 @@ export const completeEvaluationApiV1EvaluationsEvaluationIdCompletePost = async 
   evaluationId: string,
   options?: RequestInit,
 ): Promise<completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse> => {
-  const res = await fetch(
+  return apiFetch<completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse>(
     getCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostUrl(evaluationId),
     {
       ...options,
       method: 'POST',
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeEvaluationApiV1EvaluationsEvaluationIdCompletePost>>,
+    TError,
+    { evaluationId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeEvaluationApiV1EvaluationsEvaluationIdCompletePost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationKey = ['completeEvaluationApiV1EvaluationsEvaluationIdCompletePost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as completeEvaluationApiV1EvaluationsEvaluationIdCompletePostResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeEvaluationApiV1EvaluationsEvaluationIdCompletePost>>,
+    { evaluationId: string }
+  > = (props) => {
+    const { evaluationId } = props ?? {}
+
+    return completeEvaluationApiV1EvaluationsEvaluationIdCompletePost(evaluationId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeEvaluationApiV1EvaluationsEvaluationIdCompletePost>>
+>
+
+export type CompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Complete Evaluation
+ */
+export const useCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof completeEvaluationApiV1EvaluationsEvaluationIdCompletePost>>,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof completeEvaluationApiV1EvaluationsEvaluationIdCompletePost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1693,21 +3710,140 @@ export const getListProposalsApiV1VendorPortalProposalsGetUrl = () => {
 export const listProposalsApiV1VendorPortalProposalsGet = async (
   options?: RequestInit,
 ): Promise<listProposalsApiV1VendorPortalProposalsGetResponse> => {
-  const res = await fetch(getListProposalsApiV1VendorPortalProposalsGetUrl(), {
-    ...options,
-    method: 'GET',
-  })
+  return apiFetch<listProposalsApiV1VendorPortalProposalsGetResponse>(
+    getListProposalsApiV1VendorPortalProposalsGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getListProposalsApiV1VendorPortalProposalsGetQueryKey = () => {
+  return [`/api/v1/vendor-portal/proposals`] as const
+}
 
-  const data: listProposalsApiV1VendorPortalProposalsGetResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as listProposalsApiV1VendorPortalProposalsGetResponse
+export const getListProposalsApiV1VendorPortalProposalsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListProposalsApiV1VendorPortalProposalsGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>
+  > = () => listProposalsApiV1VendorPortalProposalsGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListProposalsApiV1VendorPortalProposalsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>
+>
+export type ListProposalsApiV1VendorPortalProposalsGetQueryError = HTTPValidationError
+
+export function useListProposalsApiV1VendorPortalProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProposalsApiV1VendorPortalProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListProposalsApiV1VendorPortalProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Proposals
+ */
+
+export function useListProposalsApiV1VendorPortalProposalsGet<
+  TData = Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listProposalsApiV1VendorPortalProposalsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListProposalsApiV1VendorPortalProposalsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -1744,21 +3880,154 @@ export const getProposalApiV1VendorPortalProposalsProposalIdGet = async (
   proposalId: string,
   options?: RequestInit,
 ): Promise<getProposalApiV1VendorPortalProposalsProposalIdGetResponse> => {
-  const res = await fetch(getGetProposalApiV1VendorPortalProposalsProposalIdGetUrl(proposalId), {
-    ...options,
-    method: 'GET',
-  })
+  return apiFetch<getProposalApiV1VendorPortalProposalsProposalIdGetResponse>(
+    getGetProposalApiV1VendorPortalProposalsProposalIdGetUrl(proposalId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getGetProposalApiV1VendorPortalProposalsProposalIdGetQueryKey = (
+  proposalId?: string,
+) => {
+  return [`/api/v1/vendor-portal/proposals/${proposalId}`] as const
+}
 
-  const data: getProposalApiV1VendorPortalProposalsProposalIdGetResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getProposalApiV1VendorPortalProposalsProposalIdGetResponse
+export const getGetProposalApiV1VendorPortalProposalsProposalIdGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetProposalApiV1VendorPortalProposalsProposalIdGetQueryKey(proposalId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>
+  > = () => getProposalApiV1VendorPortalProposalsProposalIdGet(proposalId)
+
+  return { queryKey, queryFn, enabled: !!proposalId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetProposalApiV1VendorPortalProposalsProposalIdGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>
+>
+export type GetProposalApiV1VendorPortalProposalsProposalIdGetQueryError = HTTPValidationError
+
+export function useGetProposalApiV1VendorPortalProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProposalApiV1VendorPortalProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProposalApiV1VendorPortalProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Proposal
+ */
+
+export function useGetProposalApiV1VendorPortalProposalsProposalIdGet<
+  TData = Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getProposalApiV1VendorPortalProposalsProposalIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetProposalApiV1VendorPortalProposalsProposalIdGetQueryOptions(
+    proposalId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**
@@ -1800,7 +4069,7 @@ export const updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementI
   answerWriteRequest: AnswerWriteRequest,
   options?: RequestInit,
 ): Promise<updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse> => {
-  const res = await fetch(
+  return apiFetch<updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse>(
     getUpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutUrl(
       proposalId,
       requirementId,
@@ -1812,16 +4081,94 @@ export const updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementI
       body: JSON.stringify(answerWriteRequest),
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getUpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut>
+      >,
+      TError,
+      { proposalId: string; requirementId: string; data: AnswerWriteRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut>
+    >,
+    TError,
+    { proposalId: string; requirementId: string; data: AnswerWriteRequest },
+    TContext
+  > => {
+    const mutationKey = ['updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
 
-  const data: updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse['data'] =
-    body ? JSON.parse(body) : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutResponse
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut>
+      >,
+      { proposalId: string; requirementId: string; data: AnswerWriteRequest }
+    > = (props) => {
+      const { proposalId, requirementId, data } = props ?? {}
+
+      return updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut(
+        proposalId,
+        requirementId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type UpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut>
+    >
+  >
+export type UpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutMutationBody =
+  AnswerWriteRequest
+export type UpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Update Answer
+ */
+export const useUpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut>
+      >,
+      TError,
+      { proposalId: string; requirementId: string; data: AnswerWriteRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPut>
+  >,
+  TError,
+  { proposalId: string; requirementId: string; data: AnswerWriteRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateAnswerApiV1VendorPortalProposalsProposalIdAnswersRequirementIdPutMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -1861,7 +4208,7 @@ export const submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost = asyn
   submitRequest: SubmitRequest,
   options?: RequestInit,
 ): Promise<submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse> => {
-  const res = await fetch(
+  return apiFetch<submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse>(
     getSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostUrl(proposalId),
     {
       ...options,
@@ -1870,15 +4217,75 @@ export const submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost = asyn
       body: JSON.stringify(submitRequest),
     },
   )
+}
 
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text()
+export const getSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost>>,
+    TError,
+    { proposalId: string; data: SubmitRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost>>,
+  TError,
+  { proposalId: string; data: SubmitRequest },
+  TContext
+> => {
+  const mutationKey = ['submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
 
-  const data: submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse['data'] = body
-    ? JSON.parse(body)
-    : {}
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as submitProposalApiV1VendorPortalProposalsProposalIdSubmitPostResponse
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost>>,
+    { proposalId: string; data: SubmitRequest }
+  > = (props) => {
+    const { proposalId, data } = props ?? {}
+
+    return submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost(proposalId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type SubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost>>
+  >
+export type SubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostMutationBody = SubmitRequest
+export type SubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Submit Proposal
+ */
+export const useSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost>>,
+      TError,
+      { proposalId: string; data: SubmitRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof submitProposalApiV1VendorPortalProposalsProposalIdSubmitPost>>,
+  TError,
+  { proposalId: string; data: SubmitRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }

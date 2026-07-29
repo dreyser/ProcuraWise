@@ -185,8 +185,10 @@ class ScoringService:
                         "title": title,
                         "priority": score.priority,
                         "raw_score": score.score,
+                        "comment": score.comment,
                         "requirement_weight": score.requirement_weight,
                         "weighted_points": score.weighted_points,
+                        "version": score.version,
                         "evaluator_membership_id": score.updated_by_membership_id,
                         "mandatory_alert": score.mandatory_alert,
                     }
