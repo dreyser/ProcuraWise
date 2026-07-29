@@ -96,6 +96,19 @@ def test_vendor_organization_is_not_visible_from_another_tenants_scope(mongo_tes
     collection.delete_one({"_id": vendor.id})
 
 
+def test_vendor_organizations_endpoint_excludes_other_tenants(client, seeded_actors) -> None:
+    tenant_a, tenant_b = _tenant_ids(seeded_actors)
+    owner_a_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_b_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_b, "evaluation_owner")]}
+
+    response_a = client.get("/api/v1/vendor-organizations", headers=owner_a_headers)
+    response_b = client.get("/api/v1/vendor-organizations", headers=owner_b_headers)
+
+    names_a = {item["name"] for item in response_a.json()["items"]}
+    names_b = {item["name"] for item in response_b.json()["items"]}
+    assert names_a.isdisjoint(names_b)
+
+
 def test_seed_dev_is_idempotent(mongo_test_settings: Settings, mongo_test_db) -> None:
     first = seed(mongo_test_settings)
     second = seed(mongo_test_settings)

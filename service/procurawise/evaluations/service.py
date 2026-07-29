@@ -104,14 +104,36 @@ class EvaluationService:
     def update_requirement(
         self, tenant_id: str, evaluation_id: str, requirement_id: str, field_updates: dict
     ) -> Requirement:
+        evaluation = self.get_evaluation(tenant_id, evaluation_id)
+        if evaluation.status != "draft":
+            raise InvalidTransitionError(evaluation_id)
+
+        current = next((r for r in evaluation.requirements if r.id == requirement_id), None)
+        if current is None:
+            raise RequirementNotFoundError(requirement_id)
+
+        # Validate the *resultant* requirement (current fields merged with
+        # this patch), not just the fields the patch happens to touch -
+        # otherwise a patch could leave single_choice/multi_choice without
+        # options, a state `Requirement.create` already refuses to produce.
+        resultant_response_type = field_updates.get("response_type", current.response_type)
+        resultant_options = (
+            field_updates["options"] if "options" in field_updates else current.options
+        )
+        if resultant_response_type in ("single_choice", "multi_choice") and not resultant_options:
+            raise ValueError(
+                f"response_type={resultant_response_type!r} requires non-empty options"
+            )
+
         matched = self._evaluations.update_requirement(
             tenant_id, evaluation_id, requirement_id, field_updates
         )
         if not matched:
-            evaluation = self.get_evaluation(tenant_id, evaluation_id)
-            if evaluation.status != "draft":
-                raise InvalidTransitionError(evaluation_id)
-            raise RequirementNotFoundError(requirement_id)
+            # draft status and requirement existence were already confirmed
+            # above; only a concurrent transition away from draft between
+            # that read and this write can still land here.
+            raise InvalidTransitionError(evaluation_id)
+
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
         for requirement in evaluation.requirements:
             if requirement.id == requirement_id:

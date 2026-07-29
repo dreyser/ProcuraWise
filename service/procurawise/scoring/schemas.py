@@ -51,13 +51,21 @@ class PartialResult(APIModel):
 
 
 class RequirementScoreDetail(APIModel):
+    """`version`/`comment` round out this as the only read surface a client
+    has for an existing Score (there is no dedicated list-scores-by-proposal
+    endpoint) - the scoring UI needs `version` to build a valid update
+    (ScoreWriteRequest.version must echo the current value or the write is
+    rejected as stale, see scoring/service.py:upsert_score)."""
+
     requirement_id: str
     dimension: Dimension
     title: str
     priority: str
     raw_score: int
+    comment: str | None
     requirement_weight: float
     weighted_points: float
+    version: int
     evaluator_membership_id: str
     mandatory_alert: bool
 

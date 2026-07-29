@@ -199,6 +199,8 @@ def update_requirement(
         raise HTTPException(status_code=404) from None
     except InvalidTransitionError:
         raise HTTPException(status_code=409, detail="evaluation is not draft") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     return _requirement_response(requirement)
 
 

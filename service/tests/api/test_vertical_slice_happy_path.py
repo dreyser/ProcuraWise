@@ -145,6 +145,22 @@ def test_vertical_slice_happy_path(client, seeded_actors) -> None:
     assert proposal_result["mandatory_alerts_count"] == 0
     assert body["draft_proposals"] == []
 
+    # /results is the only read surface for an existing Score's version - the
+    # scoring UI needs it to build a valid update (see scoring/schemas.py).
+    scores_by_requirement = {s["requirement_id"]: s for s in proposal_result["scores"]}
+    assert scores_by_requirement[functional_id]["version"] == 1
+    assert scores_by_requirement[functional_id]["comment"] is None
+    assert scores_by_requirement[technical_id]["version"] == 1
+
+    rescored_functional = client.put(
+        f"/api/v1/evaluations/{evaluation_id}/proposals/{proposal_id}/scores/{functional_id}",
+        json={"score": 4, "comment": "Revisado", "version": 1},
+        headers=evaluator_headers,
+    )
+    assert rescored_functional.status_code == 200
+    assert rescored_functional.json()["version"] == 2
+    assert rescored_functional.json()["comment"] == "Revisado"
+
     complete = client.post(f"/api/v1/evaluations/{evaluation_id}/complete", headers=owner_headers)
     assert complete.status_code == 200
     assert complete.json()["status"] == "completed"

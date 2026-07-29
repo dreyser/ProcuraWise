@@ -21,3 +21,16 @@ class ActorContextResponse(APIModel):
     role: str
     vendor_org_id: str | None = None
     display_name: str
+
+
+class VendorOrganizationSummary(APIModel):
+    """Deliberately minimal: no tenant_id, no created_at - this is a picker
+    catalog, not the full VendorOrganization record."""
+
+    id: str
+    name: str
+
+
+class VendorOrganizationListResponse(APIModel):
+    items: list[VendorOrganizationSummary]
+    next_cursor: str | None = None

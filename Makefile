@@ -1,4 +1,10 @@
-.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration seed-dev seed-reset
+# Pin bash explicitly so every recipe runs under the same shell locally
+# (macOS's /bin/sh is bash-derived) and in CI (ubuntu-latest's /bin/sh is
+# dash) - keeps behavior consistent even though, per the note on test-e2e
+# below, dash alone wasn't the cause of the segfault seen there.
+SHELL := /bin/bash
+
+.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration test-e2e seed-dev seed-reset
 
 dev:
 	@trap 'kill 0' EXIT INT TERM; \
@@ -70,3 +76,23 @@ dev-reset:
 
 test-integration: dev-up
 	cd service && uv run pytest -m docker
+
+# Reproducible Playwright E2E run: infra -> deterministic seed -> API+Vite in
+# background -> wait for real readiness (not a fixed sleep) -> tests ->
+# guaranteed cleanup, even on failure/Ctrl-C. The cleanup/wait/run logic
+# lives in scripts/test-e2e.sh, not inline here - a previous inline version
+# (single `trap '...' EXIT INT TERM` one-liner, backslash-continued across
+# the whole recipe, calling `$(MAKE) dev-down` recursively from *inside*
+# the trap) segfaulted in CI (GitHub Actions ubuntu-latest) right after both
+# specs printed "passed", during that trap's cleanup - never reproduced
+# locally. Pinning SHELL to bash (above) didn't fix it, which rules out a
+# plain dash-vs-bash difference and points at the recursive-make-inside-a-
+# trap nesting itself. Extracting to a real script removes that nesting
+# (calls `docker compose down` directly, not through `make`) and is
+# independently testable/shellcheck-able, unlike an inline Make recipe
+# string. `dev-up`/`seed-reset`/`seed-dev` stay here since a human runs
+# those same targets locally too - only the fragile part moved out.
+test-e2e: dev-up
+	$(MAKE) seed-reset CONFIRM=yes
+	$(MAKE) seed-dev
+	bash scripts/test-e2e.sh
