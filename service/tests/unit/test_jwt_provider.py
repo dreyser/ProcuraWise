@@ -58,7 +58,24 @@ def test_decode_rejects_wrong_token_use() -> None:
 def test_decode_rejects_tampered_signature() -> None:
     settings = _settings()
     token, _ = create_access_token(_context(), settings)
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+
+    # Flip a character inside the signature segment, but never its very last
+    # character. An HS256 signature is 32 bytes -> 43 base64url characters,
+    # and base64's final character of a length that isn't a multiple of 3
+    # bytes only encodes 4 significant bits (the other 2 are padding,
+    # discarded on decode) - so occasionally a *different* last character
+    # still decodes to byte-identical signature bytes, making the "tampered"
+    # token spuriously still valid (this was flaky in CI: the payload embeds
+    # the real iat/exp, so the signature - and which characters are
+    # boundary-safe - differs run to run). Any other position is a full
+    # 6-bit-significant slot, so tampering it always changes the decoded
+    # bytes, deterministically.
+    header_b64, payload_b64, signature_b64 = token.split(".")
+    index = len(signature_b64) - 2
+    flipped_char = "A" if signature_b64[index] != "A" else "B"
+    tampered_signature = signature_b64[:index] + flipped_char + signature_b64[index + 1 :]
+    tampered = f"{header_b64}.{payload_b64}.{tampered_signature}"
+
     with pytest.raises(TokenInvalidError):
         decode_token(tampered, settings, expected_use="access")
 
