@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from procurawise.evaluations.exceptions import RequirementNotFoundError
 from procurawise.evaluations.models import Requirement
 from procurawise.evaluations.repository import EvaluationRepository
+from procurawise.identity.dev_provider import get_current_context as get_dev_context
 from procurawise.identity.repository import VendorOrganizationRepository
 from procurawise.proposals.exceptions import (
     AnswerValidationError,
@@ -15,7 +16,7 @@ from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.proposals.service import ProposalService
 from procurawise.shared.config import Settings, get_settings
-from procurawise.shared.context import ActorContext, require_role
+from procurawise.shared.context import ActorContext
 from procurawise.shared.mongo import get_database
 from procurawise.vendor_portal.schemas import (
     AnswerWriteRequest,
@@ -29,7 +30,18 @@ from procurawise.vendor_portal.service import VendorPortalService
 
 router = APIRouter(prefix="/vendor-portal/proposals", tags=["vendor-portal"])
 
-require_vendor_role = require_role("vendor_contact")
+
+# Deliberately NOT shared.context.require_role (AUTH-PROD scope decision #1):
+# vendor_contact stays on the interim dev-header mechanism
+# (identity.dev_provider) until Fase 15 delivers real invitation-token auth
+# for vendors, while require_role now resolves buyer identity via a real JWT.
+# Anchoring directly here, instead of through shared.context, means a future
+# change to require_role can never accidentally drag the vendor portal along
+# with it - the coupling is explicit and visible in this import line.
+def require_vendor_role(context: ActorContext = Depends(get_dev_context)) -> ActorContext:
+    if context.role != "vendor_contact":
+        raise HTTPException(status_code=403, detail="role not permitted")
+    return context
 
 
 def get_vendor_portal_service(settings: Settings = Depends(get_settings)) -> VendorPortalService:

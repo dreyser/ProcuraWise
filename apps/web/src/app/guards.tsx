@@ -1,10 +1,11 @@
 import { type ReactElement } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useActor } from '@/actor/ActorContext'
+import { useAuth } from '@/auth/AuthContext'
 
-/** Deep link without an active actor: redirect to the selector, preserving
- * the destination via ?next= (brief §10). Route guards are UX only - real
- * authorization always happens on the backend (brief §27). */
+/** Deep link without an active vendor dev-actor: redirect to the interim
+ * selector, preserving the destination via ?next=. Route guards are UX
+ * only - real authorization always happens on the backend. */
 export function RequireActor({ children }: { children: ReactElement }) {
   const { status } = useActor()
   const location = useLocation()
@@ -27,8 +28,39 @@ export function RequireActor({ children }: { children: ReactElement }) {
   return children
 }
 
-export function RequireRole({ roles, children }: { roles: string[]; children: ReactElement }) {
-  const { actor } = useActor()
+/** Buyer equivalent of RequireActor, backed by real auth (AUTH-PROD) instead
+ * of the dev-header mechanism. Redirects to /login (anonymous) or
+ * /auth/select-workspace (a login resolved to more than one Membership,
+ * still awaiting a choice) - never to /dev/select-actor, which is the
+ * vendor-only mechanism. */
+export function RequireAuth({ children }: { children: ReactElement }) {
+  const { status } = useAuth()
+  const location = useLocation()
+
+  if (status === 'anonymous') {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`)
+    return <Navigate to={`/login?next=${next}`} replace />
+  }
+
+  if (status === 'awaiting_workspace') {
+    return <Navigate to="/auth/select-workspace" replace />
+  }
+
+  return children
+}
+
+/** Takes the resolved actor as a prop rather than reading a fixed hook - the
+ * caller (BuyerLayout: auth/AuthContext; VendorLayout: actor/ActorContext)
+ * decides which of the two identity mechanisms it belongs to. */
+export function RequireRole({
+  roles,
+  actor,
+  children,
+}: {
+  roles: string[]
+  actor: { role: string } | null
+  children: ReactElement
+}) {
   if (!actor) return null
   if (!roles.includes(actor.role)) {
     return <Navigate to="/unauthorized" replace />

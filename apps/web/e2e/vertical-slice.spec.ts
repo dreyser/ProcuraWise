@@ -2,9 +2,32 @@ import { test, expect, type Page } from '@playwright/test'
 
 const wait = { waitUntil: 'commit' as const }
 
-async function selectActor(page: Page, namePattern: RegExp) {
-  await page.getByRole('button', { name: 'Cambiar de actor' }).click()
-  await page.waitForURL('**/dev/select-actor**', wait)
+const DEV_BUYER_PASSWORD = 'dev-password-2026'
+
+/**
+ * Buyer identity (evaluation_owner/evaluator) is real auth after AUTH-PROD -
+ * logs in via email+password against dev_seed.py's known dev password. The
+ * access token lives only in memory (scope decision #2, no persistence), so
+ * `page.goto()` - a real browser navigation, unlike a client-side <Link>
+ * click - always requires a fresh login afterward; this helper always starts
+ * from a clean /login visit rather than assuming any prior session survived.
+ */
+async function loginAsBuyer(page: Page, email: string) {
+  await page.goto('/login')
+  await page.getByLabel('Correo').fill(email)
+  await page.getByLabel('Contraseña').fill(DEV_BUYER_PASSWORD)
+  await page.getByRole('button', { name: 'Entrar' }).click()
+  await page.waitForURL((url) => !url.pathname.includes('/login'), wait)
+}
+
+/**
+ * vendor_contact stays on the interim dev-header mechanism until Fase 15
+ * (AUTH-PROD scope decision #1) - a completely separate mechanism from the
+ * buyer login above, persisted via sessionStorage (survives the `page.goto`
+ * below, unlike the buyer's in-memory access token).
+ */
+async function selectVendorActor(page: Page, namePattern: RegExp) {
+  await page.goto('/dev/select-actor')
   await page.getByRole('button', { name: namePattern }).click()
   await page.waitForURL((url) => !url.pathname.includes('/dev/select-actor'), wait)
 }
@@ -16,25 +39,28 @@ async function selectActor(page: Page, namePattern: RegExp) {
  * completes. Runs against the seeded evaluation from `make seed-dev`
  * ("Evaluacion de ejemplo (dev)": functional=40 + technical=20, one vendor
  * already linked) so the spec doesn't also have to build fixtures.
+ *
+ * Every switch between actors here is a full login (owner/evaluator are
+ * different real accounts; vendor is a different mechanism entirely) - no
+ * step assumes a previous buyer session survived a `page.goto`, since it
+ * deliberately doesn't (AUTH-PROD scope decision #2).
  */
 test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async ({ page }) => {
   // 1. Owner: start collection.
-  await page.goto('/')
-  await page.waitForURL('**/dev/select-actor**', wait)
-  await page.getByRole('button', { name: /Owner A/ }).click()
+  await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
   await page.waitForURL('**/evaluations', wait)
   await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
   await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
   const evaluationId = page.url().split('/evaluations/')[1]
 
-  await page.goto(`/evaluations/${evaluationId}/vendors`)
+  await page.getByRole('link', { name: 'Proveedores' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/vendors`, wait)
   await page.getByRole('button', { name: 'Iniciar recepción de propuestas' }).click()
   await page.getByRole('button', { name: 'Iniciar recepción' }).click()
   await expect(page.getByText('Recibiendo propuestas')).toBeVisible()
 
   // 2. Vendor: answer both required requirements and submit.
-  await selectActor(page, /Vendor Contact A/)
-  await page.goto('/vendor/proposals')
+  await selectVendorActor(page, /Vendor Contact A/)
   await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
   await page.waitForURL(/\/vendor\/proposals\/[a-f0-9]+$/, wait)
 
@@ -54,16 +80,26 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByText('Esta propuesta ya fue enviada y no puede editarse.')).toBeVisible()
 
-  // 3. Owner: start evaluation.
-  await selectActor(page, /Owner A/)
-  await page.goto(`/evaluations/${evaluationId}/proposals`)
+  // 3. Owner: start evaluation. Fresh login - the previous owner session (if
+  // any survived step 1) was already wiped by selectVendorActor's `page.goto`.
+  await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
+  await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
+  await page.getByRole('link', { name: 'Propuestas' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/proposals`, wait)
   await page.getByRole('button', { name: 'Iniciar evaluación' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Iniciar evaluación' }).click()
   await expect(page.getByText('En evaluación')).toBeVisible()
 
-  // 4. Evaluator: score both requirements.
-  await selectActor(page, /Evaluator A/)
-  await page.goto(`/evaluations/${evaluationId}/proposals`)
+  // 4. Evaluator: score both requirements. A different buyer account than
+  // owner_a - not just a role switch, a genuinely different login.
+  await loginAsBuyer(page, 'evaluator.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
+  await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
+  await page.getByRole('link', { name: 'Propuestas' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/proposals`, wait)
   await page.getByRole('link', { name: 'Calificar' }).click()
   await page.waitForURL(/\/proposals\/[a-f0-9]+\/score$/, wait)
   await expect(page.getByText('Calificados: 0 / 2')).toBeVisible()
@@ -83,9 +119,17 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
     await expect(page.getByText(`Calificados: ${i + 1} / 2`)).toBeVisible()
   }
 
-  // 5. Owner: consult results and complete.
-  await selectActor(page, /Owner A/)
-  await page.goto(`/evaluations/${evaluationId}/results`)
+  // 5. Owner: consult results and complete. Uses the "Cerrar sesión" button
+  // once here (rather than another bare page.goto) to also exercise that
+  // real UI action, not just the login form.
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+  await page.waitForURL('**/login**', wait)
+  await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
+  await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
+  await page.getByRole('link', { name: 'Resultados' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/results`, wait)
 
   await expect(page.getByText('Estado de calificación: Calificación completa')).toBeVisible()
   await expect(page.getByText('40 / 40')).toBeVisible()

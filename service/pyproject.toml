@@ -9,6 +9,18 @@ dependencies = [
     "pydantic-settings>=2.6",
     "pymongo>=4.9",
     "azure-storage-blob>=12.23",
+    # AUTH-PROD (ADR 0003): JWT propio + OIDC Microsoft/Google + hashing de
+    # contraseñas. httpx promovido desde dev: el cliente async de authlib lo
+    # necesita en runtime (intercambio de code/tokens con el IdP), no solo en
+    # tests.
+    "authlib>=1.3",
+    "pyjwt>=2.9",
+    "argon2-cffi>=23.1",
+    "httpx>=0.27",
+    # id_token (JWS/JWK) verification - authlib's own `authlib.jose` is
+    # deprecated in favor of this since authlib 1.7; declared directly
+    # rather than relying on it being pulled in transitively by authlib.
+    "joserfc>=1.0",
 ]
 
 [dependency-groups]
@@ -16,9 +28,9 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
-    "httpx>=0.27",
     "ruff>=0.7",
     "mypy>=1.13",
+    "types-authlib>=1.7.2.20260724",
 ]
 
 [build-system]

@@ -1,6 +1,5 @@
 import { type ReactNode } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { useActor } from '@/actor/ActorContext'
+import { NavLink } from 'react-router-dom'
 import { translateRole } from '@/lib/enumLabels'
 
 interface NavItem {
@@ -16,25 +15,46 @@ function navItemsForRole(role: string): NavItem[] {
   return role === 'vendor_contact' ? VENDOR_NAV : BUYER_NAV
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
-  const { actor, clearActor } = useActor()
-  const navigate = useNavigate()
+interface AppShellActor {
+  tenant_name: string
+  display_name: string
+  role: string
+}
 
-  if (!actor) return null
+interface AppShellProps {
+  actor: AppShellActor
+  exitLabel: string
+  onExit: () => void
+  /** True only for the vendor interim mechanism (RequireActor/ActorContext) -
+   * buyer sessions are real auth, no banner needed. */
+  devModeNotice?: boolean
+  children: ReactNode
+}
 
-  const handleChangeActor = () => {
-    clearActor()
-    navigate('/dev/select-actor', { replace: true })
-  }
-
+/**
+ * Presentation-only shell shared by BuyerLayout and VendorLayout
+ * (app/router.tsx) - takes the resolved actor and an exit action as props
+ * instead of reading a fixed identity hook, since the two layouts are backed
+ * by two different mechanisms (auth/AuthContext vs actor/ActorContext,
+ * AUTH-PROD scope decision #1).
+ */
+export function AppShell({
+  actor,
+  exitLabel,
+  onExit,
+  devModeNotice = false,
+  children,
+}: AppShellProps) {
   return (
     <div className="min-h-screen bg-background">
-      <div
-        role="status"
-        className="border-b border-amber-300 bg-amber-50 px-4 py-1 text-center text-xs font-medium text-amber-900"
-      >
-        Modo de desarrollo — identidad seleccionada manualmente, no hay autenticación real
-      </div>
+      {devModeNotice && (
+        <div
+          role="status"
+          className="border-b border-amber-300 bg-amber-50 px-4 py-1 text-center text-xs font-medium text-amber-900"
+        >
+          Modo de desarrollo — identidad seleccionada manualmente, no hay autenticación real
+        </div>
+      )}
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-3">
         <div>
           <p className="text-sm font-semibold text-foreground">ProcuraWise</p>
@@ -57,10 +77,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <button
           type="button"
-          onClick={handleChangeActor}
+          onClick={onExit}
           className="text-xs text-muted-foreground underline hover:text-foreground"
         >
-          Cambiar de actor
+          {exitLabel}
         </button>
       </header>
       <main className="px-6 py-6">{children}</main>

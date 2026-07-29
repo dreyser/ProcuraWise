@@ -14,7 +14,19 @@ def test_require_dev_environment_allows_test() -> None:
 
 
 def test_require_dev_environment_rejects_production() -> None:
-    settings = Settings(_env_file=None, environment="production", queue_backend="service_bus")
+    # Valid auth config alongside queue_backend=service_bus - this test only
+    # exercises require_dev_environment(), not Settings' own production
+    # validators (see test_config.py for those).
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        queue_backend="service_bus",
+        jwt_secret="x" * 32,
+        oidc_microsoft_client_id="mid",
+        oidc_microsoft_client_secret="msecret",
+        oidc_google_client_id="gid",
+        oidc_google_client_secret="gsecret",
+    )
     with pytest.raises(HTTPException) as exc_info:
         require_dev_environment(settings)
     assert exc_info.value.status_code == 404

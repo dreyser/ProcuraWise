@@ -8,6 +8,7 @@ from procurawise.identity.models import VendorOrganization
 from procurawise.identity.repository import VendorOrganizationRepository
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.tenant_collection import TenantCollection
+from tests.conftest import bearer_headers_for as _bearer_headers_for
 from tests.conftest import tenant_ids as _tenant_ids
 from tests.conftest import unique_actor_by_role as _unique_actor_by_role
 
@@ -96,10 +97,16 @@ def test_vendor_organization_is_not_visible_from_another_tenants_scope(mongo_tes
     collection.delete_one({"_id": vendor.id})
 
 
-def test_vendor_organizations_endpoint_excludes_other_tenants(client, seeded_actors) -> None:
+def test_vendor_organizations_endpoint_excludes_other_tenants(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, tenant_b = _tenant_ids(seeded_actors)
-    owner_a_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
-    owner_b_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_b, "evaluation_owner")]}
+    owner_a_headers = _bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    owner_b_headers = _bearer_headers_for(
+        seeded_actors[(tenant_b, "evaluation_owner")], mongo_test_settings
+    )
 
     response_a = client.get("/api/v1/vendor-organizations", headers=owner_a_headers)
     response_b = client.get("/api/v1/vendor-organizations", headers=owner_b_headers)

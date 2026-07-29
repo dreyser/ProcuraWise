@@ -4,7 +4,7 @@
 # below, dash alone wasn't the cause of the segfault seen there.
 SHELL := /bin/bash
 
-.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration test-e2e seed-dev seed-reset
+.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration test-e2e seed-dev seed-reset provision-user
 
 dev:
 	@trap 'kill 0' EXIT INT TERM; \
@@ -53,6 +53,19 @@ seed-reset:
 		exit 1; \
 	fi
 	cd service && uv run python -m procurawise.dev_seed --reset
+
+# Provision a real buyer account (AUTH-PROD has no self-signup endpoint - see
+# service/procurawise/provisioning_cli.py). Runs in any environment, prompts
+# for the password interactively (never pass it as a Make variable, it would
+# end up in shell history). Example:
+#   make provision-user TENANT_SLUG=acme TENANT_NAME="Acme Inc" EMAIL=owner@acme.com DISPLAY_NAME="Jane Doe" ROLE=evaluation_owner
+provision-user:
+	cd service && uv run python -m procurawise.provisioning_cli \
+		--tenant-slug "$(TENANT_SLUG)" \
+		--tenant-name "$(TENANT_NAME)" \
+		--email "$(EMAIL)" \
+		--display-name "$(DISPLAY_NAME)" \
+		--role "$(or $(ROLE),evaluation_owner)"
 
 dev-up:
 	docker compose up -d --wait

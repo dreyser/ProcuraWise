@@ -1,9 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
 Role = Literal["evaluation_owner", "evaluator", "vendor_contact"]
+OidcProviderName = Literal["microsoft", "google"]
 
 
 def new_id() -> str:
@@ -32,17 +33,49 @@ class Tenant:
 
 
 @dataclass(frozen=True)
+class OidcIdentity:
+    """One linked external identity for a User. Embedded (not a separate
+    collection) - always read together with the User, and a person realistically
+    links at most one identity per provider (AUTH-PROD, ADR 0003)."""
+
+    provider: OidcProviderName
+    subject: str
+    linked_at: datetime
+
+    def to_document(self) -> dict[str, Any]:
+        return {"provider": self.provider, "subject": self.subject, "linked_at": self.linked_at}
+
+    @staticmethod
+    def from_document(doc: dict[str, Any]) -> "OidcIdentity":
+        return OidcIdentity(
+            provider=doc["provider"], subject=doc["subject"], linked_at=doc["linked_at"]
+        )
+
+
+@dataclass(frozen=True)
 class User:
     id: str
     display_name: str
     email: str
     created_at: datetime
+    # None means the user only authenticates via a linked OIDC identity below -
+    # never has a local password (AUTH-PROD).
+    password_hash: str | None = None
+    oidc_identities: tuple[OidcIdentity, ...] = ()
 
     @staticmethod
-    def create(display_name: str, email: str) -> "User":
+    def create(display_name: str, email: str, password_hash: str | None = None) -> "User":
         return User(
-            id=new_id(), display_name=display_name, email=email, created_at=datetime.now(UTC)
+            id=new_id(),
+            display_name=display_name,
+            email=email,
+            created_at=datetime.now(UTC),
+            password_hash=password_hash,
+            oidc_identities=(),
         )
+
+    def with_oidc_identity(self, identity: "OidcIdentity") -> "User":
+        return replace(self, oidc_identities=(*self.oidc_identities, identity))
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -50,6 +83,8 @@ class User:
             "display_name": self.display_name,
             "email": self.email,
             "created_at": self.created_at,
+            "password_hash": self.password_hash,
+            "oidc_identities": [identity.to_document() for identity in self.oidc_identities],
         }
 
     @staticmethod
@@ -59,6 +94,10 @@ class User:
             display_name=doc["display_name"],
             email=doc["email"],
             created_at=doc["created_at"],
+            password_hash=doc.get("password_hash"),
+            oidc_identities=tuple(
+                OidcIdentity.from_document(identity) for identity in doc.get("oidc_identities", [])
+            ),
         )
 
 

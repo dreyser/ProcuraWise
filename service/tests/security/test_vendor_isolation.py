@@ -7,7 +7,7 @@ from procurawise.identity.repository import (
     UserRepository,
     VendorOrganizationRepository,
 )
-from tests.conftest import unique_actor_by_role
+from tests.conftest import bearer_headers_for, unique_actor_by_role
 
 pytestmark = pytest.mark.docker
 
@@ -78,28 +78,42 @@ def _create_submittable_proposal(
 
 
 def test_vendor_contact_cannot_access_buyer_routes(client, seeded_actors) -> None:
+    # vendor_contact only ever holds the interim dev header, which buyer
+    # routes (behind shared.context.require_role, now JWT-only) don't even
+    # recognize as a credential - this fails at authentication (401) before
+    # role-checking (403) ever runs. Stronger isolation than before, not a
+    # weaker one (see vendor_portal/router.py, AUTH-PROD scope decision #1).
     _tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
-    assert client.get("/api/v1/evaluations", headers=vendor_headers).status_code == 403
+    assert client.get("/api/v1/evaluations", headers=vendor_headers).status_code == 401
     assert (
         client.post(
             "/api/v1/evaluations", json={"name": "x", "description": ""}, headers=vendor_headers
         ).status_code
-        == 403
+        == 401
     )
 
 
-def test_owner_cannot_access_vendor_portal_routes(client, seeded_actors) -> None:
+def test_owner_cannot_access_vendor_portal_routes(
+    client, seeded_actors, mongo_test_settings
+) -> None:
+    # Symmetric to the above: an owner's real access token has no
+    # X-Dev-Membership-Id header at all, so the vendor portal's dev-header
+    # dependency 401s before it can even consider the role.
     tenant_a, _vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
-    assert client.get("/api/v1/vendor-portal/proposals", headers=owner_headers).status_code == 403
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    assert client.get("/api/v1/vendor-portal/proposals", headers=owner_headers).status_code == 401
 
 
 def test_vendor_contact_cannot_see_another_vendor_orgs_proposal(
-    client, seeded_actors, mongo_test_db
+    client, seeded_actors, mongo_test_db, mongo_test_settings
 ) -> None:
     tenant_a, vendor_a_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     vendor_a_headers = {DEV_ACTOR_HEADER: vendor_a_membership_id}
     vendor_a_org_id = client.get("/api/v1/me", headers=vendor_a_headers).json()["vendor_org_id"]
 
@@ -120,11 +134,17 @@ def test_vendor_contact_cannot_see_another_vendor_orgs_proposal(
     assert all(p["id"] != proposal_id for p in list_response.json())
 
 
-def test_evaluation_owner_of_other_tenant_gets_404(client, seeded_actors) -> None:
+def test_evaluation_owner_of_other_tenant_gets_404(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, _vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
     tenant_b = next(t for t, _role in seeded_actors if t != tenant_a)
-    owner_a_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
-    owner_b_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_b, "evaluation_owner")]}
+    owner_a_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    owner_b_headers = bearer_headers_for(
+        seeded_actors[(tenant_b, "evaluation_owner")], mongo_test_settings
+    )
 
     evaluation_id = client.post(
         "/api/v1/evaluations",
@@ -138,9 +158,11 @@ def test_evaluation_owner_of_other_tenant_gets_404(client, seeded_actors) -> Non
     )
 
 
-def test_tenant_id_in_body_is_rejected(client, seeded_actors) -> None:
+def test_tenant_id_in_body_is_rejected(client, seeded_actors, mongo_test_settings) -> None:
     tenant_a, _vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     response = client.post(
         "/api/v1/evaluations",
         json={"name": "x", "description": "", "tenant_id": "not-mine"},
@@ -149,9 +171,13 @@ def test_tenant_id_in_body_is_rejected(client, seeded_actors) -> None:
     assert response.status_code == 422
 
 
-def test_status_field_in_evaluation_update_body_is_rejected(client, seeded_actors) -> None:
+def test_status_field_in_evaluation_update_body_is_rejected(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, _vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     evaluation_id = client.post(
         "/api/v1/evaluations", json={"name": "x", "description": ""}, headers=owner_headers
     ).json()["id"]
@@ -164,9 +190,13 @@ def test_status_field_in_evaluation_update_body_is_rejected(client, seeded_actor
     assert response.status_code == 422
 
 
-def test_vendor_answer_body_rejects_status_field(client, seeded_actors) -> None:
+def test_vendor_answer_body_rejects_status_field(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
@@ -192,9 +222,13 @@ def test_vendor_answer_body_rejects_status_field(client, seeded_actors) -> None:
     assert response.status_code == 422
 
 
-def test_submitted_proposal_rejects_further_answer_edits(client, seeded_actors) -> None:
+def test_submitted_proposal_rejects_further_answer_edits(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
@@ -219,9 +253,11 @@ def test_submitted_proposal_rejects_further_answer_edits(client, seeded_actors) 
     assert edit_after_submit.status_code == 409
 
 
-def test_stale_proposal_version_is_rejected(client, seeded_actors) -> None:
+def test_stale_proposal_version_is_rejected(client, seeded_actors, mongo_test_settings) -> None:
     tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
@@ -238,10 +274,16 @@ def test_stale_proposal_version_is_rejected(client, seeded_actors) -> None:
     assert stale.status_code == 409
 
 
-def test_score_cannot_reference_requirement_outside_snapshot(client, seeded_actors) -> None:
+def test_score_cannot_reference_requirement_outside_snapshot(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
-    evaluator_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluator")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    evaluator_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+    )
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
@@ -261,10 +303,14 @@ def test_score_cannot_reference_requirement_outside_snapshot(client, seeded_acto
     assert response.status_code == 400
 
 
-def test_score_out_of_range_is_rejected(client, seeded_actors) -> None:
+def test_score_out_of_range_is_rejected(client, seeded_actors, mongo_test_settings) -> None:
     tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
-    evaluator_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluator")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    evaluator_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+    )
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 

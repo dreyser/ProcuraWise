@@ -1,12 +1,12 @@
 import pytest
 
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from tests.conftest import unique_actor_by_role
+from tests.conftest import bearer_headers_for, unique_actor_by_role
 
 pytestmark = pytest.mark.docker
 
 
-def test_vertical_slice_happy_path(client, seeded_actors) -> None:
+def test_vertical_slice_happy_path(client, seeded_actors, mongo_test_settings) -> None:
     """owner creates evaluation -> requirements -> links vendor -> starts
     collection -> vendor answers+submits -> owner starts evaluation ->
     scores -> results -> completes. Exercises the full VS-2B contract end to
@@ -14,8 +14,14 @@ def test_vertical_slice_happy_path(client, seeded_actors) -> None:
     # dev_seed only seeds a vendor_contact under one tenant - resolve that
     # tenant by role rather than an arbitrary/sorted tenant pair.
     tenant_a, vendor_membership_id = unique_actor_by_role(seeded_actors, "vendor_contact")
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
-    evaluator_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluator")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    evaluator_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+    )
+    # vendor_contact stays on the dev-header mechanism (AUTH-PROD scope
+    # decision #1) - unchanged.
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
 
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]

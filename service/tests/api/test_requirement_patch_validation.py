@@ -1,7 +1,6 @@
 import pytest
 
-from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from tests.conftest import tenant_ids
+from tests.conftest import bearer_headers_for, tenant_ids
 
 pytestmark = pytest.mark.docker
 
@@ -57,9 +56,13 @@ def _create_plain_requirement(client, owner_headers, evaluation_id: str) -> str:
     return created.json()["id"]
 
 
-def test_patch_to_single_choice_without_options_is_rejected(client, seeded_actors) -> None:
+def test_patch_to_single_choice_without_options_is_rejected(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     evaluation_id = _create_evaluation(client, owner_headers)
     requirement_id = _create_plain_requirement(client, owner_headers, evaluation_id)
 
@@ -76,9 +79,13 @@ def test_patch_to_single_choice_without_options_is_rejected(client, seeded_actor
     assert requirement["response_type"] == "text"
 
 
-def test_patch_clearing_options_on_existing_choice_is_rejected(client, seeded_actors) -> None:
+def test_patch_clearing_options_on_existing_choice_is_rejected(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     evaluation_id = _create_evaluation(client, owner_headers)
     requirement_id = _create_single_choice_requirement(client, owner_headers, evaluation_id)
 
@@ -95,9 +102,13 @@ def test_patch_clearing_options_on_existing_choice_is_rejected(client, seeded_ac
     assert requirement["options"] == ["SaaS", "On-premise"]
 
 
-def test_patch_from_choice_to_another_type_is_allowed(client, seeded_actors) -> None:
+def test_patch_from_choice_to_another_type_is_allowed(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     evaluation_id = _create_evaluation(client, owner_headers)
     requirement_id = _create_single_choice_requirement(client, owner_headers, evaluation_id)
 
@@ -111,9 +122,13 @@ def test_patch_from_choice_to_another_type_is_allowed(client, seeded_actors) -> 
     assert response.json()["response_type"] == "text"
 
 
-def test_partial_patch_preserving_valid_combination_succeeds(client, seeded_actors) -> None:
+def test_partial_patch_preserving_valid_combination_succeeds(
+    client, seeded_actors, mongo_test_settings
+) -> None:
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
-    owner_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
+    owner_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
     evaluation_id = _create_evaluation(client, owner_headers)
     requirement_id = _create_single_choice_requirement(client, owner_headers, evaluation_id)
 
@@ -130,10 +145,14 @@ def test_partial_patch_preserving_valid_combination_succeeds(client, seeded_acto
     assert body["options"] == ["SaaS", "On-premise"]
 
 
-def test_cross_tenant_patch_returns_404(client, seeded_actors) -> None:
+def test_cross_tenant_patch_returns_404(client, seeded_actors, mongo_test_settings) -> None:
     tenant_a, tenant_b = tenant_ids(seeded_actors)
-    owner_a_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_a, "evaluation_owner")]}
-    owner_b_headers = {DEV_ACTOR_HEADER: seeded_actors[(tenant_b, "evaluation_owner")]}
+    owner_a_headers = bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    owner_b_headers = bearer_headers_for(
+        seeded_actors[(tenant_b, "evaluation_owner")], mongo_test_settings
+    )
     evaluation_id = _create_evaluation(client, owner_a_headers)
     requirement_id = _create_plain_requirement(client, owner_a_headers, evaluation_id)
 

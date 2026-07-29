@@ -3,6 +3,12 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Obviously-insecure placeholder, never a real secret - safe as a default so
+# every existing `Settings(_env_file=None, ...)` call across the test suite
+# keeps working without passing a jwt_secret explicitly. The production
+# validator below rejects this exact value (and anything under 32 chars).
+_INSECURE_DEV_JWT_SECRET = "dev-insecure-jwt-secret-do-not-use-in-production"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -35,10 +41,57 @@ class Settings(BaseSettings):
     queue_backend: Literal["memory", "service_bus"] = "memory"
     service_bus_connection_string: str | None = None
 
+    # AUTH-PROD: JWT propio (ADR 0003). Ver _INSECURE_DEV_JWT_SECRET arriba -
+    # el default solo es válido fuera de production, el validador de abajo lo
+    # exige.
+    jwt_secret: str = _INSECURE_DEV_JWT_SECRET
+    jwt_algorithm: Literal["HS256"] = "HS256"
+    access_token_ttl_minutes: int = 30
+    pre_session_token_ttl_minutes: int = 5
+
+    # OIDC Microsoft/Google (authlib, ADR 0003). None por defecto: solo
+    # comprador usa este flujo, y no bloquea development/test sin credenciales
+    # reales configuradas - el validador de abajo sí las exige en production.
+    oidc_microsoft_client_id: str | None = None
+    oidc_microsoft_client_secret: str | None = None
+    oidc_microsoft_tenant: str = "common"
+    oidc_google_client_id: str | None = None
+    oidc_google_client_secret: str | None = None
+    # Dónde vive este mismo backend (para construir redirect_uri hacia el IdP)
+    # y dónde vive el SPA (para el redirect final tras el callback OIDC).
+    oidc_redirect_base_url: str = "http://localhost:8000"
+    frontend_base_url: str = "http://localhost:5173"
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":
             raise ValueError("queue_backend=memory no está permitido cuando environment=production")
+        return self
+
+    @model_validator(mode="after")
+    def _require_real_auth_config_in_production(self) -> Self:
+        if self.environment != "production":
+            return self
+        if self.jwt_secret == _INSECURE_DEV_JWT_SECRET or len(self.jwt_secret) < 32:
+            raise ValueError(
+                "jwt_secret debe configurarse explícitamente (>=32 caracteres, "
+                "distinto del default de desarrollo) cuando environment=production"
+            )
+        missing = [
+            name
+            for name, value in (
+                ("oidc_microsoft_client_id", self.oidc_microsoft_client_id),
+                ("oidc_microsoft_client_secret", self.oidc_microsoft_client_secret),
+                ("oidc_google_client_id", self.oidc_google_client_id),
+                ("oidc_google_client_secret", self.oidc_google_client_secret),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                f"faltan credenciales oidc requeridas cuando environment=production: "
+                f"{', '.join(missing)}"
+            )
         return self
 
 
