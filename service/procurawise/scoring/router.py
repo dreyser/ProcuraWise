@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from procurawise.audit.repository import AuditEventRepository
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import CompletionPreconditionError, InvalidTransitionError
 from procurawise.evaluations.exceptions import EvaluationNotFoundError as _EvaluationNotFoundError
 from procurawise.evaluations.models import Evaluation
@@ -37,6 +39,7 @@ def get_scoring_service(settings: Settings = Depends(get_settings)) -> ScoringSe
         proposals=ProposalRepository(db),
         evaluations=EvaluationRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
+        audit=AuditEventService(AuditEventRepository(db), settings),
     )
 
 
@@ -97,6 +100,7 @@ def upsert_score(
             body.comment,
             body.version,
             context.membership_id,
+            actor=context,
         )
     except (_EvaluationNotFoundError, ProposalNotFoundError):
         raise HTTPException(status_code=404) from None
@@ -153,7 +157,7 @@ def complete_evaluation(
     service: ScoringService = Depends(get_scoring_service),
 ) -> EvaluationDetailResponse:
     try:
-        evaluation = service.complete_evaluation(context.tenant_id, evaluation_id)
+        evaluation = service.complete_evaluation(context.tenant_id, evaluation_id, actor=context)
     except _EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
     except InvalidTransitionError:

@@ -1,5 +1,37 @@
 # Fase actual
 
+## Fase 8 (E3) — `audit`: AuditEvent append-only
+
+**Estado: ✅ Implementado y verificado con Docker real** (2026-07-30) — planeada en Plan Mode (investigación con 3 agentes Explore en paralelo sobre estado de git/docs, inventario de mutaciones, y patrones de test/migración/infra, seguida de 4 preguntas bloqueantes resueltas explícitamente por el founder antes de implementar). Plan completo en `~/.claude/plans/dreamy-enchanting-seal.md` (fuera del repo). Ejecutado en 6 bloques incrementales (0-6), cada uno verificado contra Docker real antes de avanzar.
+
+**Decisiones de alcance confirmadas por el founder antes de implementar (no reabiertas durante la implementación):**
+1. Consistencia mutación↔evento: best-effort — la mutación de negocio nunca se revierte por un fallo de `AuditEvent`; el fallo genera un log `ERROR` estructurado, encapsulado en `AuditEventService.record()`. Sin outbox, sin transacciones.
+2. Autosave de `ProposalAnswer` no se audita — solo el evento terminal `PROPOSAL_SUBMITTED`.
+3. Retención: 1 año (mismo default de ADR 0016), vía campo `expires_at` + TTL index, con la duración centralizada en `Settings.audit_event_retention_days`.
+4. El fix de flakiness de JWT pendiente (`95c5ea7`) se mergeó primero, aislado, antes de iniciar código de esta fase — ver housekeeping abajo y en `session-handoff.md`.
+
+**Housekeeping previo a esta fase (2026-07-30):** se detectó y corrigió una laguna de continuidad — `current-phase.md`/`session-handoff.md` seguían describiendo AUTH-PROD como implementado pero sin comitear; en realidad ya estaba fusionado a `main` (PR #17, `49bd646`), junto con el fix de flakiness de JWT en `tests/unit/test_jwt_provider.py` (PR #18, `1aa8202`) y su aplicación equivalente a `tests/security/test_auth_tenant_isolation.py` (mergeada en esta sesión como PR #19/`877559a`, con un PR #20/`f537f64` duplicado sin cambios de código — diff vacío entre ambos, inofensivo, no se revirtió). `origin/main` está en `f537f64`. La rama `phase-8/audit` se creó desde ese `main` ya actualizado. Alcance obligatorio de esta fase: instrumentación retroactiva de VS-2A/VS-2B/VS-2C (evaluations/proposals/scoring) — AUTH-PROD (login/OIDC) queda explícitamente fuera del criterio de aceptación (ver plan, §3/§6).
+
+**Contenido entregado (backend, `service/procurawise/`):**
+- **Bloque 1 — Fundación**: `audit/models.py` (`AuditEvent`, enum cerrado `AuditAction` de 13 acciones, `AuditActorType`, `AuditResourceType`); `audit/repository.py` (`AuditEventRepository`, expone únicamente `record()` + lectura, nunca `update`/`delete`); `migrations/0004_audit_events_indexes.py` (3 índices de consulta `(tenant_id, ...)` + TTL index sobre `expires_at`); `shared/config.py` (+`audit_event_retention_days`, default 365); `shared/request_context.py` (nuevo — `ContextVar` de `correlation_id`, no existía ningún mecanismo de request-id antes de esta fase).
+- **Bloque 2 — Servicio y consulta**: `audit/service.py` (`AuditEventService.record()` — best-effort, try/except que nunca propaga, log `ERROR` estructurado en fallo; `list_for_evaluation()` con cursor `(occurred_at, id)`); `audit/schemas.py`, `audit/router.py` (`GET /api/v1/evaluations/{evaluation_id}/audit-events`, paginado, `evaluation_owner`/`evaluator` únicamente); `api/main.py` (+middleware `correlation_id_middleware`, nuevo — primer middleware de la app; registro del router `audit`).
+- **Bloque 3 — Instrumentación de evaluations**: `EvaluationService` gana un constructor param `audit: AuditEventService` y un param `actor: ActorContext` en cada método mutador; 9 acciones instrumentadas (`evaluation_created/updated`, `requirement_added/updated/deleted`, `vendor_linked/unlinked`, `evaluation_collection_started`, `evaluation_scoring_started`).
+- **Bloque 4 — Instrumentación de proposals/vendor-portal**: solo `ProposalService.submit()` (autosave/`update_answer` deliberadamente sin instrumentar, decisión #2) — acción `proposal_submitted` con referencia a `snapshot_id`/`version`/conteo de respuestas, nunca el contenido. `vendor_portal/service.py` pasa `actor` a través sin lógica propia de auditoría.
+- **Bloque 5 — Instrumentación de scoring**: `ScoringService.upsert_score()` (`score_created`/`score_updated`, valor numérico + `requirement_id` en `metadata`, comentario libre explícitamente excluido) y `complete_evaluation()` (`evaluation_completed`).
+- **Bloque 6 — Contratos y cierre**: `apps/web/openapi.json`/`apps/web/src/api/client.ts` regenerados (+260 líneas, nuevo endpoint), `make contracts` corrido dos veces consecutivas → idéntico byte a byte (`shasum` comparado).
+
+**Diseño de `AuditEvent` (campos completos en `audit/models.py`):** `tenant_id`/`actor_*`/`occurred_at`/`action` siempre server-derivados (nunca de un body de cliente — no existe endpoint de escritura pública para `AuditEvent`); `evaluation_id`/`proposal_id`/`snapshot_id`/`version` para correlación sin duplicar contenido; `metadata` como allowlist explícita por acción (nombres de campos cambiados, IDs, valor numérico de score — nunca comentarios/contenido de respuestas/secretos); `expires_at` alimenta el TTL index de retención.
+
+**Resultado de pruebas de esta sesión (todas ejecutadas contra Docker real, ninguna asumida):**
+- `make lint` → 0 errores (backend ruff+format, frontend eslint 0 errores/23 warnings preexistentes).
+- `make typecheck` → limpio (mypy 65 archivos backend; `tsc -b` frontend).
+- `make test` → **82 passed backend + 79 passed frontend** (14 archivos).
+- `make test-integration` (Docker real) → **109 passed** (incluye 27 tests nuevos de audit: modelo, repositorio append-only, índices/TTL, aislamiento tenant-a-tenant, instrumentación de evaluations/proposals/scoring con casos negativos de mutación rechazada).
+- `make contracts` corrido dos veces consecutivas → idéntico byte a byte (`shasum` comparado).
+- `git diff --check` → limpio (exit 0).
+
+**Estado final: Fase 8 cerrada formalmente.** Ningún criterio de aceptación del backlog ("toda mutación relevante del vertical slice genera un `AuditEvent` consultable") queda abierto. `make test-e2e` no aplica (sin UI en el alcance de esta fase, decisión documentada en el plan §11 — "consultable" satisfecho por el endpoint API).
+
 ## AUTH-PROD — Auth productiva de comprador (reemplazo de `DevelopmentIdentityProvider`)
 
 **Estado: ✅ Implementado y verificado con Docker real** (2026-07-29) — planeado en Plan Mode (investigación previa con 3 agentes Explore en paralelo sobre backend/frontend/mecanismo de invitación de proveedores, seguida de 4 preguntas de alcance resueltas explícitamente por el founder vía `AskUserQuestion` antes de diseñar: (1) solo auth de comprador esta fase, `vendor_contact` se queda en `DevelopmentIdentityProvider` hasta Fase 15; (2) JWT de acceso corto en memoria, sin refresh token, sin cookies; (3) sin self-signup, provisión vía `dev_seed.py`/CLI administrativo; (4) sin recuperación de contraseña, sin Mailhog). Ejecutado en 5 bloques incrementales, cada uno verificado contra Docker real antes de avanzar al siguiente. Reemplaza `DevelopmentIdentityProvider` como mecanismo de identidad **solo para rutas de comprador** (`evaluations`/`proposals`/`scoring`/`vendor-organizations`) — el portal de proveedores sigue con el mecanismo interino sin cambios.
@@ -34,6 +66,10 @@
 - `git diff --check` → limpio (exit 0).
 
 **Estado final: AUTH-PROD cerrado formalmente para auth de comprador.** Ningún criterio de aceptación del backlog (`AUTH-PROD`: "Login exitoso ambos flujos; JWT contiene `tenant_id` correcto; sesión expira") queda abierto. Verificación manual del flujo OIDC contra Microsoft/Google reales **no realizada** (requeriría registrar apps OAuth de prueba, fuera del alcance de esta sesión) — el flujo está verificado end-to-end vía el fake de OIDC en tests automatizados; queda como verificación opcional documentada, no bloqueante (ver "Deuda técnica no bloqueante").
+
+### Actualización — merge confirmado a `main` (PR #17, y fixes de flakiness de JWT PR #18/#19/#20) (2026-07-30)
+
+**AUTH-PROD está fusionado a `main`.** El founder comiteó el trabajo y abrió/mergeó el PR #17 (`phase-2/auth-prod` → `main`) fuera de una sesión de Claude Code documentada — esta nota reemplaza la afirmación anterior ("vive sin comitear en `phase-2/vs-2c`"), que quedó desactualizada. `origin/main` avanzó `0b38ef7` → **`49bd646 feat(identity): implement AUTH-PROD buyer authentication (email+password + OIDC) (#17)`** (squash-merge). Posteriormente se mergeó `1aa8202 fix(tests): stop tampering the last base64 char of a JWT signature (#18)` — fix de un flake real en `test_jwt_provider.py::test_decode_rejects_tampered_signature` (el último char base64 de una firma HS256 solo codifica 4 bits significativos, así que tampearlo a veces decodifica a la misma firma, dejando el token "tampereado" espuriamente válido). El mismo patrón de bug existía también en `tests/security/test_auth_tenant_isolation.py::test_tampered_access_token_returns_401` — corregido y mergeado como PR #19 (`877559a`) al iniciar la sesión de Fase 8; un PR #20 (`f537f64`) duplicado se mergeó también por error humano, pero su diff contra #19 es vacío (no-op, sin riesgo, no se revirtió). `main` local y remoto sincronizados en `f537f64`. Rama `phase-8/audit` creada desde ese `main` — ver sección "Fase 8" arriba.
 
 ## VS-2C — Frontend del vertical slice de evaluación
 

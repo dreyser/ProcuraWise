@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from procurawise.audit.repository import AuditEventRepository
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.models import Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.schemas import RequirementResponse
@@ -30,6 +32,7 @@ def get_proposal_service(settings: Settings = Depends(get_settings)) -> Proposal
         proposals=ProposalRepository(db),
         evaluations=EvaluationRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
+        audit=AuditEventService(AuditEventRepository(db), settings),
     )
 
 

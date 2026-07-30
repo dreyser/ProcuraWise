@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import RequirementNotFoundError
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
@@ -15,6 +16,7 @@ from procurawise.proposals.exceptions import (
 )
 from procurawise.proposals.models import Proposal, ProposalAnswer, ProposalSnapshot
 from procurawise.proposals.repository import ProposalRepository
+from procurawise.shared.context import ActorContext
 
 _CURRENCY_CODES = {"MXN", "USD"}
 _COMPLIANCE_VALUES = {"compliant", "partially_compliant", "non_compliant"}
@@ -82,10 +84,12 @@ class ProposalService:
         proposals: ProposalRepository,
         evaluations: EvaluationRepository,
         vendor_orgs: VendorOrganizationRepository,
+        audit: AuditEventService,
     ) -> None:
         self._proposals = proposals
         self._evaluations = evaluations
         self._vendor_orgs = vendor_orgs
+        self._audit = audit
 
     def get_proposal(self, tenant_id: str, proposal_id: str) -> Proposal:
         doc = self._proposals.find_by_id(tenant_id, proposal_id)
@@ -172,6 +176,8 @@ class ProposalService:
         proposal_id: str,
         expected_version: int,
         membership_id: str,
+        *,
+        actor: ActorContext,
     ) -> Proposal:
         proposal = self.get_proposal_for_vendor(tenant_id, vendor_org_id, proposal_id)
         evaluation_doc = self._evaluations.find_by_id(tenant_id, proposal.evaluation_id)
@@ -217,4 +223,19 @@ class ProposalService:
         )
         if not matched:
             raise StaleVersionError(proposal_id)
-        return self.get_proposal(tenant_id, proposal_id)
+
+        submitted = self.get_proposal(tenant_id, proposal_id)
+        answered_count = sum(1 for a in submitted.answers if a.value is not None)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="proposal_submitted",
+            resource_type="proposal",
+            resource_id=proposal_id,
+            evaluation_id=evaluation.id,
+            proposal_id=proposal_id,
+            snapshot_id=snapshot.snapshot_id,
+            version=submitted.version,
+            metadata={"requirements_answered_count": answered_count},
+        )
+        return submitted

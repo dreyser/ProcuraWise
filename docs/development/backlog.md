@@ -29,7 +29,7 @@ Estado por fase se actualiza en [`docs/development/current-phase.md`](current-ph
 
 | Fase | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
 |---|---|---|---|---|---|
-| 8 | `audit` AuditEvent append-only, instrumentado retroactivamente en VS-2A/VS-2B/VS-2C | P0 | VS-2C | Toda mutación relevante del vertical slice genera un `AuditEvent` consultable | Not Started |
+| 8 | `audit` AuditEvent append-only, instrumentado retroactivamente en VS-2A/VS-2B/VS-2C | P0 | VS-2C | Toda mutación relevante del vertical slice genera un `AuditEvent` consultable | ✅ Completed (2026-07-30) — implementado y verificado con Docker real: `make lint`/`typecheck`/`test`/`test-integration`/`contracts`(x2) en verde. Alcance: evaluations (9 acciones) + proposals (submit) + scoring (score/complete), 13 acciones en total; login/OIDC (AUTH-PROD) y autosave de `ProposalAnswer` explícitamente fuera de alcance por decisión del founder — ver `current-phase.md` |
 | 9 | RBAC completo (todos los roles del §4 de la spec) + `Assignment` por sección | P0 | 8 | Usuario sin rol adecuado recibe 403 en acción restringida | Not Started |
 
 ### E4 — Wizard y biblioteca de requerimientos (Bloque 2, parte 2)

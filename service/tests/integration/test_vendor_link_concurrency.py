@@ -2,17 +2,22 @@ import threading
 
 import pytest
 
+from procurawise.audit.repository import AuditEventRepository
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.models import MAX_LINKED_VENDORS
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.service import EvaluationService
 from procurawise.identity.models import Tenant, VendorOrganization
 from procurawise.identity.repository import TenantRepository, VendorOrganizationRepository
 from procurawise.proposals.repository import ProposalRepository
+from procurawise.shared.context import ActorContext
 
 pytestmark = pytest.mark.docker
 
 
-def test_vendor_link_reservation_never_exceeds_limit_under_concurrency(mongo_test_db) -> None:
+def test_vendor_link_reservation_never_exceeds_limit_under_concurrency(
+    mongo_test_db, mongo_test_settings
+) -> None:
     """count_documents-then-insert would let two concurrent requests both
     read count=5 and both succeed, overshooting the 6-vendor cap (plan §12).
     The atomic $inc-guarded reservation must not allow that: exactly
@@ -23,14 +28,26 @@ def test_vendor_link_reservation_never_exceeds_limit_under_concurrency(mongo_tes
     vendor_orgs = VendorOrganizationRepository(mongo_test_db)
     evaluations = EvaluationRepository(mongo_test_db)
     proposals = ProposalRepository(mongo_test_db)
+    audit = AuditEventService(AuditEventRepository(mongo_test_db), mongo_test_settings)
     service = EvaluationService(
-        evaluations=evaluations, proposals=proposals, vendor_orgs=vendor_orgs
+        evaluations=evaluations, proposals=proposals, vendor_orgs=vendor_orgs, audit=audit
     )
 
     tenant = Tenant.create(slug="vs2b-concurrency-tenant", name="Concurrency Tenant")
     tenants.insert(tenant.to_document())
+    actor = ActorContext(
+        membership_id="membership-x",
+        user_id="user-x",
+        tenant_id=tenant.id,
+        tenant_name=tenant.name,
+        role="evaluation_owner",
+        vendor_org_id=None,
+        display_name="Owner",
+    )
     try:
-        evaluation = service.create_evaluation(tenant.id, "membership-x", "Concurrency RFP", "")
+        evaluation = service.create_evaluation(
+            tenant.id, "membership-x", "Concurrency RFP", "", actor=actor
+        )
 
         vendor_org_ids = []
         for i in range(10):
@@ -42,7 +59,7 @@ def test_vendor_link_reservation_never_exceeds_limit_under_concurrency(mongo_tes
 
         def link(vendor_org_id: str) -> None:
             try:
-                service.link_vendor(tenant.id, evaluation.id, vendor_org_id)
+                service.link_vendor(tenant.id, evaluation.id, vendor_org_id, actor=actor)
                 results[vendor_org_id] = "ok"
             except Exception as exc:  # noqa: BLE001 - recording the outcome, not handling it
                 results[vendor_org_id] = type(exc).__name__
@@ -68,3 +85,4 @@ def test_vendor_link_reservation_never_exceeds_limit_under_concurrency(mongo_tes
         mongo_test_db["vendor_organizations"].delete_many({"tenant_id": tenant.id})
         mongo_test_db["evaluations"].delete_many({"tenant_id": tenant.id})
         mongo_test_db["proposals"].delete_many({"tenant_id": tenant.id})
+        mongo_test_db["audit_events"].delete_many({"tenant_id": tenant.id})

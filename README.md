@@ -4,9 +4,7 @@ SaaS B2B multi-tenant que convierte una necesidad de compra de software/tecnolog
 
 ## Estado del proyecto
 
-**Fase 1 — Fundación técnica: completa.** Fase 1A (estructura y herramientas) y Fase 1B (infraestructura local: MongoDB Community + Azurite vía Docker Compose, configuración tipada por ambiente, adaptadores de Mongo/Blob/cola — `InMemoryMessageBus` por defecto en local, ver [ADR 0020](docs/architecture/decisions/0020-composicion-servicios-desarrollo-local.md) —, health checks, logging estructurado y pruebas de integración) están verificadas con Docker real. Fase 1C (Integración continua y seguridad de pipeline) agrega CI en GitHub Actions, escaneo de secretos/dependencias y cierra formalmente la Fundación técnica — ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle.
-
-La siguiente sub-fase (`identity`) introduce el primer bounded context de dominio real y, junto con él, pre-commit hooks locales.
+**Fase 1 — Fundación técnica: completa** (2026-07-18). El vertical slice de negocio (`VS-2A`/`VS-2B`/`VS-2C`: `identity`, `evaluations`, `proposals`, `scoring`, `vendor_portal`) y `AUTH-PROD` (auth productiva de comprador — email+password + OIDC Microsoft/Google) también están completos y fusionados a `main`. En progreso: **Fase 8 (E3) — `audit`**, `AuditEvent` append-only instrumentado retroactivamente sobre el vertical slice. Ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle de cada fase y [`docs/development/backlog.md`](docs/development/backlog.md) para el estado de todas las fases del MVP.
 
 ## Cómo correr el proyecto localmente
 
@@ -58,7 +56,7 @@ Makefile            # make dev/test/lint/typecheck/contracts/migrate/dev-up/dev-
 CLAUDE.md           # reglas operativas para trabajar en este repositorio
 ```
 
-Pre-commit hooks locales y los subpaquetes de dominio (`identity`, `evaluations`, ...) se introducen junto con el primer código de negocio real, en la sub-fase `identity` — ver [`docs/development/current-phase.md`](docs/development/current-phase.md).
+Los subpaquetes de dominio bajo `service/procurawise/` (`identity`, `evaluations`, `proposals`, `scoring`, `vendor_portal`, `audit`, ...) siguen todos el mismo patrón interno (`models/schemas/repository/service/router`) — ver [`docs/architecture/architecture.md`](docs/architecture/architecture.md). Pre-commit hooks locales quedaron explícitamente fuera de alcance (CI ya cubre lint/format/typecheck en cada PR vía branch protection).
 
 ## Por dónde empezar
 
