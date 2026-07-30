@@ -67,20 +67,21 @@ Código + tests correspondientes (unit/integration, y de aislamiento si toca dat
 - No implementar MFA.
 - No implementar adjudicación automática — la decisión final siempre requiere aprobación humana explícita.
 
-## 9. Interfaz de comandos objetivo — pendiente de implementarse durante la fase de fundación
+## 9. Interfaz de comandos
 
-Los siguientes comandos son el objetivo de la Fase 0 (Bootstrap), **no existen todavía**:
+Estos comandos ya existen desde la Fase 0 (Bootstrap) y se usan en CI (`.github/workflows/ci.yml`, `integration.yml`):
 
 ```
-make dev         # levanta api + web en local
-make test        # corre unit + integration
-make lint        # ruff + mypy + eslint + prettier
-make typecheck   # mypy + tsc --noEmit
-make contracts   # regenera tipos TS desde openapi.json vía orval
-make migrate     # aplica migraciones de Mongo pendientes
+make dev              # levanta api + web en local
+make test             # corre unit + integration sin Docker (backend) + tests de frontend
+make test-integration # levanta dependencias y corre las pruebas que requieren Mongo/Azurite reales
+make lint             # ruff + mypy + eslint + prettier
+make typecheck        # mypy + tsc --noEmit
+make contracts        # regenera apps/web/src/api/client.ts desde openapi.json vía orval
+make migrate          # aplica migraciones de Mongo pendientes
 ```
 
-**Antes de ejecutar cualquiera de estos comandos, verifica primero que exista `Makefile` y el target correspondiente.** Si no existen, no asumas que están implementados — repórtalo y, si la tarea lo requiere, créalos como parte del alcance de la Fase 0.
+**Antes de ejecutar cualquiera de estos comandos, verifica primero que exista `Makefile` y el target correspondiente** — si una fase futura necesitara un target nuevo, repórtalo y créalo como parte del alcance de esa fase, en vez de asumir que ya existe.
 
 ## 10. Regla de continuidad entre sesiones
 

@@ -4,6 +4,7 @@ from procurawise.evaluations.models import Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.service import ProposalService
+from procurawise.shared.context import ActorContext
 
 
 class VendorPortalService:
@@ -72,7 +73,9 @@ class VendorPortalService:
         proposal_id: str,
         expected_version: int,
         membership_id: str,
+        *,
+        actor: ActorContext,
     ) -> Proposal:
         return self._proposals.submit(
-            tenant_id, vendor_org_id, proposal_id, expected_version, membership_id
+            tenant_id, vendor_org_id, proposal_id, expected_version, membership_id, actor=actor
         )

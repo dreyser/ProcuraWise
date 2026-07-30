@@ -32,6 +32,53 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-30 — Housekeeping (merge AUTH-PROD/JWT-fixes) + Fase 8 (E3, `audit`): implementación completa
+
+**Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo: estado de git/docs, inventario de mutaciones VS-2A/VS-2B/VS-2C/AUTH-PROD, y patrones de test/migración/infra) seguida de implementación completa de la Fase 8 (`audit`: `AuditEvent` append-only) en 6 bloques incrementales, cada uno verificado contra Docker real antes de avanzar. Se presentaron 4 preguntas bloqueantes al founder, resueltas explícitamente antes de avanzar a implementación. Plan completo aprobado en `~/.claude/plans/dreamy-enchanting-seal.md` (fuera del repo). Housekeeping previo: se confirmó que AUTH-PROD (PR #17) y el fix de flakiness de JWT (PR #18) ya estaban fusionados a `main` sin que la documentación lo reflejara — misma clase de laguna de continuidad ya vista con VS-2C/PR #15.
+
+**Decisiones bloqueantes resueltas por el founder (2026-07-30):**
+1. Consistencia mutación↔`AuditEvent`: best-effort — nunca se revierte la mutación de negocio; fallo de auditoría → log `ERROR` estructurado, encapsulado en un único punto (`AuditEventService.record()`). Sin outbox/transacciones esta fase.
+2. Autosave de `ProposalAnswer`: no se audita — solo `PROPOSAL_SUBMITTED` (evento terminal con referencia a snapshot).
+3. Retención: 1 año (ADR 0016), vía `expires_at`/TTL index, duración centralizada en config, no configurable por tenant.
+4. Rama pendiente `fix/tampered-token-test-flake-security` (`95c5ea7`): mergear primero, aislado, antes de tocar código de auditoría.
+
+**Housekeeping ejecutado en esta sesión:**
+- PR de `95c5ea7` (aplicaba el fix de tampering de JWT a `test_auth_tenant_isolation.py`, ya corregido en `test_jwt_provider.py` por PR #18) abierto y mergeado por el founder — landing como **PR #19 (`877559a`)**. Un **PR #20 (`f537f64`)** se mergeó también por duplicado accidental; diff vacío contra #19 (no-op, sin riesgo, no se revirtió — dejarlo así evita reescribir historia de `main` sin necesidad).
+- `main` local actualizado por fast-forward a `origin/main` (`f537f64`).
+- Rama `phase-8/audit` creada desde ese `main` actualizado.
+- Ramas obsoletas eliminadas (local + remoto), verificadas sin commits únicos antes de borrar: `fix/jwt-tampered-signature-test-flake`, `phase-2/auth-prod`, `phase-2/vs-2c`, `phase-1/foundation`, y `fix/tampered-token-test-flake-security` (ya mergeada).
+
+**Contenido entregado (backend, `service/procurawise/`) — ver detalle completo en `docs/development/current-phase.md`, sección Fase 8:**
+- **Bloque 1**: `audit/models.py` (`AuditEvent`, enum cerrado `AuditAction` de 13 acciones), `audit/repository.py` (append-only, solo `record()`+lectura), `migrations/0004_audit_events_indexes.py` (3 índices de consulta + TTL sobre `expires_at`), `shared/config.py` (+`audit_event_retention_days`), `shared/request_context.py` (nuevo — `correlation_id` vía `ContextVar`, primer mecanismo de request-id de la app).
+- **Bloque 2**: `audit/service.py` (`AuditEventService.record()` best-effort, `list_for_evaluation()` paginado por cursor), `audit/schemas.py`, `audit/router.py` (`GET /api/v1/evaluations/{evaluation_id}/audit-events`), `api/main.py` (+middleware de correlation-id, +registro del router `audit`).
+- **Bloque 3**: `evaluations/service.py`/`router.py` — 9 acciones instrumentadas (create/update evaluation, add/update/delete requirement, link/unlink vendor, start-collection, start-evaluation).
+- **Bloque 4**: `proposals/service.py`/`vendor_portal/service.py`/`router.py` — solo `submit` (`proposal_submitted`, referencia a snapshot, nunca contenido); autosave (`update_answer`) deliberadamente sin instrumentar.
+- **Bloque 5**: `scoring/service.py`/`router.py` — `score_created`/`score_updated` (valor numérico + `requirement_id`, comentario excluido) y `evaluation_completed`.
+- **Bloque 6**: contratos regenerados (`apps/web/openapi.json`/`client.ts`, +260 líneas), `docs/security/threat-model.md` (nueva sección "Auditoría (Fase 8, `audit`)" + fila en riesgos aceptados), `docs/development/backlog.md` (fila Fase 8 → Completed).
+- Cada bloque de servicio mutador (`EvaluationService`/`ProposalService`/`ScoringService`) ganó un constructor param `audit: AuditEventService` y un param `actor: ActorContext` en sus métodos mutadores — los tests de concurrencia que instanciaban estos servicios directamente (`test_vendor_link_concurrency.py`, `test_proposal_version_concurrency.py`) se actualizaron para construir un `AuditEventService`/`ActorContext` real.
+
+**Archivos tocados:** ver lista completa en `current-phase.md`, sección Fase 8. Nuevos tests: `tests/unit/test_audit_event_model.py`, `tests/integration/{test_audit_repository,test_audit_indexes,test_evaluations_audit_instrumentation,test_proposals_audit_instrumentation,test_scoring_audit_instrumentation}.py`, `tests/security/test_audit_isolation.py`.
+
+**Resultado de pruebas de esta sesión (todas ejecutadas contra Docker real, ninguna asumida):**
+- `make lint` → 0 errores. `make typecheck` → limpio (mypy 65 archivos backend; `tsc -b` frontend).
+- `make test` → **82 passed backend + 79 passed frontend**.
+- `make test-integration` (Docker real) → **109 passed** (27 nuevos de audit, incluyendo casos negativos de mutación rechazada sin evento espurio).
+- `make contracts` corrido dos veces consecutivas → idéntico byte a byte.
+- `git diff --check` → limpio.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** ninguna — el bounded context `audit` ya estaba previsto en `architecture.md` como subpaquete estándar; ninguna decisión de esta sesión reabre monolito/DB/hosting/patrón de comunicación. El middleware de `correlation_id` es aditivo, no arquitectónico.
+
+**Deuda técnica introducida:**
+- `AuditEvent` con garantía best-effort (gap posible si el insert falla tras una mutación exitosa) y sin protección contra acceso admin directo a Mongo — aceptado explícitamente por el founder, documentado en `threat-model.md`.
+- Sin UI de consulta de audit trail — el criterio de aceptación ("consultable") se satisface con el endpoint API; UI queda como extensión futura si se pide explícitamente.
+
+**Estado final: Fase 8 cerrada formalmente.** Ningún criterio de aceptación del backlog queda abierto.
+
+**Instrucciones para la siguiente sesión:**
+- `main`/`phase-8/audit` no están fusionados entre sí todavía — el founder decide si comitea/abre PR (mismo patrón que fases anteriores).
+- Próxima fase según `backlog.md`: Fase 9 (RBAC completo + `Assignment`), depende de Fase 8 (ya cerrada).
+- No tocar todavía: RBAC completo, `Assignment`, consola `platform_admin` (Fase 25), UI de audit trail (no en alcance de Fase 8).
+
 ### Sesión — 2026-07-29 — AUTH-PROD: auth productiva de comprador (email+password + OIDC Microsoft/Google)
 
 **Resumen:** Sesión de planeación (Plan Mode, con 3 agentes Explore en paralelo investigando backend/frontend/mecanismo de invitación de proveedores antes de diseñar) seguida de implementación completa en 5 bloques incrementales, cada uno verificado contra Docker real antes de avanzar. Reemplaza `DevelopmentIdentityProvider` como mecanismo de identidad para rutas de comprador (`evaluation_owner`/`evaluator`); `vendor_contact` se queda deliberadamente en el mecanismo interino hasta Fase 15.

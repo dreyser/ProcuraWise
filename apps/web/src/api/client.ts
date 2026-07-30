@@ -56,6 +56,49 @@ export interface AnswerWriteRequest {
   expected_version: number
 }
 
+export type AuditEventListResponseNextCursor = string | null
+
+export interface AuditEventListResponse {
+  items: AuditEventResponse[]
+  next_cursor?: AuditEventListResponseNextCursor
+}
+
+export type AuditEventResponseActorUserId = string | null
+
+export type AuditEventResponseActorVendorOrgId = string | null
+
+export type AuditEventResponseEvaluationId = string | null
+
+export type AuditEventResponseProposalId = string | null
+
+export type AuditEventResponseSnapshotId = string | null
+
+export type AuditEventResponseVersion = number | null
+
+export type AuditEventResponseCorrelationId = string | null
+
+export type AuditEventResponseMetadata = { [key: string]: unknown }
+
+export interface AuditEventResponse {
+  id: string
+  occurred_at: string
+  actor_type: string
+  actor_membership_id: string
+  actor_user_id?: AuditEventResponseActorUserId
+  actor_vendor_org_id?: AuditEventResponseActorVendorOrgId
+  actor_role: string
+  action: string
+  resource_type: string
+  resource_id: string
+  evaluation_id?: AuditEventResponseEvaluationId
+  proposal_id?: AuditEventResponseProposalId
+  snapshot_id?: AuditEventResponseSnapshotId
+  version?: AuditEventResponseVersion
+  outcome: string
+  correlation_id?: AuditEventResponseCorrelationId
+  metadata: AuditEventResponseMetadata
+}
+
 export type DevActorSummaryVendorOrgId = string | null
 
 /**
@@ -714,6 +757,15 @@ export type OidcCallbackApiV1AuthOidcProviderCallbackGetParams = {
 
 export type ListVendorOrganizationsApiV1VendorOrganizationsGetParams = {
   search?: string | null
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number
+  cursor?: string | null
+}
+
+export type ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams = {
   /**
    * @minimum 1
    * @maximum 100
@@ -3647,6 +3699,214 @@ export const useStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost =
     getStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPostMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Audit Events
+ */
+export type listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponse200 = {
+  data: AuditEventListResponse
+  status: 200
+}
+
+export type listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponseSuccess =
+  listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponse200 & {
+    headers: Headers
+  }
+export type listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponseError =
+  listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponse =
+  | listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponseSuccess
+  | listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponseError
+
+export const getListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetUrl = (
+  evaluationId: string,
+  params?: ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+) => {
+  const normalizedParams = new URLSearchParams()
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  })
+
+  const stringifiedParams = normalizedParams.toString()
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/evaluations/${evaluationId}/audit-events?${stringifiedParams}`
+    : `/api/v1/evaluations/${evaluationId}/audit-events`
+}
+
+export const listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet = async (
+  evaluationId: string,
+  params?: ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+  options?: RequestInit,
+): Promise<listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponse> => {
+  return apiFetch<listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetResponse>(
+    getListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetUrl(evaluationId, params),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetQueryKey = (
+  evaluationId?: string,
+  params?: ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/audit-events`, ...(params ? [params] : [])] as const
+}
+
+export const getListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  params?: ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetQueryKey(evaluationId, params)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>
+  > = () => listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet(evaluationId, params)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>
+>
+export type ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetQueryError =
+  HTTPValidationError
+
+export function useListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet<
+  TData = Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  params: undefined | ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet<
+  TData = Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  params?: ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet<
+  TData = Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  params?: ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Audit Events
+ */
+
+export function useListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet<
+  TData = Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  params?: ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetQueryOptions(
+    evaluationId,
+    params,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**

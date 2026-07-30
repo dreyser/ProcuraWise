@@ -1,0 +1,154 @@
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
+from uuid import uuid4
+
+from procurawise.shared.context import ActorContext
+
+AuditActorType = Literal["buyer", "vendor_contact"]
+
+AuditResourceType = Literal["evaluation", "requirement", "proposal", "score"]
+
+# Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
+# the call site. PROPOSAL_ANSWER_UPDATED (autosave) is deliberately absent:
+# founder decision §18.2, only the terminal PROPOSAL_SUBMITTED is audited.
+AuditAction = Literal[
+    "evaluation_created",
+    "evaluation_updated",
+    "requirement_added",
+    "requirement_updated",
+    "requirement_deleted",
+    "vendor_linked",
+    "vendor_unlinked",
+    "evaluation_collection_started",
+    "evaluation_scoring_started",
+    "evaluation_completed",
+    "proposal_submitted",
+    "score_created",
+    "score_updated",
+]
+
+
+def new_id() -> str:
+    return uuid4().hex
+
+
+def _actor_type_for_role(role: str) -> AuditActorType:
+    return "vendor_contact" if role == "vendor_contact" else "buyer"
+
+
+@dataclass(frozen=True)
+class AuditEvent:
+    """Append-only record of a relevant business mutation (plan §7). Never
+    constructed directly by a router from client input - `tenant_id`,
+    `actor_*`, `occurred_at` and `action` are always server-derived (from the
+    resolved ActorContext and the instrumentation call site), never accepted
+    from a request body. `metadata` is an explicit per-action allowlist built
+    by the caller, never a raw diff or a passthrough of a request body - see
+    audit.service and CLAUDE.md's sensitive-data rules."""
+
+    id: str
+    tenant_id: str
+    occurred_at: datetime
+    actor_type: AuditActorType
+    actor_membership_id: str
+    actor_user_id: str | None
+    actor_vendor_org_id: str | None
+    actor_role: str
+    action: AuditAction
+    resource_type: AuditResourceType
+    resource_id: str
+    evaluation_id: str | None
+    proposal_id: str | None
+    snapshot_id: str | None
+    version: int | None
+    outcome: Literal["success"]
+    correlation_id: str | None
+    metadata: dict[str, Any]
+    expires_at: datetime
+
+    @staticmethod
+    def create(
+        *,
+        tenant_id: str,
+        actor: ActorContext,
+        action: AuditAction,
+        resource_type: AuditResourceType,
+        resource_id: str,
+        evaluation_id: str | None = None,
+        proposal_id: str | None = None,
+        snapshot_id: str | None = None,
+        version: int | None = None,
+        correlation_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        retention_days: int,
+    ) -> "AuditEvent":
+        now = datetime.now(UTC)
+        return AuditEvent(
+            id=new_id(),
+            tenant_id=tenant_id,
+            occurred_at=now,
+            actor_type=_actor_type_for_role(actor.role),
+            actor_membership_id=actor.membership_id,
+            actor_user_id=actor.user_id,
+            actor_vendor_org_id=actor.vendor_org_id,
+            actor_role=actor.role,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            evaluation_id=evaluation_id,
+            proposal_id=proposal_id,
+            snapshot_id=snapshot_id,
+            version=version,
+            outcome="success",
+            correlation_id=correlation_id,
+            metadata=metadata or {},
+            expires_at=now + timedelta(days=retention_days),
+        )
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "_id": self.id,
+            "tenant_id": self.tenant_id,
+            "occurred_at": self.occurred_at,
+            "actor_type": self.actor_type,
+            "actor_membership_id": self.actor_membership_id,
+            "actor_user_id": self.actor_user_id,
+            "actor_vendor_org_id": self.actor_vendor_org_id,
+            "actor_role": self.actor_role,
+            "action": self.action,
+            "resource_type": self.resource_type,
+            "resource_id": self.resource_id,
+            "evaluation_id": self.evaluation_id,
+            "proposal_id": self.proposal_id,
+            "snapshot_id": self.snapshot_id,
+            "version": self.version,
+            "outcome": self.outcome,
+            "correlation_id": self.correlation_id,
+            "metadata": self.metadata,
+            "expires_at": self.expires_at,
+        }
+
+    @staticmethod
+    def from_document(doc: dict[str, Any]) -> "AuditEvent":
+        return AuditEvent(
+            id=doc["_id"],
+            tenant_id=doc["tenant_id"],
+            occurred_at=doc["occurred_at"],
+            actor_type=doc["actor_type"],
+            actor_membership_id=doc["actor_membership_id"],
+            actor_user_id=doc.get("actor_user_id"),
+            actor_vendor_org_id=doc.get("actor_vendor_org_id"),
+            actor_role=doc["actor_role"],
+            action=doc["action"],
+            resource_type=doc["resource_type"],
+            resource_id=doc["resource_id"],
+            evaluation_id=doc.get("evaluation_id"),
+            proposal_id=doc.get("proposal_id"),
+            snapshot_id=doc.get("snapshot_id"),
+            version=doc.get("version"),
+            outcome=doc["outcome"],
+            correlation_id=doc.get("correlation_id"),
+            metadata=doc.get("metadata", {}),
+            expires_at=doc["expires_at"],
+        )

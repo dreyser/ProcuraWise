@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from procurawise.audit.repository import AuditEventRepository
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import (
     EvaluationNotFoundError,
     InvalidTransitionError,
@@ -48,6 +50,7 @@ def get_evaluation_service(settings: Settings = Depends(get_settings)) -> Evalua
         evaluations=EvaluationRepository(db),
         proposals=ProposalRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
+        audit=AuditEventService(AuditEventRepository(db), settings),
     )
 
 
@@ -94,7 +97,7 @@ def create_evaluation(
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> EvaluationDetailResponse:
     evaluation = service.create_evaluation(
-        context.tenant_id, context.membership_id, body.name, body.description
+        context.tenant_id, context.membership_id, body.name, body.description, actor=context
     )
     return _evaluation_detail(evaluation)
 
@@ -139,7 +142,7 @@ def update_evaluation(
 ) -> EvaluationDetailResponse:
     try:
         evaluation = service.update_evaluation(
-            context.tenant_id, evaluation_id, body.name, body.description
+            context.tenant_id, evaluation_id, body.name, body.description, actor=context
         )
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
@@ -170,6 +173,7 @@ def add_requirement(
             display_order=body.display_order,
             buyer_guidance=body.buyer_guidance,
             options=body.options,
+            actor=context,
         )
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
@@ -191,7 +195,7 @@ def update_requirement(
     field_updates = body.model_dump(exclude_unset=True)
     try:
         requirement = service.update_requirement(
-            context.tenant_id, evaluation_id, requirement_id, field_updates
+            context.tenant_id, evaluation_id, requirement_id, field_updates, actor=context
         )
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
@@ -212,7 +216,7 @@ def delete_requirement(
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> None:
     try:
-        service.delete_requirement(context.tenant_id, evaluation_id, requirement_id)
+        service.delete_requirement(context.tenant_id, evaluation_id, requirement_id, actor=context)
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
     except RequirementNotFoundError:
@@ -229,7 +233,9 @@ def link_vendor(
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> ProposalSummaryResponse:
     try:
-        proposal = service.link_vendor(context.tenant_id, evaluation_id, body.vendor_org_id)
+        proposal = service.link_vendor(
+            context.tenant_id, evaluation_id, body.vendor_org_id, actor=context
+        )
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
     except VendorOrganizationNotFoundError:
@@ -260,7 +266,7 @@ def unlink_vendor(
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> None:
     try:
-        service.unlink_vendor(context.tenant_id, evaluation_id, vendor_org_id)
+        service.unlink_vendor(context.tenant_id, evaluation_id, vendor_org_id, actor=context)
     except VendorNotLinkedError:
         raise HTTPException(status_code=404) from None
     except InvalidTransitionError:
@@ -274,7 +280,7 @@ def start_collection(
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> EvaluationDetailResponse:
     try:
-        evaluation = service.start_collection(context.tenant_id, evaluation_id)
+        evaluation = service.start_collection(context.tenant_id, evaluation_id, actor=context)
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
     except InvalidTransitionError:
@@ -291,7 +297,7 @@ def start_evaluation(
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> EvaluationDetailResponse:
     try:
-        evaluation = service.start_evaluation(context.tenant_id, evaluation_id)
+        evaluation = service.start_evaluation(context.tenant_id, evaluation_id, actor=context)
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
     except InvalidTransitionError:

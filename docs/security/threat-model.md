@@ -76,6 +76,18 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 - **Pendientes (Fase 26 — Hardening):** rate limiting, CSRF, headers de seguridad, promover dependency scanning de informativo a bloqueante (una vez exista bandwidth de triage regular), CodeQL si cambia la visibilidad del repo o se adquiere GHAS, SBOM, WCAG 2.1 AA, pruebas de performance, backup/restore verificado.
 - **Pendientes de gate externo:** aprobación legal de web-grounding antes de activar `FoundryWebSearchProvider` (ver ADR 0011).
 
+## Auditoría (Fase 8, `audit`)
+
+**Estado: implementado y verificado con Docker real (2026-07-30).** `AuditEvent` append-only instrumentado retroactivamente sobre VS-2A/VS-2B/VS-2C (evaluations/proposals/scoring) — 13 acciones de una taxonomía cerrada (`service/procurawise/audit/models.py::AuditAction`), nunca strings arbitrarios. Extiende el patrón ya establecido por `Agreement` (append-only, `user_id`/`ip`/`timestamp`/`version`, fila "proposals"/"vendors" de la tabla STRIDE arriba) a todo el vertical slice.
+
+- **`tenant_id`/`actor_*`/`occurred_at`/`action` siempre server-derivados** desde `ActorContext` y el punto de instrumentación — nunca aceptados de un body de cliente (no existe endpoint de escritura pública para `AuditEvent`).
+- **Append-only por disciplina de superficie, no por control de motor**: `AuditEventRepository` expone únicamente `record()` (insert) y lectura — nunca `update`/`delete`/`replace`. **Riesgo residual aceptado**: acceso administrativo directo a MongoDB Atlas (o `mongosh` local) puede modificar/borrar documentos sin pasar por la aplicación; esto no es mitigable a nivel de código en la arquitectura actual (sin roles de BD por tenant en Atlas M0). No se propone blockchain/event-store externo — desproporcionado para el MVP.
+- **Consistencia mutación↔evento: best-effort, decisión explícita del founder (2026-07-30).** La mutación de negocio nunca se revierte por un fallo de `AuditEvent`; el fallo genera un log `ERROR` estructurado (`tenant_id`/`actor_id`/`action`/`resource_type`/`resource_id`/`correlation_id`), encapsulado en `AuditEventService.record()`. **Consecuencia aceptada**: pueden existir gaps poco frecuentes en el audit trail si el insert falla tras una mutación exitosa — no hay outbox ni transacciones en esta fase (ni el entorno local ni se asume Atlas M0 con transacciones multi-documento para este propósito).
+- **Redacción de datos sensibles**: `metadata` es una allowlist explícita por acción (nombres de campos cambiados, IDs, valores numéricos de score) — nunca passwords/hashes, JWT, tokens OIDC, contenido completo de respuestas de propuesta, ni comentarios de scoring. Ver matriz completa en el plan de la fase.
+- **Retención**: 1 año por defecto (consistente con [ADR 0016](../architecture/decisions/0016-retencion-datos-1-anio.md)), vía campo `expires_at` + TTL index (`ttl_audit_expires_at`), centralizado en `Settings.audit_event_retention_days`. Una retención distinta/más larga (práctica común para audit trails, potencialmente en tensión con ADR 0016) requeriría una decisión de producto/compliance explícita y, si cambia la política vigente, un ADR nuevo.
+- **Consultable**: `GET /api/v1/evaluations/{evaluation_id}/audit-events`, tenant-scoped, paginado por cursor, autorizado solo para `evaluation_owner`/`evaluator` de su propio tenant — `vendor_contact` no tiene ruta equivalente (401 sin credenciales de comprador, mismo patrón ya establecido por AUTH-PROD).
+- **Fuera de alcance de esta fase**: autosave de `ProposalAnswer` (alta frecuencia, decisión explícita de no auditar cada guardado — solo el `PROPOSAL_SUBMITTED` terminal); login/OIDC (identity/AUTH-PROD) — el criterio de aceptación del backlog nombra VS-2A/VS-2B/VS-2C, no AUTH-PROD, y `User`/`Membership` son entidades cross-tenant que no encajan en un `AuditEvent` tenant-scoped sin una decisión de diseño aparte.
+
 ## Riesgos aceptados temporalmente
 
 | Riesgo | Dueño | Fecha de revisión | Referencia |
@@ -83,6 +95,7 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 | MongoDB Atlas tier M0 (cluster compartido, sin Private Endpoint) en producción | Founder | Post-MVP, sin gatillo numérico predefinido | [ADR 0015](../architecture/decisions/0015-tier-mongodb-atlas-m0.md) |
 | Búsqueda web en vivo (`FoundryWebSearchProvider`) desactivada hasta aprobación legal | Founder / abogado externo | ≥2 semanas antes del piloto (Fase 28) | [ADR 0011](../architecture/decisions/0011-research-provider-gate-legal-foundry.md) |
 | Retención de datos fija a 1 año, no configurable por tenant | Founder | Post-MVP | [ADR 0016](../architecture/decisions/0016-retencion-datos-1-anio.md) |
+| `AuditEvent` con garantía best-effort (gap posible si el insert falla tras una mutación exitosa); sin protección contra acceso admin directo a Mongo | Founder | Post-MVP, revisitar si surge un requisito de compliance más estricto | Plan de Fase 8 (`~/.claude/plans/dreamy-enchanting-seal.md`, fuera del repo) |
 
 ## Bandera GDPR
 

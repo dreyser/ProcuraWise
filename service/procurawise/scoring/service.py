@@ -3,6 +3,7 @@ from typing import Any
 
 from pymongo.errors import DuplicateKeyError
 
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import (
     CompletionPreconditionError,
     EvaluationNotFoundError,
@@ -23,6 +24,7 @@ from procurawise.scoring.exceptions import (
 )
 from procurawise.scoring.models import Score
 from procurawise.scoring.repository import ScoreRepository
+from procurawise.shared.context import ActorContext
 
 # functional(40) + technical(20) = 60 of the eventual 100-point model; this
 # also happens to equal the coverage percentage (60/100), since the model's
@@ -38,11 +40,13 @@ class ScoringService:
         proposals: ProposalRepository,
         evaluations: EvaluationRepository,
         vendor_orgs: VendorOrganizationRepository,
+        audit: AuditEventService,
     ) -> None:
         self._scores = scores
         self._proposals = proposals
         self._evaluations = evaluations
         self._vendor_orgs = vendor_orgs
+        self._audit = audit
 
     def upsert_score(
         self,
@@ -54,6 +58,8 @@ class ScoringService:
         comment: str | None,
         expected_version: int | None,
         membership_id: str,
+        *,
+        actor: ActorContext,
     ) -> Score:
         if score_value < 0 or score_value > 5:
             raise ScoreOutOfRangeError(score_value)
@@ -102,6 +108,18 @@ class ScoringService:
                 self._scores.insert(tenant_id, score.to_document())
             except DuplicateKeyError:
                 raise StaleScoreVersionError(requirement_id) from None
+            self._audit.record(
+                tenant_id=tenant_id,
+                actor=actor,
+                action="score_created",
+                resource_type="score",
+                resource_id=score.id,
+                evaluation_id=evaluation_id,
+                proposal_id=proposal_id,
+                snapshot_id=proposal.snapshot.snapshot_id,
+                version=score.version,
+                metadata={"requirement_id": requirement_id, "score": score_value},
+            )
             return score
 
         existing = Score.from_document(existing_doc)
@@ -116,7 +134,20 @@ class ScoringService:
             tenant_id, evaluation_id, proposal_id, proposal.snapshot.snapshot_id, requirement_id
         )
         assert updated_doc is not None
-        return Score.from_document(updated_doc)
+        updated = Score.from_document(updated_doc)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="score_updated",
+            resource_type="score",
+            resource_id=updated.id,
+            evaluation_id=evaluation_id,
+            proposal_id=proposal_id,
+            snapshot_id=proposal.snapshot.snapshot_id,
+            version=updated.version,
+            metadata={"requirement_id": requirement_id, "score": score_value},
+        )
+        return updated
 
     def _submitted_and_draft_proposals(
         self, tenant_id: str, evaluation_id: str
@@ -245,7 +276,9 @@ class ScoringService:
             ),
         }
 
-    def complete_evaluation(self, tenant_id: str, evaluation_id: str) -> Evaluation:
+    def complete_evaluation(
+        self, tenant_id: str, evaluation_id: str, *, actor: ActorContext
+    ) -> Evaluation:
         evaluation_doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
         if evaluation_doc is None:
             raise EvaluationNotFoundError(evaluation_id)
@@ -264,6 +297,15 @@ class ScoringService:
         )
         if not matched:
             raise InvalidTransitionError(evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_completed",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"from_status": "evaluating", "to_status": "completed"},
+        )
         updated_doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
         assert updated_doc is not None
         return Evaluation.from_document(updated_doc)

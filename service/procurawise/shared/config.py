@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     oidc_redirect_base_url: str = "http://localhost:8000"
     frontend_base_url: str = "http://localhost:5173"
 
+    # Fase 8 (audit): retention window for AuditEvent, backing the `expires_at`
+    # TTL index (audit.repository) - one centralized value, consistent with
+    # ADR 0016's 1-year default, not configurable per tenant in this phase
+    # (founder decision §18.3 of the approved plan).
+    audit_event_retention_days: int = 365
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":

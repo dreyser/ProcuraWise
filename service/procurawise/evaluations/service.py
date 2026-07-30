@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from pymongo.errors import DuplicateKeyError
 
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import (
     EvaluationNotFoundError,
     InvalidTransitionError,
@@ -17,6 +18,7 @@ from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.repository import VendorOrganizationRepository
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
+from procurawise.shared.context import ActorContext
 
 _WEIGHT_TOLERANCE = 1e-6
 
@@ -27,13 +29,21 @@ class EvaluationService:
         evaluations: EvaluationRepository,
         proposals: ProposalRepository,
         vendor_orgs: VendorOrganizationRepository,
+        audit: AuditEventService,
     ) -> None:
         self._evaluations = evaluations
         self._proposals = proposals
         self._vendor_orgs = vendor_orgs
+        self._audit = audit
 
     def create_evaluation(
-        self, tenant_id: str, membership_id: str, name: str, description: str
+        self,
+        tenant_id: str,
+        membership_id: str,
+        name: str,
+        description: str,
+        *,
+        actor: ActorContext,
     ) -> Evaluation:
         evaluation = Evaluation.create(
             tenant_id=tenant_id,
@@ -42,6 +52,15 @@ class EvaluationService:
             created_by_membership_id=membership_id,
         )
         self._evaluations.insert(tenant_id, evaluation.to_document())
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_created",
+            resource_type="evaluation",
+            resource_id=evaluation.id,
+            evaluation_id=evaluation.id,
+            metadata={"name": name},
+        )
         return evaluation
 
     def get_evaluation(self, tenant_id: str, evaluation_id: str) -> Evaluation:
@@ -54,7 +73,13 @@ class EvaluationService:
         return [Evaluation.from_document(doc) for doc in self._evaluations.find_many(tenant_id)]
 
     def update_evaluation(
-        self, tenant_id: str, evaluation_id: str, name: str | None, description: str | None
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        name: str | None,
+        description: str | None,
+        *,
+        actor: ActorContext,
     ) -> Evaluation:
         updates: dict[str, str] = {}
         if name is not None:
@@ -63,6 +88,15 @@ class EvaluationService:
             updates["description"] = description
         matched = self._evaluations.update_metadata(tenant_id, evaluation_id, updates)
         self._require_matched(matched, tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_updated",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"fields_changed": sorted(updates.keys())},
+        )
         return self.get_evaluation(tenant_id, evaluation_id)
 
     def add_requirement(
@@ -81,6 +115,7 @@ class EvaluationService:
         display_order: int,
         buyer_guidance: str | None,
         options: list[str] | None,
+        actor: ActorContext,
     ) -> Requirement:
         requirement = Requirement.create(
             dimension=dimension,  # type: ignore[arg-type]
@@ -99,10 +134,25 @@ class EvaluationService:
             tenant_id, evaluation_id, requirement.to_document()
         )
         self._require_draft_matched(matched, tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="requirement_added",
+            resource_type="requirement",
+            resource_id=requirement.id,
+            evaluation_id=evaluation_id,
+            metadata={"requirement_id": requirement.id},
+        )
         return requirement
 
     def update_requirement(
-        self, tenant_id: str, evaluation_id: str, requirement_id: str, field_updates: dict
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        requirement_id: str,
+        field_updates: dict,
+        *,
+        actor: ActorContext,
     ) -> Requirement:
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
         if evaluation.status != "draft":
@@ -134,21 +184,47 @@ class EvaluationService:
             # that read and this write can still land here.
             raise InvalidTransitionError(evaluation_id)
 
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="requirement_updated",
+            resource_type="requirement",
+            resource_id=requirement_id,
+            evaluation_id=evaluation_id,
+            metadata={
+                "requirement_id": requirement_id,
+                "fields_changed": sorted(field_updates.keys()),
+            },
+        )
+
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
         for requirement in evaluation.requirements:
             if requirement.id == requirement_id:
                 return requirement
         raise RequirementNotFoundError(requirement_id)
 
-    def delete_requirement(self, tenant_id: str, evaluation_id: str, requirement_id: str) -> None:
+    def delete_requirement(
+        self, tenant_id: str, evaluation_id: str, requirement_id: str, *, actor: ActorContext
+    ) -> None:
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
         if evaluation.status != "draft":
             raise InvalidTransitionError(evaluation_id)
         if not any(r.id == requirement_id for r in evaluation.requirements):
             raise RequirementNotFoundError(requirement_id)
         self._evaluations.delete_requirement(tenant_id, evaluation_id, requirement_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="requirement_deleted",
+            resource_type="requirement",
+            resource_id=requirement_id,
+            evaluation_id=evaluation_id,
+            metadata={"requirement_id": requirement_id},
+        )
 
-    def link_vendor(self, tenant_id: str, evaluation_id: str, vendor_org_id: str) -> Proposal:
+    def link_vendor(
+        self, tenant_id: str, evaluation_id: str, vendor_org_id: str, *, actor: ActorContext
+    ) -> Proposal:
         outcome = self._evaluations.reserve_vendor_slot(tenant_id, evaluation_id)
         if outcome == "not_found":
             raise EvaluationNotFoundError(evaluation_id)
@@ -173,9 +249,21 @@ class EvaluationService:
         except Exception:
             self._evaluations.release_vendor_slot(tenant_id, evaluation_id)
             raise
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="vendor_linked",
+            resource_type="proposal",
+            resource_id=proposal.id,
+            evaluation_id=evaluation_id,
+            proposal_id=proposal.id,
+            metadata={"vendor_org_id": vendor_org_id},
+        )
         return proposal
 
-    def unlink_vendor(self, tenant_id: str, evaluation_id: str, vendor_org_id: str) -> None:
+    def unlink_vendor(
+        self, tenant_id: str, evaluation_id: str, vendor_org_id: str, *, actor: ActorContext
+    ) -> None:
         proposal_doc = self._proposals.find_one_by_evaluation_and_vendor(
             tenant_id, evaluation_id, vendor_org_id
         )
@@ -185,8 +273,20 @@ class EvaluationService:
         if not deleted:
             raise InvalidTransitionError(evaluation_id)
         self._evaluations.release_vendor_slot(tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="vendor_unlinked",
+            resource_type="proposal",
+            resource_id=proposal_doc["_id"],
+            evaluation_id=evaluation_id,
+            proposal_id=proposal_doc["_id"],
+            metadata={"vendor_org_id": vendor_org_id},
+        )
 
-    def start_collection(self, tenant_id: str, evaluation_id: str) -> Evaluation:
+    def start_collection(
+        self, tenant_id: str, evaluation_id: str, *, actor: ActorContext
+    ) -> Evaluation:
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
         if evaluation.status != "draft":
             raise InvalidTransitionError(evaluation_id)
@@ -219,9 +319,20 @@ class EvaluationService:
             {"collecting_responses_started_at": datetime.now(UTC)},
         )
         self._require_matched(matched, tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_collection_started",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"from_status": "draft", "to_status": "collecting_responses"},
+        )
         return self.get_evaluation(tenant_id, evaluation_id)
 
-    def start_evaluation(self, tenant_id: str, evaluation_id: str) -> Evaluation:
+    def start_evaluation(
+        self, tenant_id: str, evaluation_id: str, *, actor: ActorContext
+    ) -> Evaluation:
         matched = self._evaluations.transition_status(
             tenant_id,
             evaluation_id,
@@ -230,6 +341,15 @@ class EvaluationService:
             {"evaluating_started_at": datetime.now(UTC)},
         )
         self._require_matched(matched, tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_scoring_started",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"from_status": "collecting_responses", "to_status": "evaluating"},
+        )
         return self.get_evaluation(tenant_id, evaluation_id)
 
     def _require_matched(self, matched: bool, tenant_id: str, evaluation_id: str) -> None:
