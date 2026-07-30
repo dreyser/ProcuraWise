@@ -5,9 +5,9 @@ from uuid import uuid4
 
 from procurawise.shared.context import ActorContext
 
-AuditActorType = Literal["buyer", "vendor_contact"]
+AuditActorType = Literal["buyer", "vendor_contact", "platform_admin"]
 
-AuditResourceType = Literal["evaluation", "requirement", "proposal", "score"]
+AuditResourceType = Literal["evaluation", "requirement", "proposal", "score", "assignment"]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
 # the call site. PROPOSAL_ANSWER_UPDATED (autosave) is deliberately absent:
@@ -26,6 +26,9 @@ AuditAction = Literal[
     "proposal_submitted",
     "score_created",
     "score_updated",
+    "assignment_created",
+    "assignment_removed",
+    "platform_admin_cross_tenant_read",
 ]
 
 
@@ -34,7 +37,11 @@ def new_id() -> str:
 
 
 def _actor_type_for_role(role: str) -> AuditActorType:
-    return "vendor_contact" if role == "vendor_contact" else "buyer"
+    if role == "vendor_contact":
+        return "vendor_contact"
+    if role == "platform_admin":
+        return "platform_admin"
+    return "buyer"
 
 
 @dataclass(frozen=True)

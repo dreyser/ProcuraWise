@@ -66,6 +66,12 @@ class MembershipRepository:
     def find_by_id(self, membership_id: str) -> dict[str, Any] | None:
         return self._collection.find_one({"_id": membership_id})
 
+    def find_by_id_and_tenant(self, membership_id: str, tenant_id: str) -> dict[str, Any] | None:
+        """Tenant-scoped membership lookup for callers (e.g. `assignments`)
+        that must verify a target membership_id both exists and belongs to
+        the caller's own tenant, without `find_by_id`'s cross-tenant reach."""
+        return self._collection.find_one({"_id": membership_id, "tenant_id": tenant_id})
+
     def find_one_for(
         self, tenant_id: str, user_id: str, role: str, vendor_org_id: str | None
     ) -> dict[str, Any] | None:
@@ -80,6 +86,16 @@ class MembershipRepository:
 
     def list_all_for_dev(self) -> list[dict[str, Any]]:
         return list(self._collection.find({}))
+
+    def find_all_for_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
+        """Every Membership row within a single tenant - unlike
+        `find_all_for_user`/`list_all_for_dev`, this one *is* naturally
+        tenant-scoped (a real, hard-coded `tenant_id` match, not a
+        client-controlled filter), backing `tenant_admin`'s "Usuarios, roles"
+        capability (spec §4). Still bypasses TenantCollection directly
+        rather than its wrapper, consistent with the rest of this
+        repository."""
+        return list(self._collection.find({"tenant_id": tenant_id}))
 
     def find_all_for_user(self, user_id: str) -> list[dict[str, Any]]:
         """Every Membership row for a user across all tenants/roles - reads

@@ -40,8 +40,8 @@ describe('AppShell - role-aware navigation', () => {
     expect(screen.queryByRole('link', { name: 'Mis propuestas' })).not.toBeInTheDocument()
   })
 
-  it('shows only the buyer nav for evaluator too', () => {
-    renderShell({ role: 'evaluator', display_name: 'Evaluator A' })
+  it('shows only the buyer nav for evaluator_functional too', () => {
+    renderShell({ role: 'evaluator_functional', display_name: 'Evaluator A' })
     expect(screen.getByRole('link', { name: 'Evaluaciones' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Mis propuestas' })).not.toBeInTheDocument()
   })

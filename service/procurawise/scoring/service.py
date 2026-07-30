@@ -3,6 +3,7 @@ from typing import Any
 
 from pymongo.errors import DuplicateKeyError
 
+from procurawise.assignments.repository import AssignmentRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import (
     CompletionPreconditionError,
@@ -20,11 +21,13 @@ from procurawise.scoring.exceptions import (
     ResultsNotAvailableError,
     ScoreOutOfRangeError,
     ScoringPreconditionError,
+    SectionNotAssignedToActorError,
     StaleScoreVersionError,
 )
 from procurawise.scoring.models import Score
 from procurawise.scoring.repository import ScoreRepository
 from procurawise.shared.context import ActorContext
+from procurawise.shared.roles import EVALUATOR_ROLES
 
 # functional(40) + technical(20) = 60 of the eventual 100-point model; this
 # also happens to equal the coverage percentage (60/100), since the model's
@@ -41,12 +44,34 @@ class ScoringService:
         evaluations: EvaluationRepository,
         vendor_orgs: VendorOrganizationRepository,
         audit: AuditEventService,
+        assignments: AssignmentRepository,
     ) -> None:
         self._scores = scores
         self._proposals = proposals
         self._evaluations = evaluations
         self._vendor_orgs = vendor_orgs
         self._audit = audit
+        self._assignments = assignments
+
+    def _enforce_section_assignment(
+        self, tenant_id: str, evaluation_id: str, dimension: str, section: str, actor: ActorContext
+    ) -> None:
+        """An evaluator sub-role may score any (dimension, section) that has
+        no Assignment recorded yet (today's VS-2B behavior, unchanged) - but
+        once at least one evaluator has been assigned to a section, scoring
+        it is restricted to the assigned evaluator(s) only, even for other
+        holders of the same sub-role (Fase 9 Block 3, spec §4/§6.7). The
+        evaluation_owner is never restricted by this check."""
+        if actor.role not in EVALUATOR_ROLES:
+            return
+        assignments = self._assignments.list_for_section(
+            tenant_id, evaluation_id, dimension, section
+        )
+        if not assignments:
+            return
+        assigned_membership_ids = {doc["evaluator_membership_id"] for doc in assignments}
+        if actor.membership_id not in assigned_membership_ids:
+            raise SectionNotAssignedToActorError(section)
 
     def upsert_score(
         self,
@@ -83,6 +108,10 @@ class ScoringService:
         )
         if requirement is None:
             raise RequirementNotInSnapshotError(requirement_id)
+
+        self._enforce_section_assignment(
+            tenant_id, evaluation_id, requirement.dimension, requirement.category, actor
+        )
 
         existing_doc = self._scores.find_one_by_natural_key(
             tenant_id, evaluation_id, proposal_id, proposal.snapshot.snapshot_id, requirement_id

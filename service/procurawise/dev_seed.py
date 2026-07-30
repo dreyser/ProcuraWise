@@ -2,6 +2,8 @@ import logging
 import sys
 from dataclasses import replace
 
+from procurawise.admin.models import PlatformAdminAccount
+from procurawise.admin.repository import PlatformAdminAccountRepository
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.models import Membership, Role, Tenant, User, VendorOrganization
@@ -26,6 +28,12 @@ logger = logging.getLogger("procurawise.dev_seed")
 # that), never a production credential.
 DEV_BUYER_PASSWORD = "dev-password-2026"
 
+# Same idea, for the one seeded platform_admin account (Fase 9 Block 4) - lets
+# POST /api/v1/admin/auth/login be exercised locally without a real
+# provisioning step.
+DEV_ADMIN_PASSWORD = "dev-admin-password-2026"
+DEV_ADMIN_EMAIL = "platform-admin@dev.procurawise.local"
+
 # Collections this script owns. `make seed-reset` drops exactly these, nothing
 # from a future bounded context - keep this list in sync as seed-dev grows.
 SEEDED_COLLECTIONS = [
@@ -36,6 +44,7 @@ SEEDED_COLLECTIONS = [
     "evaluations",
     "proposals",
     "scores",
+    "platform_admins",
 ]
 
 
@@ -77,6 +86,19 @@ def _get_or_create_vendor_org(
     vendor_org = VendorOrganization.create(tenant_id=tenant.id, name=name)
     vendor_orgs.insert(tenant.id, vendor_org.to_document())
     return vendor_org
+
+
+def _get_or_create_platform_admin(
+    admins: PlatformAdminAccountRepository, email: str, display_name: str, password: str
+) -> PlatformAdminAccount:
+    existing = admins.find_by_email(email)
+    if existing is not None:
+        return PlatformAdminAccount.from_document(existing)
+    account = PlatformAdminAccount.create(
+        email=email, display_name=display_name, password_hash=hash_password(password)
+    )
+    admins.insert(account.to_document())
+    return account
 
 
 def _get_or_create_membership(
@@ -163,6 +185,11 @@ def seed(settings: Settings) -> list[Membership]:
     users = UserRepository(db)
     memberships = MembershipRepository(db)
     vendor_orgs = VendorOrganizationRepository(db)
+    admins = PlatformAdminAccountRepository(db)
+
+    _get_or_create_platform_admin(
+        admins, DEV_ADMIN_EMAIL, "Platform Admin (dev)", DEV_ADMIN_PASSWORD
+    )
 
     tenant_a = _get_or_create_tenant(tenants, "dev-tenant-a", "Acme Compradora (dev)")
     tenant_b = _get_or_create_tenant(tenants, "dev-tenant-b", "Globex Compradora (dev)")
@@ -174,15 +201,45 @@ def seed(settings: Settings) -> list[Membership]:
     owner_a = _get_or_create_user(
         users, "owner.a@dev.procurawise.local", "Owner A", DEV_BUYER_PASSWORD
     )
-    evaluator_a = _get_or_create_user(
-        users, "evaluator.a@dev.procurawise.local", "Evaluator A", DEV_BUYER_PASSWORD
+    evaluator_functional_a = _get_or_create_user(
+        users,
+        "evaluator.functional.a@dev.procurawise.local",
+        "Evaluator Funcional A",
+        DEV_BUYER_PASSWORD,
+    )
+    evaluator_technical_a = _get_or_create_user(
+        users,
+        "evaluator.technical.a@dev.procurawise.local",
+        "Evaluator Tecnico A",
+        DEV_BUYER_PASSWORD,
+    )
+    evaluator_economic_a = _get_or_create_user(
+        users,
+        "evaluator.economic.a@dev.procurawise.local",
+        "Evaluator Economico A",
+        DEV_BUYER_PASSWORD,
+    )
+    collaborator_a = _get_or_create_user(
+        users, "collaborator.a@dev.procurawise.local", "Colaborador Interno A", DEV_BUYER_PASSWORD
+    )
+    approver_a = _get_or_create_user(
+        users, "approver.a@dev.procurawise.local", "Aprobador A", DEV_BUYER_PASSWORD
+    )
+    tenant_admin_a = _get_or_create_user(
+        users,
+        "tenant-admin.a@dev.procurawise.local",
+        "Administrador Cliente A",
+        DEV_BUYER_PASSWORD,
     )
     vendor_user_a = _get_or_create_user(users, "vendor.a@dev.procurawise.local", "Vendor Contact A")
     owner_b = _get_or_create_user(
         users, "owner.b@dev.procurawise.local", "Owner B", DEV_BUYER_PASSWORD
     )
-    evaluator_b = _get_or_create_user(
-        users, "evaluator.b@dev.procurawise.local", "Evaluator B", DEV_BUYER_PASSWORD
+    evaluator_technical_b = _get_or_create_user(
+        users,
+        "evaluator.technical.b@dev.procurawise.local",
+        "Evaluator Tecnico B",
+        DEV_BUYER_PASSWORD,
     )
 
     vendor_org_a = _get_or_create_vendor_org(vendor_orgs, tenant_a, "Proveedor Uno (dev)")
@@ -191,18 +248,32 @@ def seed(settings: Settings) -> list[Membership]:
         memberships, tenant_a, owner_a, "evaluation_owner"
     )
 
-    # owner_b also holds a second Membership (evaluator, same tenant) on
-    # purpose: demonstrates that a single User can carry multiple Memberships,
-    # which the domain model must support without restriction.
+    # owner_b also holds a second Membership (approver, same tenant) on
+    # purpose: demonstrates that a single User can carry multiple Memberships
+    # with distinct roles ("roles acumulables", spec §4.1/FR-005), which the
+    # domain model must support without restriction.
     created = [
         owner_a_membership,
-        _get_or_create_membership(memberships, tenant_a, evaluator_a, "evaluator"),
+        _get_or_create_membership(
+            memberships, tenant_a, evaluator_functional_a, "evaluator_functional"
+        ),
+        _get_or_create_membership(
+            memberships, tenant_a, evaluator_technical_a, "evaluator_technical"
+        ),
+        _get_or_create_membership(
+            memberships, tenant_a, evaluator_economic_a, "evaluator_economic"
+        ),
+        _get_or_create_membership(memberships, tenant_a, collaborator_a, "internal_collaborator"),
+        _get_or_create_membership(memberships, tenant_a, approver_a, "approver"),
+        _get_or_create_membership(memberships, tenant_a, tenant_admin_a, "tenant_admin"),
         _get_or_create_membership(
             memberships, tenant_a, vendor_user_a, "vendor_contact", vendor_org_a.id
         ),
         _get_or_create_membership(memberships, tenant_b, owner_b, "evaluation_owner"),
-        _get_or_create_membership(memberships, tenant_b, evaluator_b, "evaluator"),
-        _get_or_create_membership(memberships, tenant_b, owner_b, "evaluator"),
+        _get_or_create_membership(
+            memberships, tenant_b, evaluator_technical_b, "evaluator_technical"
+        ),
+        _get_or_create_membership(memberships, tenant_b, owner_b, "approver"),
     ]
 
     evaluations = EvaluationRepository(db)

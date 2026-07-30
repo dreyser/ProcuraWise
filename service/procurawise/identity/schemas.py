@@ -34,3 +34,21 @@ class VendorOrganizationSummary(APIModel):
 class VendorOrganizationListResponse(APIModel):
     items: list[VendorOrganizationSummary]
     next_cursor: str | None = None
+
+
+class OrgMemberSummary(APIModel):
+    """One Membership within the caller's own tenant (spec §4:
+    "Administrador del cliente: Usuarios, roles..."). Never cross-tenant -
+    that's platform_admin's `find_across_tenants()` escape hatch, a
+    structurally different, physically separate mechanism (procurawise.admin)."""
+
+    membership_id: str
+    user_id: str
+    email: str
+    display_name: str
+    role: str
+    vendor_org_id: str | None = None
+
+
+class OrgMembersListResponse(APIModel):
+    items: list[OrgMemberSummary]

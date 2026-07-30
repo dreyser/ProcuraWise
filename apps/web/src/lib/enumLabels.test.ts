@@ -39,7 +39,12 @@ describe('enumLabels translations', () => {
 
   it('translates role and scoring status', () => {
     expect(translateRole('evaluation_owner')).toBe('Responsable de evaluación')
-    expect(translateRole('evaluator')).toBe('Evaluador')
+    expect(translateRole('evaluator_functional')).toBe('Evaluador funcional')
+    expect(translateRole('evaluator_technical')).toBe('Evaluador técnico')
+    expect(translateRole('evaluator_economic')).toBe('Evaluador económico')
+    expect(translateRole('internal_collaborator')).toBe('Colaborador interno')
+    expect(translateRole('approver')).toBe('Aprobador')
+    expect(translateRole('tenant_admin')).toBe('Administrador del cliente')
     expect(translateRole('vendor_contact')).toBe('Contacto de proveedor')
     expect(translateScoringStatus('incomplete')).toBe('Calificación incompleta')
     expect(translateScoringStatus('complete')).toBe('Calificación completa')

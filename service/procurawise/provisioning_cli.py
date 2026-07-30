@@ -17,8 +17,9 @@ from procurawise.identity.repository import MembershipRepository, TenantReposito
 from procurawise.shared.config import get_settings
 from procurawise.shared.logging import configure_logging
 from procurawise.shared.mongo import get_database
+from procurawise.shared.roles import BUYER_LOGIN_ROLES
 
-BUYER_ROLES: tuple[Role, ...] = ("evaluation_owner", "evaluator")
+BUYER_ROLES: tuple[str, ...] = BUYER_LOGIN_ROLES
 
 
 def _get_or_create_tenant(tenants: TenantRepository, slug: str, name: str) -> Tenant:

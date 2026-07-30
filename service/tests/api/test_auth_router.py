@@ -85,15 +85,16 @@ def test_memberships_requires_bearer_token(client) -> None:
 
 def test_memberships_lists_only_buyer_roles_for_authenticated_user(client, seeded_actors) -> None:
     # owner.b@dev.procurawise.local is seeded (dev_seed.py) with both an
-    # evaluation_owner and an evaluator Membership under tenant_b - never
-    # vendor_contact (that's a different seeded user entirely).
+    # evaluation_owner and an approver Membership under tenant_b - never
+    # vendor_contact (that's a different seeded user entirely). Demonstrates
+    # "roles acumulables" (spec §4.1/FR-005).
     token = _pre_session_token(client, "owner.b@dev.procurawise.local")
 
     response = client.get("/api/v1/auth/memberships", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
     roles = {m["role"] for m in response.json()["memberships"]}
-    assert roles == {"evaluation_owner", "evaluator"}
+    assert roles == {"evaluation_owner", "approver"}
 
 
 def test_switch_tenant_issues_access_token_for_owned_membership(

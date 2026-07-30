@@ -1,5 +1,6 @@
 import base64
 import json
+from typing import Any
 
 from fastapi import Depends
 
@@ -62,6 +63,27 @@ class IdentityService:
             for doc in self._memberships.find_all_for_user(user_id)
         )
         return [context for context in contexts if context is not None and context.role in roles]
+
+    def list_members_for_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
+        """Backs `tenant_admin`'s "Usuarios, roles" capability (spec §4) -
+        every Membership within the caller's own tenant, joined with the
+        owning User's email/display_name. Deliberately tenant-scoped, unlike
+        `procurawise.admin`'s cross-tenant escape hatch."""
+        members = []
+        for doc in self._memberships.find_all_for_tenant(tenant_id):
+            membership = Membership.from_document(doc)
+            user_doc = self._users.find_by_id(membership.user_id)
+            members.append(
+                {
+                    "membership_id": membership.id,
+                    "user_id": membership.user_id,
+                    "email": user_doc["email"] if user_doc else membership.user_id,
+                    "display_name": user_doc["display_name"] if user_doc else membership.user_id,
+                    "role": membership.role,
+                    "vendor_org_id": membership.vendor_org_id,
+                }
+            )
+        return members
 
     def _build_context(self, membership: Membership) -> ActorContext | None:
         tenant_doc = self._tenants.find_by_id(membership.tenant_id)

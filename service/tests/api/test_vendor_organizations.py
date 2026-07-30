@@ -43,9 +43,12 @@ def test_owner_lists_only_own_tenant_vendor_organizations(
 def test_evaluator_can_list_vendor_organizations(
     client, seeded_actors, mongo_test_settings
 ) -> None:
+    # evaluator_technical is the only evaluator sub-role dev_seed.py seeds
+    # symmetrically for both tenants, so this holds regardless of which
+    # tenant tenant_ids() arbitrarily labels tenant_a.
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
     evaluator_headers = bearer_headers_for(
-        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+        seeded_actors[(tenant_a, "evaluator_technical")], mongo_test_settings
     )
 
     response = client.get("/api/v1/vendor-organizations", headers=evaluator_headers)

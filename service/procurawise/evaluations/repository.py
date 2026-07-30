@@ -25,6 +25,27 @@ class EvaluationRepository:
     def find_many(self, tenant_id: str) -> list[dict[str, Any]]:
         return list(self._scoped(tenant_id).find({}))
 
+    def find_across_tenants(
+        self, *, limit: int, cursor: tuple[datetime, str] | None
+    ) -> list[dict[str, Any]]:
+        """The `find_across_tenants()` escape hatch ADR 0002/architecture.md
+        §5 reserve for `platform_admin` - deliberately bypasses
+        TenantCollection, unlike every other method here. Callers (see
+        procurawise.admin) must always pair this with a mandatory,
+        server-recorded reason and an AuditEvent per tenant touched; nothing
+        here enforces that on its own, exactly like MembershipRepository's
+        equivalent cross-tenant methods (see identity/repository.py)."""
+        filter_: dict[str, Any] = {}
+        if cursor is not None:
+            cursor_created_at, cursor_id = cursor
+            filter_["$or"] = [
+                {"created_at": {"$lt": cursor_created_at}},
+                {"created_at": cursor_created_at, "_id": {"$lt": cursor_id}},
+            ]
+        return list(
+            self._collection.find(filter_).sort([("created_at", -1), ("_id", -1)]).limit(limit + 1)
+        )
+
     def transition_status(
         self,
         tenant_id: str,

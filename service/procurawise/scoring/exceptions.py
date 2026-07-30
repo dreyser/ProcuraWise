@@ -19,3 +19,9 @@ class StaleScoreVersionError(Exception):
 class ResultsNotAvailableError(Exception):
     """GET /results was called while Evaluation is still draft or
     collecting_responses - nothing scoreable exists yet."""
+
+
+class SectionNotAssignedToActorError(Exception):
+    """The requirement's (dimension, section) has at least one Assignment
+    recorded, and the acting evaluator is not one of the assigned
+    evaluator_membership_ids for it (Fase 9 Block 3)."""

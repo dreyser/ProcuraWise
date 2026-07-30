@@ -46,8 +46,19 @@ export const compliantStatusLabels = {
 
 export const roleLabels = {
   evaluation_owner: 'Responsable de evaluación',
-  evaluator: 'Evaluador',
+  evaluator_functional: 'Evaluador funcional',
+  evaluator_technical: 'Evaluador técnico',
+  evaluator_economic: 'Evaluador económico',
+  internal_collaborator: 'Colaborador interno',
+  approver: 'Aprobador',
+  tenant_admin: 'Administrador del cliente',
   vendor_contact: 'Contacto de proveedor',
+} as const satisfies Record<string, string>
+
+export const assignmentStatusLabels = {
+  not_started: 'Sin iniciar',
+  in_progress: 'En progreso',
+  completed: 'Completado',
 } as const satisfies Record<string, string>
 
 export const scoringStatusLabels = {
@@ -71,3 +82,5 @@ export const translateCompliantStatus = (value: string): string =>
 export const translateRole = (value: string): string => translate(roleLabels, value)
 export const translateScoringStatus = (value: string): string =>
   translate(scoringStatusLabels, value)
+export const translateAssignmentStatus = (value: string): string =>
+  translate(assignmentStatusLabels, value)
