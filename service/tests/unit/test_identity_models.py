@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from procurawise.identity.models import Membership, OidcIdentity, User
+from procurawise.identity.models import Membership, OidcIdentity, Role, User
 
 
 def test_vendor_contact_membership_requires_vendor_org_id() -> None:
@@ -28,8 +28,36 @@ def test_evaluation_owner_membership_without_vendor_org_id_succeeds() -> None:
     assert membership.vendor_org_id is None
 
 
+@pytest.mark.parametrize(
+    "role",
+    [
+        "evaluator_functional",
+        "evaluator_technical",
+        "evaluator_economic",
+        "internal_collaborator",
+        "approver",
+        "tenant_admin",
+    ],
+)
+def test_fase9_role_membership_without_vendor_org_id_succeeds(role: Role) -> None:
+    # Fase 9 (RBAC completo, spec §4): every one of these new roles is
+    # tenant-scoped like evaluation_owner, never vendor-scoped.
+    membership = Membership.create(tenant_id="t", user_id="u", role=role)
+    assert membership.role == role
+    assert membership.vendor_org_id is None
+
+
+@pytest.mark.parametrize(
+    "role",
+    ["evaluator_functional", "evaluator_technical", "evaluator_economic", "tenant_admin"],
+)
+def test_fase9_role_membership_rejects_vendor_org_id(role: Role) -> None:
+    with pytest.raises(ValueError, match="vendor_contact"):
+        Membership.create(tenant_id="t", user_id="u", role=role, vendor_org_id="v")
+
+
 def test_membership_round_trips_through_document() -> None:
-    membership = Membership.create(tenant_id="t", user_id="u", role="evaluator")
+    membership = Membership.create(tenant_id="t", user_id="u", role="evaluator_functional")
     restored = Membership.from_document(membership.to_document())
     assert restored == membership
 

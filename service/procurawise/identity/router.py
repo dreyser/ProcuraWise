@@ -9,6 +9,8 @@ from procurawise.identity.repository import VendorOrganizationRepository
 from procurawise.identity.schemas import (
     ActorContextResponse,
     DevActorSummary,
+    OrgMembersListResponse,
+    OrgMemberSummary,
     VendorOrganizationListResponse,
     VendorOrganizationSummary,
 )
@@ -20,11 +22,12 @@ from procurawise.identity.service import (
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
 from procurawise.shared.mongo import get_database
+from procurawise.shared.roles import BUYER_READ_ROLES, ORG_MEMBERS_READ_ROLES
 
 router = APIRouter(tags=["identity"])
 
-BUYER_READ_ROLES = ("evaluation_owner", "evaluator")
 require_buyer_read = require_role(*BUYER_READ_ROLES)
+require_org_members_read = require_role(*ORG_MEMBERS_READ_ROLES)
 
 
 def get_vendor_organization_service(
@@ -82,4 +85,25 @@ def list_vendor_organizations(
     return VendorOrganizationListResponse(
         items=[VendorOrganizationSummary(id=org.id, name=org.name) for org in organizations],
         next_cursor=next_cursor,
+    )
+
+
+@router.get("/org/members", response_model=OrgMembersListResponse)
+def list_org_members(
+    context: ActorContext = Depends(require_org_members_read),
+    identity_service: IdentityService = Depends(get_identity_service),
+) -> OrgMembersListResponse:
+    members = identity_service.list_members_for_tenant(context.tenant_id)
+    return OrgMembersListResponse(
+        items=[
+            OrgMemberSummary(
+                membership_id=m["membership_id"],
+                user_id=m["user_id"],
+                email=m["email"],
+                display_name=m["display_name"],
+                role=m["role"],
+                vendor_org_id=m["vendor_org_id"],
+            )
+            for m in members
+        ]
     )

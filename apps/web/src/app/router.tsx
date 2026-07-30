@@ -21,8 +21,20 @@ import { ScoringPage } from '@/features/scoring/pages/ScoringPage'
 import { ResultsPage } from '@/features/scoring/pages/ResultsPage'
 import { VendorProposalListPage } from '@/features/vendor-portal/pages/VendorProposalListPage'
 import { VendorProposalDetailPage } from '@/features/vendor-portal/pages/VendorProposalDetailPage'
+import { AssignmentsPage } from '@/features/evaluations/pages/AssignmentsPage'
 
-const BUYER_ROLES = ['evaluation_owner', 'evaluator']
+// Fase 9 (RBAC completo, spec §4): tenant_admin/platform_admin are real,
+// backend-enforced roles that can authenticate, but have no dedicated UI
+// area yet (that's the admin console, Fase 25) - reaching this app with
+// either lands on /unauthorized, same as any other unrecognized role.
+const BUYER_ROLES = [
+  'evaluation_owner',
+  'evaluator_functional',
+  'evaluator_technical',
+  'evaluator_economic',
+  'internal_collaborator',
+  'approver',
+]
 const VENDOR_ROLES = ['vendor_contact']
 
 function BuyerLayout({ children }: { children: ReactElement }) {
@@ -143,6 +155,14 @@ export function AppRouter() {
           element={
             <BuyerLayout>
               <VendorsPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/evaluations/:evaluationId/assignments"
+          element={
+            <BuyerLayout>
+              <AssignmentsPage />
             </BuyerLayout>
           }
         />

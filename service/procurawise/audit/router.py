@@ -7,10 +7,10 @@ from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
 from procurawise.shared.mongo import get_database
+from procurawise.shared.roles import BUYER_READ_ROLES
 
 router = APIRouter(prefix="/evaluations/{evaluation_id}", tags=["audit"])
 
-BUYER_READ_ROLES = ("evaluation_owner", "evaluator")
 require_buyer_read = require_role(*BUYER_READ_ROLES)
 
 

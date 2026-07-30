@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from procurawise.assignments.repository import AssignmentRepository
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import CompletionPreconditionError, InvalidTransitionError
@@ -15,6 +16,7 @@ from procurawise.scoring.exceptions import (
     ResultsNotAvailableError,
     ScoreOutOfRangeError,
     ScoringPreconditionError,
+    SectionNotAssignedToActorError,
     StaleScoreVersionError,
 )
 from procurawise.scoring.repository import ScoreRepository
@@ -23,13 +25,13 @@ from procurawise.scoring.service import ScoringService
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
 from procurawise.shared.mongo import get_database
+from procurawise.shared.roles import BUYER_READ_ROLES, OWNER_ONLY, SCORE_WRITE_ROLES
 
 router = APIRouter(prefix="/evaluations/{evaluation_id}", tags=["scoring"])
 
-BUYER_READ_ROLES = ("evaluation_owner", "evaluator")
-OWNER_ONLY = ("evaluation_owner",)
 require_buyer_read = require_role(*BUYER_READ_ROLES)
 require_owner = require_role(*OWNER_ONLY)
+require_score_write = require_role(*SCORE_WRITE_ROLES)
 
 
 def get_scoring_service(settings: Settings = Depends(get_settings)) -> ScoringService:
@@ -40,6 +42,7 @@ def get_scoring_service(settings: Settings = Depends(get_settings)) -> ScoringSe
         evaluations=EvaluationRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
+        assignments=AssignmentRepository(db),
     )
 
 
@@ -87,7 +90,7 @@ def upsert_score(
     proposal_id: str,
     requirement_id: str,
     body: ScoreWriteRequest,
-    context: ActorContext = Depends(require_buyer_read),
+    context: ActorContext = Depends(require_score_write),
     service: ScoringService = Depends(get_scoring_service),
 ) -> ScoreResponse:
     try:
@@ -109,6 +112,10 @@ def upsert_score(
     except RequirementNotInSnapshotError:
         raise HTTPException(
             status_code=400, detail="requirement not in proposal snapshot"
+        ) from None
+    except SectionNotAssignedToActorError:
+        raise HTTPException(
+            status_code=403, detail="requirement's section is not assigned to this evaluator"
         ) from None
     except ScoringPreconditionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None

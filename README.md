@@ -4,7 +4,7 @@ SaaS B2B multi-tenant que convierte una necesidad de compra de software/tecnolog
 
 ## Estado del proyecto
 
-**Fase 1 — Fundación técnica: completa** (2026-07-18). El vertical slice de negocio (`VS-2A`/`VS-2B`/`VS-2C`: `identity`, `evaluations`, `proposals`, `scoring`, `vendor_portal`) y `AUTH-PROD` (auth productiva de comprador — email+password + OIDC Microsoft/Google) también están completos y fusionados a `main`. En progreso: **Fase 8 (E3) — `audit`**, `AuditEvent` append-only instrumentado retroactivamente sobre el vertical slice. Ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle de cada fase y [`docs/development/backlog.md`](docs/development/backlog.md) para el estado de todas las fases del MVP.
+**Fase 1 — Fundación técnica: completa** (2026-07-18). El vertical slice de negocio (`VS-2A`/`VS-2B`/`VS-2C`: `identity`, `evaluations`, `proposals`, `scoring`, `vendor_portal`) y `AUTH-PROD` (auth productiva de comprador — email+password + OIDC Microsoft/Google) están completos y fusionados a `main`. También completos, verificados con Docker real pero aún sin fusionar a `main`: Fase 8 (E3 — `audit`, `AuditEvent` append-only) y Fase 9 (E3 — RBAC completo + `Assignment` por sección). Ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle de cada fase y [`docs/development/backlog.md`](docs/development/backlog.md) para el estado de todas las fases del MVP.
 
 ## Cómo correr el proyecto localmente
 

@@ -32,6 +32,45 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-30 — Fase 9 (E3): RBAC completo + `Assignment` por sección
+
+**Resumen:** Sesión de planeación en Plan Mode (4 agentes Explore en paralelo: roadmap/backlog/handoff, arquitectura/ADRs/threat-model, estructura del código, y el detalle de roles del §4 de la spec + gap contra el código actual) seguida de implementación completa en 6 bloques incrementales, cada uno verificado contra Docker real antes de avanzar. Se presentaron 3 decisiones bloqueantes al founder (alcance de la fase, profundidad de `platform_admin`/`Administrador del cliente`, y si refactorizar "roles acumulables"), resueltas explícitamente antes de implementar.
+
+**Decisiones bloqueantes resueltas por el founder (2026-07-30):**
+1. Alcance de la fase: opción 3 — roles de comprador + `Assignment` en una sola rama/PR; `Colaborador proveedor` diferido a Fase 15, profundidad de `platform_admin`/`Administrador del cliente` diferida a Fase 25.
+2. `platform_admin`/`Administrador del cliente`: opción 1 — rol + esqueleto mínimo auditado (`/api/v1/admin/*`, `find_across_tenants()`), sin consola/UI (Fase 25).
+3. "Roles acumulables": cerrado — se mantiene el patrón de múltiples `Membership` por usuario/rol, sin migración ni ADR nuevo.
+
+**Contenido entregado (backend, `service/procurawise/`) — ver detalle completo en `docs/development/current-phase.md`, sección Fase 9:**
+- **Bloque 1**: `identity/models.py::Role` (3→8 valores), `shared/roles.py` (nuevo, centraliza tuplas de roles antes duplicadas en 5 routers), `dev_seed.py` (usuarios por rol nuevo, demostración de roles acumulables).
+- **Bloque 2**: módulo `assignments/` nuevo (`Assignment` vincula evaluador↔sección↔dimensión, valida rol esperado y existencia real de la sección), `migrations/0005_assignments_indexes.py`, `audit/models.py` (+`assignment_created`/`assignment_removed`).
+- **Bloque 3**: `scoring/service.py::_enforce_section_assignment` (sección sin asignar → cualquier evaluador del sub-rol puede calificarla; sección asignada → solo el evaluador asignado). Corrección real encontrada y aplicada: `SCORE_WRITE_ROLES` separado de `BUYER_READ_ROLES` — el Bloque 1 le había dado sin querer permiso de escritura de scores a `internal_collaborator`/`approver`.
+- **Bloque 4**: módulo `admin/` nuevo, físicamente separado (`/api/v1/admin/*`), `PlatformAdminAccount` (no es una `Membership` — sin `tenant_id`), JWT con `token_use` distinto (verificado que un token no sirve para el otro router en ningún sentido), `find_across_tenants()` en `EvaluationRepository` auditado por evaluación tocada; `GET /api/v1/org/members` (`tenant_admin` + `evaluation_owner`).
+- **Bloque 5 (frontend)**: `app/router.tsx::BUYER_ROLES` corregido (contenía `'evaluator'`, rol que ya no existe tras el Bloque 1 — regresión real que habría roto el login de todo evaluador), `AssignmentsPage.tsx` nuevo, `ScoringPage.tsx` (inputs de calificación ya no editables para roles sin permiso de escritura), `e2e/vertical-slice.spec.ts` (email de evaluador actualizado).
+
+**Archivos tocados:** ver lista completa en `current-phase.md`, sección Fase 9. Tests nuevos: `tests/unit/test_platform_admin_models.py`, `tests/integration/{test_assignment_indexes,test_platform_admin_indexes}.py`, `tests/api/{test_assignments,test_section_scoped_scoring,test_admin_router,test_org_members}.py`, `tests/security/{test_role_permissions,test_assignment_isolation}.py`.
+
+**Resultado de pruebas de esta sesión (todas ejecutadas contra Docker real, ninguna asumida):**
+- `make lint` → 0 errores. `make typecheck` → limpio (mypy 80 archivos backend; `tsc -b` frontend).
+- `make test` → **93 passed backend + 79 passed frontend**.
+- `make test-integration` (Docker real) → **140 passed**.
+- `make test-e2e` (Docker + Playwright real) → **2 passed**, teardown limpio.
+- `make contracts` corrido dos veces consecutivas → idéntico byte a byte.
+- `pnpm build` → build de producción exitoso.
+- `git diff --check` → limpio.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** ninguna reabre monolito/DB/hosting/patrón de comunicación. El módulo `admin` es un subpaquete estándar más, ya previsto conceptualmente en `architecture.md` §5 (`platform_admin`/`find_across_tenants()`) — implementarlo no es una decisión arquitectónica nueva, es completar un diseño ya aprobado.
+
+**Deuda técnica introducida:**
+- Ninguna nueva. Los diferimientos (Colaborador proveedor→Fase 15, consola admin→Fase 25, dimensión económica→Fase 19-20) son alcance explícitamente aprobado por el founder, no deuda.
+
+**Estado final: Fase 9 cerrada formalmente.** Ningún criterio de aceptación del backlog queda abierto.
+
+**Instrucciones para la siguiente sesión:**
+- `main`/la rama de esta fase no están fusionadas entre sí todavía — el founder decide si comitea/abre PR (mismo patrón que fases anteriores).
+- Próxima fase según `backlog.md`: Fase 10 (wizard guiado estático + autosave), depende de Fase 9 (ya cerrada).
+- No tocar todavía: `Colaborador proveedor`/auth real de proveedor (Fase 15), consola `platform_admin`/`Administrador del cliente` (Fase 25), dimensión económica real (Fase 19-20).
+
 ### Sesión — 2026-07-30 — Housekeeping (merge AUTH-PROD/JWT-fixes) + Fase 8 (E3, `audit`): implementación completa
 
 **Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo: estado de git/docs, inventario de mutaciones VS-2A/VS-2B/VS-2C/AUTH-PROD, y patrones de test/migración/infra) seguida de implementación completa de la Fase 8 (`audit`: `AuditEvent` append-only) en 6 bloques incrementales, cada uno verificado contra Docker real antes de avanzar. Se presentaron 4 preguntas bloqueantes al founder, resueltas explícitamente antes de avanzar a implementación. Plan completo aprobado en `~/.claude/plans/dreamy-enchanting-seal.md` (fuera del repo). Housekeeping previo: se confirmó que AUTH-PROD (PR #17) y el fix de flakiness de JWT (PR #18) ya estaban fusionados a `main` sin que la documentación lo reflejara — misma clase de laguna de continuidad ya vista con VS-2C/PR #15.

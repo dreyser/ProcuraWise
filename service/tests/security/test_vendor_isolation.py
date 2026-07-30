@@ -282,7 +282,7 @@ def test_score_cannot_reference_requirement_outside_snapshot(
         seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
     )
     evaluator_headers = bearer_headers_for(
-        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+        seeded_actors[(tenant_a, "evaluator_functional")], mongo_test_settings
     )
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
@@ -309,7 +309,7 @@ def test_score_out_of_range_is_rejected(client, seeded_actors, mongo_test_settin
         seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
     )
     evaluator_headers = bearer_headers_for(
-        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+        seeded_actors[(tenant_a, "evaluator_functional")], mongo_test_settings
     )
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]

@@ -4,6 +4,7 @@ const TABS = [
   { suffix: '', label: 'Resumen' },
   { suffix: '/requirements', label: 'Requerimientos' },
   { suffix: '/vendors', label: 'Proveedores' },
+  { suffix: '/assignments', label: 'Asignaciones' },
   { suffix: '/proposals', label: 'Propuestas' },
   { suffix: '/results', label: 'Resultados' },
 ]

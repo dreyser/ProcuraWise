@@ -18,7 +18,7 @@ def test_vertical_slice_happy_path(client, seeded_actors, mongo_test_settings) -
         seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
     )
     evaluator_headers = bearer_headers_for(
-        seeded_actors[(tenant_a, "evaluator")], mongo_test_settings
+        seeded_actors[(tenant_a, "evaluator_functional")], mongo_test_settings
     )
     # vendor_contact stays on the dev-header mechanism (AUTH-PROD scope
     # decision #1) - unchanged.

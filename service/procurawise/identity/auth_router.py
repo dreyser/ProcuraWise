@@ -32,17 +32,19 @@ from procurawise.identity.schemas import ActorContextResponse
 from procurawise.identity.service import ActorNotFoundError, IdentityService, get_identity_service
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.mongo import get_database
+from procurawise.shared.roles import BUYER_LOGIN_ROLES
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Only buyer roles ever get a real access token through this router -
 # vendor_contact stays on the interim mechanism (AUTH-PROD scope decision #1,
-# see vendor_portal/router.py). Enforced twice, independently: memberships()
-# filters the list a user is even offered, switch_tenant() re-checks the
-# chosen membership's role server-side before minting a token - a client
-# skipping straight to switch-tenant with a guessed vendor membership_id still
-# gets rejected.
-BUYER_ROLES: tuple[str, ...] = ("evaluation_owner", "evaluator")
+# see vendor_portal/router.py); platform_admin has no tenant_id claim and
+# isn't a Membership at all (see procurawise.admin, Fase 9 Block 4). Enforced
+# twice, independently: memberships() filters the list a user is even
+# offered, switch_tenant() re-checks the chosen membership's role
+# server-side before minting a token - a client skipping straight to
+# switch-tenant with a guessed vendor membership_id still gets rejected.
+BUYER_ROLES: tuple[str, ...] = BUYER_LOGIN_ROLES
 
 
 def get_user_repository(settings: Settings = Depends(get_settings)) -> UserRepository:

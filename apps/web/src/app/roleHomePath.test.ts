@@ -6,9 +6,9 @@ describe('roleHomePath', () => {
     expect(roleHomePath('vendor_contact')).toBe('/vendor/proposals')
   })
 
-  it('sends evaluation_owner and evaluator to the buyer evaluations list', () => {
+  it('sends evaluation_owner and evaluator_functional to the buyer evaluations list', () => {
     expect(roleHomePath('evaluation_owner')).toBe('/evaluations')
-    expect(roleHomePath('evaluator')).toBe('/evaluations')
+    expect(roleHomePath('evaluator_functional')).toBe('/evaluations')
   })
 })
 
@@ -20,7 +20,7 @@ describe('isNextPathAllowedForRole', () => {
 
   it('allows a buyer path only for buyer roles', () => {
     expect(isNextPathAllowedForRole('/evaluations/abc', 'evaluation_owner')).toBe(true)
-    expect(isNextPathAllowedForRole('/evaluations/abc', 'evaluator')).toBe(true)
+    expect(isNextPathAllowedForRole('/evaluations/abc', 'evaluator_functional')).toBe(true)
     expect(isNextPathAllowedForRole('/evaluations/abc', 'vendor_contact')).toBe(false)
   })
 

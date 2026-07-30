@@ -29,6 +29,17 @@ interface Draft {
   comment: string
 }
 
+// Mirrors procurawise.shared.roles.SCORE_WRITE_ROLES - internal_collaborator
+// and approver can view this page (BUYER_READ_ROLES) but the backend 403s
+// their score writes (Fase 9 Block 3), so the inputs must never look
+// editable to them in the first place.
+const SCORE_WRITE_ROLES = [
+  'evaluation_owner',
+  'evaluator_functional',
+  'evaluator_technical',
+  'evaluator_economic',
+]
+
 export function ScoringPage() {
   const { evaluationId, proposalId } = useParams<{ evaluationId: string; proposalId: string }>()
   const { actor } = useAuth()
@@ -95,7 +106,8 @@ export function ScoringPage() {
     return <ErrorBanner message="Solo las propuestas enviadas pueden calificarse." />
   }
 
-  const isEditable = evaluation.status === 'evaluating'
+  const canWriteScores = Boolean(actor?.role && SCORE_WRITE_ROLES.includes(actor.role))
+  const isEditable = evaluation.status === 'evaluating' && canWriteScores
   const scoredCount = requirements.filter((r) => scoresByRequirement.has(r.id)).length
 
   const handleSave = async (requirementId: string) => {
@@ -269,9 +281,14 @@ export function ScoringPage() {
         Calificados: {scoredCount} / {requirements.length}
       </div>
 
-      {!isEditable && (
+      {!isEditable && evaluation.status !== 'evaluating' && (
         <p className="mt-2 text-sm text-muted-foreground">
           La evaluación ya no está en curso; las calificaciones son de solo lectura.
+        </p>
+      )}
+      {!isEditable && evaluation.status === 'evaluating' && !canWriteScores && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Tu rol puede revisar esta calificación, pero no puede modificarla.
         </p>
       )}
 

@@ -31,11 +31,9 @@ from procurawise.proposals.schemas import ProposalSummaryResponse
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
 from procurawise.shared.mongo import get_database
+from procurawise.shared.roles import BUYER_READ_ROLES, OWNER_ONLY
 
 router = APIRouter(prefix="/evaluations", tags=["evaluations"])
-
-BUYER_READ_ROLES = ("evaluation_owner", "evaluator")
-OWNER_ONLY = ("evaluation_owner",)
 
 # Computed once at module import time (not inside a route's argument default,
 # which ruff/bugbear (B008) flags as a function call in a mutable default) -

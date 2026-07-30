@@ -9,11 +9,12 @@ from fastapi import Depends, Header, HTTPException
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext
 
-TokenUse = Literal["access", "pre_session", "oidc_state"]
+TokenUse = Literal["access", "pre_session", "oidc_state", "admin_access"]
 
 ACCESS_TOKEN_USE: TokenUse = "access"
 PRE_SESSION_TOKEN_USE: TokenUse = "pre_session"
 OIDC_STATE_TOKEN_USE: TokenUse = "oidc_state"
+ADMIN_ACCESS_TOKEN_USE: TokenUse = "admin_access"
 OIDC_STATE_TTL_MINUTES = 2
 
 
@@ -52,6 +53,24 @@ def create_access_token(context: ActorContext, settings: Settings) -> tuple[str,
     mid-session - acceptable given the short TTL and no-refresh design
     (AUTH-PROD scope decision #2)."""
     payload = {**asdict(context), "sub": context.user_id, "token_use": ACCESS_TOKEN_USE}
+    return _issue(payload, settings.access_token_ttl_minutes, settings)
+
+
+def create_admin_access_token(
+    admin_id: str, display_name: str, settings: Settings
+) -> tuple[str, int]:
+    """`platform_admin` has no tenant_id claim at all (architecture.md §5) -
+    a distinct `token_use` (not ACCESS_TOKEN_USE) means this token is
+    structurally rejected by identity.jwt_provider.get_current_context (the
+    dependency every buyer router's require_role resolves through), not just
+    role-checked away. A platform_admin JWT can never be mistaken for, or
+    accidentally accepted as, a buyer ActorContext (Fase 9 Block 4)."""
+    payload = {
+        "sub": admin_id,
+        "admin_id": admin_id,
+        "display_name": display_name,
+        "token_use": ADMIN_ACCESS_TOKEN_USE,
+    }
     return _issue(payload, settings.access_token_ttl_minutes, settings)
 
 
@@ -99,7 +118,7 @@ def decode_token(token: str, settings: Settings, *, expected_use: TokenUse) -> d
     return claims
 
 
-def _extract_bearer_token(authorization: str | None) -> str:
+def extract_bearer_token(authorization: str | None) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")
     return authorization[len("bearer ") :].strip()
@@ -114,7 +133,7 @@ def get_current_context(
     and builds ActorContext directly from its claims (no Mongo round-trip,
     see create_access_token). Wired into shared.context.require_role in place
     of identity.dev_provider.get_current_context (AUTH-PROD)."""
-    token = _extract_bearer_token(authorization)
+    token = extract_bearer_token(authorization)
     try:
         claims = decode_token(token, settings, expected_use=ACCESS_TOKEN_USE)
     except TokenError:
@@ -139,7 +158,7 @@ def get_authenticated_user_id(
     user_id", which is all GET /auth/memberships and POST /auth/switch-tenant
     need. Deliberately does not build an ActorContext: there may be no tenant
     resolved yet."""
-    token = _extract_bearer_token(authorization)
+    token = extract_bearer_token(authorization)
     try:
         claims = _decode(token, settings)
     except TokenError:

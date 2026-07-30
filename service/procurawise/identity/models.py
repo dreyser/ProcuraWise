@@ -3,7 +3,20 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-Role = Literal["evaluation_owner", "evaluator", "vendor_contact"]
+# Fase 9 (RBAC completo, spec §4): every tenant-scoped buyer/vendor role.
+# `platform_admin` is deliberately NOT here - it has no tenant_id claim at all
+# (architecture.md §5), so it cannot be a Membership.role; it gets its own
+# identity mechanism in the `admin` module instead (see Fase 9 Block 4).
+Role = Literal[
+    "evaluation_owner",
+    "evaluator_functional",
+    "evaluator_technical",
+    "evaluator_economic",
+    "internal_collaborator",
+    "approver",
+    "tenant_admin",
+    "vendor_contact",
+]
 OidcProviderName = Literal["microsoft", "google"]
 
 

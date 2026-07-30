@@ -5,7 +5,7 @@ const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
 /**
- * Buyer identity (evaluation_owner/evaluator) is real auth after AUTH-PROD -
+ * Buyer identity (evaluation_owner/evaluator_functional) is real auth after AUTH-PROD -
  * logs in via email+password against dev_seed.py's known dev password. The
  * access token lives only in memory (scope decision #2, no persistence), so
  * `page.goto()` - a real browser navigation, unlike a client-side <Link>
@@ -93,8 +93,11 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await expect(page.getByText('En evaluación')).toBeVisible()
 
   // 4. Evaluator: score both requirements. A different buyer account than
-  // owner_a - not just a role switch, a genuinely different login.
-  await loginAsBuyer(page, 'evaluator.a@dev.procurawise.local')
+  // owner_a - not just a role switch, a genuinely different login. No
+  // Assignment exists for this seeded evaluation, so evaluator_functional
+  // may still score its technical requirement too (Fase 9 Block 3's
+  // backward-compatible "unassigned section" rule).
+  await loginAsBuyer(page, 'evaluator.functional.a@dev.procurawise.local')
   await page.waitForURL('**/evaluations', wait)
   await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
   await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
