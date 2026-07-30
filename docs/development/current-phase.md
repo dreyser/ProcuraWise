@@ -36,6 +36,10 @@
 
 **Estado final: Fase 9 cerrada formalmente.** Ningún criterio de aceptación del backlog ("Usuario sin rol adecuado recibe 403 en acción restringida") queda abierto. Verificación manual de OIDC/roles reales contra Microsoft/Google no aplica a esta fase (ya cubierto por AUTH-PROD).
 
+### Actualización — merge confirmado a `main` (PR #22) (2026-07-30)
+
+**Fase 9 está fusionada a `main`.** El founder comiteó y mergeó el PR #22 (`main` avanzó a `4154c49 feat: implement role-based access control and section assignments (#22)`) fuera de una sesión de Claude Code documentada — esta nota reemplaza la afirmación anterior ("no está fusionada todavía"), que había quedado desactualizada en `README.md` y en la sección de cierre de esta misma fase (arriba) y de `session-handoff.md`. Confirmado por lectura directa de `git log --oneline` sobre `main`.
+
 ## Fase 8 (E3) — `audit`: AuditEvent append-only
 
 **Estado: ✅ Implementado y verificado con Docker real** (2026-07-30) — planeada en Plan Mode (investigación con 3 agentes Explore en paralelo sobre estado de git/docs, inventario de mutaciones, y patrones de test/migración/infra, seguida de 4 preguntas bloqueantes resueltas explícitamente por el founder antes de implementar). Plan completo en `~/.claude/plans/dreamy-enchanting-seal.md` (fuera del repo). Ejecutado en 6 bloques incrementales (0-6), cada uno verificado contra Docker real antes de avanzar.
@@ -67,6 +71,10 @@
 - `git diff --check` → limpio (exit 0).
 
 **Estado final: Fase 8 cerrada formalmente.** Ningún criterio de aceptación del backlog ("toda mutación relevante del vertical slice genera un `AuditEvent` consultable") queda abierto. `make test-e2e` no aplica (sin UI en el alcance de esta fase, decisión documentada en el plan §11 — "consultable" satisfecho por el endpoint API).
+
+### Actualización — merge confirmado a `main` (PR #21) (2026-07-30)
+
+**Fase 8 está fusionada a `main`.** El founder comiteó y mergeó el PR #21 (`main` avanzó a `c786238 feat: add append-only audit trail (#21)`) fuera de una sesión de Claude Code documentada — esta nota reemplaza la afirmación anterior ("no está fusionada todavía"), que había quedado desactualizada en `README.md`. Confirmado por lectura directa de `git log --oneline` sobre `main`.
 
 ## AUTH-PROD — Auth productiva de comprador (reemplazo de `DevelopmentIdentityProvider`)
 

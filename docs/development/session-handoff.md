@@ -67,9 +67,12 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 **Estado final: Fase 9 cerrada formalmente.** Ningún criterio de aceptación del backlog queda abierto.
 
 **Instrucciones para la siguiente sesión:**
-- `main`/la rama de esta fase no están fusionadas entre sí todavía — el founder decide si comitea/abre PR (mismo patrón que fases anteriores).
 - Próxima fase según `backlog.md`: Fase 10 (wizard guiado estático + autosave), depende de Fase 9 (ya cerrada).
 - No tocar todavía: `Colaborador proveedor`/auth real de proveedor (Fase 15), consola `platform_admin`/`Administrador del cliente` (Fase 25), dimensión económica real (Fase 19-20).
+
+### Actualización — merge confirmado a `main` (PR #21 Fase 8, PR #22 Fase 9) (2026-07-30)
+
+**Fase 8 y Fase 9 están fusionadas a `main`.** El founder comiteó y mergeó ambos PRs fuera de una sesión de Claude Code documentada — `main` avanzó `f537f64` → `c786238 feat: add append-only audit trail (#21)` → `4154c49 feat: implement role-based access control and section assignments (#22)`. Esta nota reemplaza la afirmación anterior ("`main`/la rama de esta fase no están fusionadas entre sí todavía"), que había quedado desactualizada junto con `README.md`. Confirmado por lectura directa de `git log --oneline` sobre `main` al iniciar la sesión de planeación de Fase 10.
 
 ### Sesión — 2026-07-30 — Housekeeping (merge AUTH-PROD/JWT-fixes) + Fase 8 (E3, `audit`): implementación completa
 
