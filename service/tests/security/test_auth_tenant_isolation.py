@@ -34,7 +34,24 @@ def test_tampered_access_token_returns_401(client, seeded_actors, mongo_test_set
     tenant_a, _tenant_b = tenant_ids(seeded_actors)
     headers = bearer_headers_for(seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings)
     token = headers["Authorization"].removeprefix("Bearer ")
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+
+    # Flip a character inside the signature segment, but never its very last
+    # character. An HS256 signature is 32 bytes -> 43 base64url characters,
+    # and base64's final character of a length that isn't a multiple of 3
+    # bytes only encodes 4 significant bits (the other 2 are padding,
+    # discarded on decode) - so occasionally a *different* last character
+    # still decodes to byte-identical signature bytes, making the "tampered"
+    # token spuriously still valid (flaky: the payload embeds the real
+    # iat/exp, so the signature - and which characters are boundary-safe -
+    # differs run to run; see tests/unit/test_jwt_provider.py for the same
+    # fix applied there after this exact failure mode hit CI). Any other
+    # position is a full 6-bit-significant slot, so tampering it always
+    # changes the decoded bytes, deterministically.
+    header_b64, payload_b64, signature_b64 = token.split(".")
+    index = len(signature_b64) - 2
+    flipped_char = "A" if signature_b64[index] != "A" else "B"
+    tampered_signature = signature_b64[:index] + flipped_char + signature_b64[index + 1 :]
+    tampered = f"{header_b64}.{payload_b64}.{tampered_signature}"
 
     response = client.get(
         "/api/v1/vendor-organizations", headers={"Authorization": f"Bearer {tampered}"}
