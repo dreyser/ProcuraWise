@@ -32,6 +32,33 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-31 — Fase 11 (E4): Biblioteca de requerimientos (`KnowledgeTemplate`, plantillas estáticas, sin IA)
+
+**Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo sobre docs/roadmap/backlog/handoff — para confirmar que Fase 11 era la fase siguiente, no asumida —, backend, y frontend/tests/CI; luego un agente Plan de diseño técnico detallado) seguida de 3 preguntas bloqueantes resueltas explícitamente por el founder antes de implementar (las 3 resueltas con la opción recomendada). Tras la aprobación del plan, implementación completa en 5 bloques incrementales, cada uno verificado contra Docker real antes de avanzar.
+
+**Decisiones bloqueantes resueltas por el founder (2026-07-31):**
+1. Autorización: `OWNER_ONLY` para crear/editar/eliminar plantillas e items y para aplicar; `BUYER_READ_ROLES` para listar/ver.
+2. Semántica de "aplicar": solo plantilla completa — `item_ids` eliminado por completo de la API, no diferido como parámetro opcional.
+3. Eliminación de plantilla: hard delete, sin archivo/soft-delete.
+
+**Archivos tocados:** ver el listado completo por bloque en `current-phase.md` — resumen: `evaluations/models.py` (+`validate_requirement_patch`, +`Evaluation.approval_invalidation_extra_set()`), `evaluations/service.py` (usa los helpers extraídos), `evaluations/repository.py` (+`add_requirements_bulk`), `knowledge_templates/{models,repository,service,router,schemas,exceptions}.py` (nuevo), `migrations/0008_knowledge_template_indexes.py` (nuevo), `audit/models.py` (+7 acciones), `api/main.py` (backend); `KnowledgeTemplatesPage.tsx`, `KnowledgeTemplateDetailPage.tsx`, `ApplyTemplateButton.tsx` (nuevos), `WizardStepRequirements.tsx`/`RequirementsPage.tsx` (+`ApplyTemplateButton`), `router.tsx`/`AppShell.tsx` (frontend); `e2e/knowledge-templates.spec.ts` (nuevo); 9 archivos de test backend nuevos, 2 archivos de test frontend nuevos.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- `make test` → 106 passed backend + 103 passed frontend.
+- `make test-integration` (Docker real) → 173 passed (+16 sobre la base de Fase 12).
+- `make test-e2e` (Docker + Playwright real) → 7 specs passed.
+- `make contracts` corrido dos veces seguidas → sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** ninguna — no reabre monolito/DB/hosting/patrón de comunicación (CLAUDE.md §3); toda la fase es CRUD estándar sobre la arquitectura ya aprobada, reutilizando el precedente de composición cruzada de módulos que `AssignmentService` (Fase 9) ya estableció.
+
+**Deuda técnica introducida:** ninguna nueva. Bug real encontrado y corregido durante la verificación E2E (no deuda, ya resuelto): `ApplyTemplateButton` mostraba `item_count` obsoleto porque `KnowledgeTemplateDetailPage` solo invalidaba la query de detalle, no la de listado — corregido invalidando ambas en cada mutación.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: **Fase 13 (E5) — Adaptador `AIProvider` real (Azure OpenAI/Foundry)**, P0, depende de Fase 12 (ya cerrada). Con Fase 11 cerrada, el Bloque 2 completo (Fases 8-12) queda formalmente cerrado; el Bloque 3 (IA y proveedores reales, Fases 13-16) queda desbloqueado.
+- No tocar todavía: `Colaborador proveedor`/auth real de proveedor (Fase 15), consola `platform_admin`/`Administrador del cliente` (Fase 25), dimensión económica real (Fase 19-20), versionado/reapertura de evaluaciones publicadas (Fase 21), `FoundryWebSearchProvider` (Fase 14, requiere aprobación legal documentada antes de activarse — ADR 0011).
+- Housekeeping pendiente heredado de sesiones anteriores, opcional: `current-phase.md`'s scaffold final ("Próximos pasos"/"Bloqueos", debajo de todas las secciones de fase) sigue reflejando la era AUTH-PROD; `README.md` sigue sin reflejar que Fase 12 (PR #24) ya está fusionada a `main`. Ninguno bloquea el inicio de Fase 13.
+
 ### Sesión — 2026-07-31 — Fase 12 (E4): Aprobación interna + publicación + snapshot inmutable
 
 **Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo sobre docs/ADRs/git, backend, y frontend; luego un agente Plan de diseño técnico detallado) seguida de 4 preguntas bloqueantes de arquitectura resueltas explícitamente por el founder vía `AskUserQuestion` antes de implementar (las 4 resueltas con la opción recomendada), más 3 bloqueantes residuales de menor riesgo resueltos en la misma sesión de planeación. Tras la aprobación del plan, implementación completa en 7 bloques incrementales, cada uno verificado contra Docker real antes de avanzar.

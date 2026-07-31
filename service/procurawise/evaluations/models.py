@@ -135,6 +135,28 @@ class Requirement:
         )
 
 
+def validate_requirement_patch(current: Requirement, field_updates: dict[str, Any]) -> None:
+    """Validate the *resultant* requirement (current fields merged with this
+    patch), not just the fields the patch happens to touch - otherwise a
+    patch could leave single_choice/multi_choice without options, a state
+    `Requirement.create` already refuses to produce. Shared by
+    evaluations.service.update_requirement and knowledge_templates.service's
+    equivalent item-patch method (Fase 11) so the rule cannot drift between
+    the two call sites."""
+    resultant_response_type = field_updates.get("response_type", current.response_type)
+    resultant_options = field_updates["options"] if "options" in field_updates else current.options
+    if resultant_response_type in ("single_choice", "multi_choice") and not resultant_options:
+        raise ValueError(f"response_type={resultant_response_type!r} requires non-empty options")
+
+
+# Fase 12: approval_status values a successful draft-gated edit invalidates
+# (plan §14/§32 Blocker 3): editing while "pending" or "approved" forces a
+# fresh, honest approval cycle rather than letting an approver's decision go
+# stale without notice. "not_requested"/"rejected" already require a fresh
+# request_approval call, so editing in those states is a no-op here.
+INVALIDATED_BY_APPROVAL_EDIT: tuple[str, ...] = ("pending", "approved")
+
+
 @dataclass(frozen=True)
 class Evaluation:
     """`linked_vendor_count` is an atomic reservation counter (see
@@ -256,6 +278,22 @@ class Evaluation:
             approval_comment=doc.get("approval_comment"),
             approval_snapshot_id=doc.get("approval_snapshot_id"),
         )
+
+    def approval_invalidation_extra_set(self) -> dict[str, Any]:
+        """Plan §32 Blocker 3 (soft-invalidation, confirmed by founder):
+        merged into the same atomic write as the edit itself, not a
+        separate follow-up write - the mutation and the invalidation land
+        together or not at all. Callers outside evaluations.service (e.g.
+        knowledge_templates.service applying a template onto a draft
+        evaluation, Fase 11) reuse this instead of reimplementing the rule."""
+        if self.approval_status not in INVALIDATED_BY_APPROVAL_EDIT:
+            return {}
+        return {
+            "approval_status": "not_requested",
+            "approval_decided_at": None,
+            "approval_decided_by_membership_id": None,
+            "approval_comment": None,
+        }
 
 
 @dataclass(frozen=True)

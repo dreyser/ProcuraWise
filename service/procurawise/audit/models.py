@@ -7,7 +7,9 @@ from procurawise.shared.context import ActorContext
 
 AuditActorType = Literal["buyer", "vendor_contact", "platform_admin"]
 
-AuditResourceType = Literal["evaluation", "requirement", "proposal", "score", "assignment"]
+AuditResourceType = Literal[
+    "evaluation", "requirement", "proposal", "score", "assignment", "knowledge_template"
+]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
 # the call site. PROPOSAL_ANSWER_UPDATED (autosave) is deliberately absent:
@@ -39,6 +41,17 @@ AuditAction = Literal[
     "evaluation_approved",
     "evaluation_rejected",
     "evaluation_published",
+    # Fase 11 (biblioteca de requerimientos, sin IA) - resource_type
+    # "knowledge_template" for template/item CRUD; "requirements_applied_
+    # from_template" reuses resource_type "evaluation" (same pattern
+    # vendor_linked already follows) since it mutates the target Evaluation.
+    "knowledge_template_created",
+    "knowledge_template_updated",
+    "knowledge_template_deleted",
+    "knowledge_template_item_added",
+    "knowledge_template_item_updated",
+    "knowledge_template_item_removed",
+    "requirements_applied_from_template",
 ]
 
 

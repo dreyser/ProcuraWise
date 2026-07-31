@@ -90,6 +90,25 @@ class EvaluationRepository:
         )
         return result.matched_count > 0
 
+    def add_requirements_bulk(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        requirement_docs: list[dict[str, Any]],
+        extra_set: dict[str, Any] | None = None,
+    ) -> bool:
+        """Fase 11 (knowledge_templates apply): a single atomic $push/$each
+        for the whole batch, not N sequential add_requirement calls - avoids
+        partial application under a mid-batch failure and avoids N audit
+        events for one logical action."""
+        set_fields = {"updated_at": datetime.now(UTC)}
+        set_fields.update(extra_set or {})
+        result = self._scoped(tenant_id).update_one(
+            {"_id": evaluation_id, "status": "draft"},
+            {"$push": {"requirements": {"$each": requirement_docs}}, "$set": set_fields},
+        )
+        return result.matched_count > 0
+
     def update_requirement(
         self,
         tenant_id: str,

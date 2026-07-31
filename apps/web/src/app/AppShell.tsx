@@ -7,7 +7,10 @@ interface NavItem {
   label: string
 }
 
-const BUYER_NAV: NavItem[] = [{ to: '/evaluations', label: 'Evaluaciones' }]
+const BUYER_NAV: NavItem[] = [
+  { to: '/evaluations', label: 'Evaluaciones' },
+  { to: '/knowledge-templates', label: 'Plantillas' },
+]
 
 const VENDOR_NAV: NavItem[] = [{ to: '/vendor/proposals', label: 'Mis propuestas' }]
 

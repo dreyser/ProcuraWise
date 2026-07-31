@@ -25,6 +25,7 @@ from procurawise.evaluations.models import (
     Evaluation,
     EvaluationSnapshot,
     Requirement,
+    validate_requirement_patch,
 )
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.snapshot_repository import EvaluationSnapshotRepository
@@ -34,13 +35,6 @@ from procurawise.proposals.repository import ProposalRepository
 from procurawise.shared.context import ActorContext
 
 _WEIGHT_TOLERANCE = 1e-6
-
-# approval_status values a successful draft-gated edit invalidates (plan
-# §14/§32 Blocker 3): editing while "pending" or "approved" forces a fresh,
-# honest approval cycle rather than letting an approver's decision go stale
-# without notice. "not_requested"/"rejected" already require a fresh
-# request_approval call, so editing in those states is a no-op here.
-_INVALIDATED_BY_EDIT: tuple[str, ...] = ("pending", "approved")
 
 
 class EvaluationService:
@@ -59,20 +53,6 @@ class EvaluationService:
         self._memberships = memberships
         self._snapshots = snapshots
         self._audit = audit
-
-    def _approval_invalidation_extra_set(self, evaluation: Evaluation) -> dict[str, Any]:
-        """Plan §32 Blocker 3 (soft-invalidation, confirmed by founder):
-        merged into the same atomic write as the edit itself, not a
-        separate follow-up write - the mutation and the invalidation land
-        together or not at all."""
-        if evaluation.approval_status not in _INVALIDATED_BY_EDIT:
-            return {}
-        return {
-            "approval_status": "not_requested",
-            "approval_decided_at": None,
-            "approval_decided_by_membership_id": None,
-            "approval_comment": None,
-        }
 
     def create_evaluation(
         self,
@@ -129,7 +109,7 @@ class EvaluationService:
         if response_deadline is not None:
             updates["response_deadline"] = response_deadline
         fields_changed = sorted(updates.keys())
-        updates.update(self._approval_invalidation_extra_set(evaluation))
+        updates.update(evaluation.approval_invalidation_extra_set())
         matched = self._evaluations.update_metadata(tenant_id, evaluation_id, updates)
         self._require_matched(matched, tenant_id, evaluation_id)
         self._audit.record(
@@ -179,7 +159,7 @@ class EvaluationService:
             tenant_id,
             evaluation_id,
             requirement.to_document(),
-            self._approval_invalidation_extra_set(evaluation),
+            evaluation.approval_invalidation_extra_set(),
         )
         self._require_draft_matched(matched, tenant_id, evaluation_id)
         self._audit.record(
@@ -210,25 +190,14 @@ class EvaluationService:
         if current is None:
             raise RequirementNotFoundError(requirement_id)
 
-        # Validate the *resultant* requirement (current fields merged with
-        # this patch), not just the fields the patch happens to touch -
-        # otherwise a patch could leave single_choice/multi_choice without
-        # options, a state `Requirement.create` already refuses to produce.
-        resultant_response_type = field_updates.get("response_type", current.response_type)
-        resultant_options = (
-            field_updates["options"] if "options" in field_updates else current.options
-        )
-        if resultant_response_type in ("single_choice", "multi_choice") and not resultant_options:
-            raise ValueError(
-                f"response_type={resultant_response_type!r} requires non-empty options"
-            )
+        validate_requirement_patch(current, field_updates)
 
         matched = self._evaluations.update_requirement(
             tenant_id,
             evaluation_id,
             requirement_id,
             field_updates,
-            self._approval_invalidation_extra_set(evaluation),
+            evaluation.approval_invalidation_extra_set(),
         )
         if not matched:
             # draft status and requirement existence were already confirmed
@@ -267,7 +236,7 @@ class EvaluationService:
             tenant_id,
             evaluation_id,
             requirement_id,
-            self._approval_invalidation_extra_set(evaluation),
+            evaluation.approval_invalidation_extra_set(),
         )
         self._audit.record(
             tenant_id=tenant_id,
@@ -283,7 +252,7 @@ class EvaluationService:
         self, tenant_id: str, evaluation_id: str, vendor_org_id: str, *, actor: ActorContext
     ) -> Proposal:
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
-        invalidation = self._approval_invalidation_extra_set(evaluation)
+        invalidation = evaluation.approval_invalidation_extra_set()
         outcome = self._evaluations.reserve_vendor_slot(tenant_id, evaluation_id, invalidation)
         if outcome == "not_found":
             raise EvaluationNotFoundError(evaluation_id)
@@ -337,7 +306,7 @@ class EvaluationService:
         # compute the invalidation extra_set, not a precondition gate.
         evaluation_doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
         invalidation = (
-            self._approval_invalidation_extra_set(Evaluation.from_document(evaluation_doc))
+            Evaluation.from_document(evaluation_doc).approval_invalidation_extra_set()
             if evaluation_doc is not None
             else {}
         )
