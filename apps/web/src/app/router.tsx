@@ -12,7 +12,7 @@ import { SelectWorkspacePage } from '@/auth/SelectWorkspacePage'
 import { UnauthorizedPage } from '@/app/UnauthorizedPage'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { EvaluationListPage } from '@/features/evaluations/pages/EvaluationListPage'
-import { EvaluationCreatePage } from '@/features/evaluations/pages/EvaluationCreatePage'
+import { EvaluationWizard } from '@/features/evaluations/wizard/EvaluationWizard'
 import { EvaluationDetailPage } from '@/features/evaluations/pages/EvaluationDetailPage'
 import { RequirementsPage } from '@/features/evaluations/pages/RequirementsPage'
 import { VendorsPage } from '@/features/evaluations/pages/VendorsPage'
@@ -130,7 +130,15 @@ export function AppRouter() {
           path="/evaluations/new"
           element={
             <BuyerLayout>
-              <EvaluationCreatePage />
+              <EvaluationWizard />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/evaluations/:evaluationId/wizard"
+          element={
+            <BuyerLayout>
+              <EvaluationWizard />
             </BuyerLayout>
           }
         />

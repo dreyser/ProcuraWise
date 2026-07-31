@@ -32,6 +32,40 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-31 — Fase 10 (E4): Wizard guiado estático + autosave
+
+**Resumen:** Sesión de planeación en Plan Mode (2 rondas de agentes Explore en paralelo: documentación/roadmap/backlog primero para identificar la fase siguiente, luego código de `evaluations`/frontend existente para el inventario de reutilización) seguida de una única pregunta bloqueante resuelta explícitamente por el founder vía `AskUserQuestion` antes de implementar, y de implementación completa en 5 bloques incrementales (0-4), cada uno verificado antes de avanzar.
+
+**Decisión bloqueante resuelta por el founder (2026-07-31):**
+1. Mecanismo de "sin pérdida de datos al recargar": opción A — step-persisted, sin campo `version` en `Evaluation`. El wizard deriva su paso actual del estado real de la evaluación en cada carga, en vez de autosave real de campo con concurrencia optimista. Consecuencia: la fase completa quedó sin ningún cambio de backend.
+
+**Contenido entregado (100% frontend, `apps/web/src/`) — ver detalle completo en `docs/development/current-phase.md`, sección Fase 10:**
+- **Bloque 0**: housekeeping — `README.md`/`current-phase.md`/`session-handoff.md` corregidos (Fase 8/PR #21 y Fase 9/PR #22 ya estaban fusionadas a `main`, la documentación no lo reflejaba).
+- **Bloque 1**: núcleo del wizard (`deriveWizardStep.ts`, `EvaluationWizard.tsx`, `WizardStepper.tsx`, `WizardStepMetadata.tsx`), rutas nuevas, `EvaluationCreatePage.tsx` eliminado (absorbido por el Paso 1).
+- **Bloque 2**: `evaluationReadiness.ts` (extraído, compartido con `VendorsPage.tsx`), `WizardStepRequirements.tsx`/`WizardStepVendors.tsx`.
+- **Bloque 3**: `WizardStepReview.tsx` (inicia recepción), afordancia "Continuar configuración" en `EvaluationListPage.tsx`.
+- **Bloque 4**: `e2e/evaluation-wizard.spec.ts` (2 specs nuevos, cierra la brecha de cobertura de "crear evaluación end-to-end" documentada desde el cierre de VS-2C).
+
+**Archivos tocados:** `apps/web/src/features/evaluations/wizard/*` (nuevo), `apps/web/src/features/evaluations/lib/evaluationReadiness.ts` (nuevo), `apps/web/src/features/evaluations/pages/{VendorsPage,EvaluationListPage}.tsx`, `apps/web/src/app/router.tsx`, `apps/web/e2e/evaluation-wizard.spec.ts` (nuevo), `apps/web/src/App.integration.test.tsx` (actualizado al nuevo flujo de creación). Tests nuevos: `deriveWizardStep.test.ts`, `evaluationReadiness.test.ts`, `WizardStepper.test.tsx`, `WizardStepMetadata.test.tsx` (15 tests). Ningún archivo bajo `service/` tocado.
+
+**Resultado de pruebas de esta sesión (todas ejecutadas contra Docker real, ninguna asumida):**
+- `make lint` → 0 errores. `make typecheck` → limpio.
+- `make test` → **93 passed backend** (sin cambios) **+ 94 passed frontend**.
+- `make test-integration` (Docker real) → **140 passed** (idéntico a Fase 9).
+- `make test-e2e` (Docker + Playwright real) → **4 specs passed**.
+- `make contracts` → sin diff (`git status` limpio sobre `openapi.json`/`client.ts`).
+- `pnpm build` → build de producción exitoso.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** ninguna. No se reabre monolito/DB/hosting/patrón de comunicación; la fase completa es orquestación frontend sobre endpoints ya existentes.
+
+**Deuda técnica introducida:** ninguna nueva. El diferimiento de autosave de campo-por-campo (opción B/C) es alcance explícitamente descartado por el founder, no deuda.
+
+**Estado final: Fase 10 cerrada formalmente.** El criterio de aceptación del backlog queda abierto en ningún punto — ver interpretación operacional acordada en `current-phase.md`.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: Fase 11 (`KnowledgeTemplate`, biblioteca de requerimientos, P1, depende de Fase 9) o Fase 12 (aprobación interna + publicación con snapshot, P0, depende de Fase 10) — ambas quedan disponibles; `roadmap.md`/`backlog.md` no fuerzan un orden estricto entre ellas más allá de sus propias dependencias.
+- No tocar todavía: `Colaborador proveedor`/auth real de proveedor (Fase 15), consola `platform_admin`/`Administrador del cliente` (Fase 25), dimensión económica real (Fase 19-20).
+
 ### Sesión — 2026-07-30 — Fase 9 (E3): RBAC completo + `Assignment` por sección
 
 **Resumen:** Sesión de planeación en Plan Mode (4 agentes Explore en paralelo: roadmap/backlog/handoff, arquitectura/ADRs/threat-model, estructura del código, y el detalle de roles del §4 de la spec + gap contra el código actual) seguida de implementación completa en 6 bloques incrementales, cada uno verificado contra Docker real antes de avanzar. Se presentaron 3 decisiones bloqueantes al founder (alcance de la fase, profundidad de `platform_admin`/`Administrador del cliente`, y si refactorizar "roles acumulables"), resueltas explícitamente antes de implementar.
@@ -67,9 +101,12 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 **Estado final: Fase 9 cerrada formalmente.** Ningún criterio de aceptación del backlog queda abierto.
 
 **Instrucciones para la siguiente sesión:**
-- `main`/la rama de esta fase no están fusionadas entre sí todavía — el founder decide si comitea/abre PR (mismo patrón que fases anteriores).
 - Próxima fase según `backlog.md`: Fase 10 (wizard guiado estático + autosave), depende de Fase 9 (ya cerrada).
 - No tocar todavía: `Colaborador proveedor`/auth real de proveedor (Fase 15), consola `platform_admin`/`Administrador del cliente` (Fase 25), dimensión económica real (Fase 19-20).
+
+### Actualización — merge confirmado a `main` (PR #21 Fase 8, PR #22 Fase 9) (2026-07-30)
+
+**Fase 8 y Fase 9 están fusionadas a `main`.** El founder comiteó y mergeó ambos PRs fuera de una sesión de Claude Code documentada — `main` avanzó `f537f64` → `c786238 feat: add append-only audit trail (#21)` → `4154c49 feat: implement role-based access control and section assignments (#22)`. Esta nota reemplaza la afirmación anterior ("`main`/la rama de esta fase no están fusionadas entre sí todavía"), que había quedado desactualizada junto con `README.md`. Confirmado por lectura directa de `git log --oneline` sobre `main` al iniciar la sesión de planeación de Fase 10.
 
 ### Sesión — 2026-07-30 — Housekeeping (merge AUTH-PROD/JWT-fixes) + Fase 8 (E3, `audit`): implementación completa
 
