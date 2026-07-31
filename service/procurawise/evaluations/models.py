@@ -4,6 +4,13 @@ from typing import Any, Literal
 from uuid import uuid4
 
 EvaluationStatus = Literal["draft", "collecting_responses", "evaluating", "completed"]
+
+# Fase 12: gates the existing draft -> collecting_responses transition
+# (EvaluationStatus itself is unchanged - founder decision, plan §9.A).
+# `rejected` is not terminal: request_approval is valid from both
+# not_requested and rejected, looping back to pending (plan §14/§15).
+ApprovalStatus = Literal["not_requested", "pending", "approved", "rejected"]
+
 Dimension = Literal["functional", "technical"]
 Priority = Literal["mandatory", "important", "desirable"]
 ResponseType = Literal[
@@ -150,6 +157,20 @@ class Evaluation:
     collecting_responses_started_at: datetime | None
     evaluating_started_at: datetime | None
     completed_at: datetime | None
+    # Fase 12 (plan §23) - approval_status only meaningful while status ==
+    # "draft"; gates the draft -> collecting_responses transition. See
+    # evaluations.service for the transitions that mutate these fields -
+    # nothing outside EvaluationRepository.transition_approval_status /
+    # set_approver / request_approval / etc. writes them directly.
+    approval_status: ApprovalStatus
+    approver_membership_id: str | None
+    response_deadline: datetime | None
+    approval_requested_at: datetime | None
+    approval_requested_by_membership_id: str | None
+    approval_decided_at: datetime | None
+    approval_decided_by_membership_id: str | None
+    approval_comment: str | None
+    approval_snapshot_id: str | None
 
     @staticmethod
     def create(
@@ -170,6 +191,15 @@ class Evaluation:
             collecting_responses_started_at=None,
             evaluating_started_at=None,
             completed_at=None,
+            approval_status="not_requested",
+            approver_membership_id=None,
+            response_deadline=None,
+            approval_requested_at=None,
+            approval_requested_by_membership_id=None,
+            approval_decided_at=None,
+            approval_decided_by_membership_id=None,
+            approval_comment=None,
+            approval_snapshot_id=None,
         )
 
     def to_document(self) -> dict[str, Any]:
@@ -187,6 +217,15 @@ class Evaluation:
             "collecting_responses_started_at": self.collecting_responses_started_at,
             "evaluating_started_at": self.evaluating_started_at,
             "completed_at": self.completed_at,
+            "approval_status": self.approval_status,
+            "approver_membership_id": self.approver_membership_id,
+            "response_deadline": self.response_deadline,
+            "approval_requested_at": self.approval_requested_at,
+            "approval_requested_by_membership_id": self.approval_requested_by_membership_id,
+            "approval_decided_at": self.approval_decided_at,
+            "approval_decided_by_membership_id": self.approval_decided_by_membership_id,
+            "approval_comment": self.approval_comment,
+            "approval_snapshot_id": self.approval_snapshot_id,
         }
 
     @staticmethod
@@ -205,4 +244,95 @@ class Evaluation:
             collecting_responses_started_at=doc.get("collecting_responses_started_at"),
             evaluating_started_at=doc.get("evaluating_started_at"),
             completed_at=doc.get("completed_at"),
+            # .get(..., default) throughout - evaluations persisted before
+            # Fase 12 have none of these keys (plan §29: no backfill).
+            approval_status=doc.get("approval_status", "not_requested"),
+            approver_membership_id=doc.get("approver_membership_id"),
+            response_deadline=doc.get("response_deadline"),
+            approval_requested_at=doc.get("approval_requested_at"),
+            approval_requested_by_membership_id=doc.get("approval_requested_by_membership_id"),
+            approval_decided_at=doc.get("approval_decided_at"),
+            approval_decided_by_membership_id=doc.get("approval_decided_by_membership_id"),
+            approval_comment=doc.get("approval_comment"),
+            approval_snapshot_id=doc.get("approval_snapshot_id"),
+        )
+
+
+@dataclass(frozen=True)
+class EvaluationSnapshot:
+    """Immutable record of exactly what was approved and published, taken
+    once at the draft -> collecting_responses transition (plan §21/§22).
+    Lives in its own collection (evaluations.snapshot_repository), never
+    embedded on Evaluation - requirements are unbounded, unlike the capped
+    MAX_LINKED_VENDORS vendor list. snapshot_id == evaluation_id
+    (deterministic, not a fresh uuid): EvaluationStatus never regresses to
+    draft, so at most one snapshot can ever exist per evaluation, and the
+    deterministic id makes the insert step naturally idempotent under retry
+    (a repeat insert raises DuplicateKeyError, treated as already-done)."""
+
+    snapshot_id: str
+    tenant_id: str
+    evaluation_id: str
+    taken_at: datetime
+    evaluation_name: str
+    evaluation_description: str
+    requirements: list[Requirement]
+    dimension_weights: dict[str, float]
+    linked_vendor_org_ids: list[str]
+    vendor_org_names: dict[str, str]
+    response_deadline: datetime
+    approver_membership_id: str
+    approval_requested_at: datetime
+    approval_requested_by_membership_id: str
+    approval_decided_at: datetime
+    approval_decided_by_membership_id: str
+    approval_comment: str | None
+    published_by_membership_id: str
+    published_at: datetime
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "_id": self.snapshot_id,
+            "tenant_id": self.tenant_id,
+            "evaluation_id": self.evaluation_id,
+            "taken_at": self.taken_at,
+            "evaluation_name": self.evaluation_name,
+            "evaluation_description": self.evaluation_description,
+            "requirements": [r.to_document() for r in self.requirements],
+            "dimension_weights": self.dimension_weights,
+            "linked_vendor_org_ids": self.linked_vendor_org_ids,
+            "vendor_org_names": self.vendor_org_names,
+            "response_deadline": self.response_deadline,
+            "approver_membership_id": self.approver_membership_id,
+            "approval_requested_at": self.approval_requested_at,
+            "approval_requested_by_membership_id": self.approval_requested_by_membership_id,
+            "approval_decided_at": self.approval_decided_at,
+            "approval_decided_by_membership_id": self.approval_decided_by_membership_id,
+            "approval_comment": self.approval_comment,
+            "published_by_membership_id": self.published_by_membership_id,
+            "published_at": self.published_at,
+        }
+
+    @staticmethod
+    def from_document(doc: dict[str, Any]) -> "EvaluationSnapshot":
+        return EvaluationSnapshot(
+            snapshot_id=doc["_id"],
+            tenant_id=doc["tenant_id"],
+            evaluation_id=doc["evaluation_id"],
+            taken_at=doc["taken_at"],
+            evaluation_name=doc["evaluation_name"],
+            evaluation_description=doc["evaluation_description"],
+            requirements=[Requirement.from_document(r) for r in doc.get("requirements", [])],
+            dimension_weights=doc["dimension_weights"],
+            linked_vendor_org_ids=doc["linked_vendor_org_ids"],
+            vendor_org_names=doc["vendor_org_names"],
+            response_deadline=doc["response_deadline"],
+            approver_membership_id=doc["approver_membership_id"],
+            approval_requested_at=doc["approval_requested_at"],
+            approval_requested_by_membership_id=doc["approval_requested_by_membership_id"],
+            approval_decided_at=doc["approval_decided_at"],
+            approval_decided_by_membership_id=doc["approval_decided_by_membership_id"],
+            approval_comment=doc.get("approval_comment"),
+            published_by_membership_id=doc["published_by_membership_id"],
+            published_at=doc["published_at"],
         )

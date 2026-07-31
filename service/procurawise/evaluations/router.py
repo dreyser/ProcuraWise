@@ -3,29 +3,41 @@ from fastapi import APIRouter, Depends, HTTPException
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import (
+    ApprovalPreconditionError,
+    ApproverMembershipNotFoundError,
+    ApproverRoleMismatchError,
     EvaluationNotFoundError,
     InvalidTransitionError,
+    NotAssignedApproverError,
     RequirementNotFoundError,
+    SelfApprovalError,
+    SnapshotNotFoundError,
     StartCollectionPreconditionError,
     VendorAlreadyLinkedError,
     VendorLimitExceededError,
     VendorNotLinkedError,
     VendorOrganizationNotFoundError,
 )
-from procurawise.evaluations.models import Evaluation, Requirement
+from procurawise.evaluations.models import Evaluation, EvaluationSnapshot, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.schemas import (
+    ApprovalDecisionRequest,
     EvaluationCreateRequest,
     EvaluationDetailResponse,
+    EvaluationSnapshotResponse,
     EvaluationSummaryResponse,
     EvaluationUpdateRequest,
+    PublicationReadinessResponse,
+    RejectionRequest,
     RequirementCreateRequest,
     RequirementResponse,
     RequirementUpdateRequest,
+    SetApproverRequest,
     VendorLinkRequest,
 )
 from procurawise.evaluations.service import EvaluationService
-from procurawise.identity.repository import VendorOrganizationRepository
+from procurawise.evaluations.snapshot_repository import EvaluationSnapshotRepository
+from procurawise.identity.repository import MembershipRepository, VendorOrganizationRepository
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.proposals.schemas import ProposalSummaryResponse
 from procurawise.shared.config import Settings, get_settings
@@ -40,6 +52,10 @@ router = APIRouter(prefix="/evaluations", tags=["evaluations"])
 # FastAPI still resolves this dependency fresh on every request.
 require_buyer_read = require_role(*BUYER_READ_ROLES)
 require_owner = require_role(*OWNER_ONLY)
+# Fase 12: approve/reject are restricted further, in the service layer, to
+# the evaluation's own approver_membership_id - this only gates "holds the
+# approver role at all" (plan §17).
+require_approver = require_role("approver")
 
 
 def get_evaluation_service(settings: Settings = Depends(get_settings)) -> EvaluationService:
@@ -48,6 +64,8 @@ def get_evaluation_service(settings: Settings = Depends(get_settings)) -> Evalua
         evaluations=EvaluationRepository(db),
         proposals=ProposalRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
+        memberships=MembershipRepository(db),
+        snapshots=EvaluationSnapshotRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
     )
 
@@ -85,6 +103,15 @@ def _evaluation_detail(evaluation: Evaluation) -> EvaluationDetailResponse:
         collecting_responses_started_at=evaluation.collecting_responses_started_at,
         evaluating_started_at=evaluation.evaluating_started_at,
         completed_at=evaluation.completed_at,
+        approval_status=evaluation.approval_status,
+        approver_membership_id=evaluation.approver_membership_id,
+        response_deadline=evaluation.response_deadline,
+        approval_requested_at=evaluation.approval_requested_at,
+        approval_requested_by_membership_id=evaluation.approval_requested_by_membership_id,
+        approval_decided_at=evaluation.approval_decided_at,
+        approval_decided_by_membership_id=evaluation.approval_decided_by_membership_id,
+        approval_comment=evaluation.approval_comment,
+        approval_snapshot_id=evaluation.approval_snapshot_id,
     )
 
 
@@ -140,13 +167,168 @@ def update_evaluation(
 ) -> EvaluationDetailResponse:
     try:
         evaluation = service.update_evaluation(
-            context.tenant_id, evaluation_id, body.name, body.description, actor=context
+            context.tenant_id,
+            evaluation_id,
+            body.name,
+            body.description,
+            body.response_deadline,
+            actor=context,
         )
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
     except InvalidTransitionError:
         raise HTTPException(status_code=409, detail="evaluation is not draft") from None
     return _evaluation_detail(evaluation)
+
+
+@router.post("/{evaluation_id}/approver", response_model=EvaluationDetailResponse)
+def set_approver(
+    evaluation_id: str,
+    body: SetApproverRequest,
+    context: ActorContext = Depends(require_owner),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    try:
+        evaluation = service.set_approver(
+            context.tenant_id, evaluation_id, body.approver_membership_id, actor=context
+        )
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except ApproverMembershipNotFoundError:
+        raise HTTPException(status_code=404, detail="approver membership not found") from None
+    except ApproverRoleMismatchError:
+        raise HTTPException(
+            status_code=400, detail="target membership does not hold the approver role"
+        ) from None
+    except SelfApprovalError:
+        raise HTTPException(
+            status_code=400, detail="the evaluation owner may not be their own approver"
+        ) from None
+    except InvalidTransitionError:
+        raise HTTPException(
+            status_code=409, detail="evaluation is not draft or approval is already in progress"
+        ) from None
+    return _evaluation_detail(evaluation)
+
+
+@router.post("/{evaluation_id}/request-approval", response_model=EvaluationDetailResponse)
+def request_approval(
+    evaluation_id: str,
+    context: ActorContext = Depends(require_owner),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    try:
+        evaluation = service.request_approval(context.tenant_id, evaluation_id, actor=context)
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="evaluation is not draft") from None
+    except ApprovalPreconditionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return _evaluation_detail(evaluation)
+
+
+@router.delete("/{evaluation_id}/request-approval", status_code=204)
+def withdraw_approval_request(
+    evaluation_id: str,
+    context: ActorContext = Depends(require_owner),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> None:
+    try:
+        service.withdraw_approval_request(context.tenant_id, evaluation_id, actor=context)
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="approval is not pending") from None
+
+
+@router.post("/{evaluation_id}/approve", response_model=EvaluationDetailResponse)
+def approve_evaluation(
+    evaluation_id: str,
+    body: ApprovalDecisionRequest,
+    context: ActorContext = Depends(require_approver),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    try:
+        evaluation = service.approve(context.tenant_id, evaluation_id, body.comment, actor=context)
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except NotAssignedApproverError:
+        raise HTTPException(
+            status_code=403, detail="only the assigned approver may decide this evaluation"
+        ) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="approval is not pending") from None
+    return _evaluation_detail(evaluation)
+
+
+@router.post("/{evaluation_id}/reject", response_model=EvaluationDetailResponse)
+def reject_evaluation(
+    evaluation_id: str,
+    body: RejectionRequest,
+    context: ActorContext = Depends(require_approver),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    try:
+        evaluation = service.reject(context.tenant_id, evaluation_id, body.comment, actor=context)
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except NotAssignedApproverError:
+        raise HTTPException(
+            status_code=403, detail="only the assigned approver may decide this evaluation"
+        ) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="approval is not pending") from None
+    return _evaluation_detail(evaluation)
+
+
+@router.get("/{evaluation_id}/publication-readiness", response_model=PublicationReadinessResponse)
+def publication_readiness(
+    evaluation_id: str,
+    context: ActorContext = Depends(require_buyer_read),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> PublicationReadinessResponse:
+    try:
+        readiness = service.publication_readiness(context.tenant_id, evaluation_id)
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    return PublicationReadinessResponse(**readiness)
+
+
+def _snapshot_response(snapshot: EvaluationSnapshot) -> EvaluationSnapshotResponse:
+    return EvaluationSnapshotResponse(
+        snapshot_id=snapshot.snapshot_id,
+        evaluation_id=snapshot.evaluation_id,
+        taken_at=snapshot.taken_at,
+        evaluation_name=snapshot.evaluation_name,
+        evaluation_description=snapshot.evaluation_description,
+        requirements=[_requirement_response(r) for r in snapshot.requirements],
+        dimension_weights=snapshot.dimension_weights,
+        linked_vendor_org_ids=snapshot.linked_vendor_org_ids,
+        vendor_org_names=snapshot.vendor_org_names,
+        response_deadline=snapshot.response_deadline,
+        approver_membership_id=snapshot.approver_membership_id,
+        approval_requested_at=snapshot.approval_requested_at,
+        approval_requested_by_membership_id=snapshot.approval_requested_by_membership_id,
+        approval_decided_at=snapshot.approval_decided_at,
+        approval_decided_by_membership_id=snapshot.approval_decided_by_membership_id,
+        approval_comment=snapshot.approval_comment,
+        published_by_membership_id=snapshot.published_by_membership_id,
+        published_at=snapshot.published_at,
+    )
+
+
+@router.get("/{evaluation_id}/snapshot", response_model=EvaluationSnapshotResponse)
+def get_snapshot(
+    evaluation_id: str,
+    context: ActorContext = Depends(require_buyer_read),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationSnapshotResponse:
+    try:
+        snapshot = service.get_snapshot(context.tenant_id, evaluation_id)
+    except SnapshotNotFoundError:
+        raise HTTPException(status_code=404) from None
+    return _snapshot_response(snapshot)
 
 
 @router.post("/{evaluation_id}/requirements", response_model=RequirementResponse, status_code=201)

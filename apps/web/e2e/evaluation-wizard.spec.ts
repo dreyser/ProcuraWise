@@ -76,7 +76,34 @@ test.describe('evaluation wizard (Fase 10)', () => {
     await expect(page.getByText('Proveedores vinculados (1 / 6)')).toBeVisible()
     await page.getByRole('button', { name: 'Siguiente' }).click()
 
-    // Step 4: review, then the real start-collection transition.
+    // Step 4: internal approval (Fase 12) - start-collection is now gated on
+    // approval_status === "approved", so publishing requires the assigned
+    // approver's decision before the owner can proceed. Every navigation
+    // below is an in-app link click, never `page.goto` - the buyer access
+    // token lives only in memory (AUTH-PROD scope decision #2), and a real
+    // browser navigation (unlike a client-side <Link>) reloads the SPA from
+    // scratch, wiping it and bouncing back to /login.
+    await page.getByLabel('Aprobador').click()
+    await page.getByRole('option', { name: 'Aprobador A' }).click()
+    await page.getByLabel('Fecha límite de respuesta').fill('2030-01-01')
+    await page.getByRole('button', { name: 'Solicitar aprobación' }).click()
+    await expect(page.getByText('Aprobación pendiente')).toBeVisible()
+
+    await loginAsBuyer(page, 'approver.a@dev.procurawise.local')
+    await page.waitForURL('**/evaluations', wait)
+    await page.getByRole('link', { name }).click()
+    await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
+    await page.getByRole('link', { name: 'Aprobación' }).click()
+    await page.getByRole('button', { name: 'Aprobar' }).click()
+    await expect(page.getByText('Aprobada')).toBeVisible()
+
+    // Owner logs back in and publishes - the real start-collection
+    // transition, from the same wizard step-4 button used before Fase 12.
+    await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
+    await page.waitForURL('**/evaluations', wait)
+    const row = page.getByRole('row').filter({ hasText: name })
+    await row.getByRole('link', { name: 'Continuar configuración' }).click()
+    await page.waitForURL(/\/evaluations\/[a-f0-9]+\/wizard$/, wait)
     await page.getByRole('button', { name: 'Iniciar recepción de propuestas' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Iniciar recepción' }).click()
 

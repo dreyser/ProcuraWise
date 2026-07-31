@@ -66,6 +66,13 @@ export const scoringStatusLabels = {
   complete: 'Calificación completa',
 } as const satisfies Record<string, string>
 
+export const approvalStatusLabels = {
+  not_requested: 'Sin solicitar',
+  pending: 'Aprobación pendiente',
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+} as const satisfies Record<string, string>
+
 function translate<T extends Record<string, string>>(map: T, key: string): string {
   return key in map ? map[key as keyof T] : key
 }
@@ -84,3 +91,5 @@ export const translateScoringStatus = (value: string): string =>
   translate(scoringStatusLabels, value)
 export const translateAssignmentStatus = (value: string): string =>
   translate(assignmentStatusLabels, value)
+export const translateApprovalStatus = (value: string): string =>
+  translate(approvalStatusLabels, value)

@@ -36,6 +36,10 @@ import { normalizeApiError } from '@/lib/errors'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
 import { VendorCatalogPicker } from '@/features/evaluations/components/VendorCatalogPicker'
 import { startCollectionPreconditionReasons } from '@/features/evaluations/lib/evaluationReadiness'
+import {
+  APPROVAL_INVALIDATED_MESSAGE,
+  useApprovalInvalidationNotice,
+} from '@/features/evaluations/lib/useApprovalInvalidationNotice'
 
 const MAX_LINKED_VENDORS = 6
 
@@ -89,6 +93,8 @@ export function VendorsPage() {
     },
   })
 
+  const invalidationNotice = useApprovalInvalidationNotice(evaluation?.approval_status)
+
   if (evaluationQuery.isLoading) return <LoadingState label="Cargando proveedores…" />
   if (evaluationQuery.error instanceof ApiError && evaluationQuery.error.status === 404) {
     return <ErrorBanner message="Esta evaluación no está disponible." />
@@ -112,6 +118,16 @@ export function VendorsPage() {
         <StatusBadge label={translateEvaluationStatus(evaluation.status)} />
       </div>
       <EvaluationTabNav evaluationId={evaluation.id} />
+
+      {invalidationNotice.visible && (
+        <div className="mt-4">
+          <ErrorBanner
+            variant="info"
+            message={APPROVAL_INVALIDATED_MESSAGE}
+            onDismiss={invalidationNotice.dismiss}
+          />
+        </div>
+      )}
 
       <section className="mt-6">
         <h2 className="text-sm font-semibold text-foreground">

@@ -79,6 +79,53 @@ def bearer_headers_for(membership_id: str, mongo_test_settings: Settings) -> dic
     return {"Authorization": f"Bearer {token}"}
 
 
+def approve_and_publish(
+    client,
+    owner_headers: dict[str, str],
+    approver_membership_id: str,
+    approver_headers: dict[str, str],
+    evaluation_id: str,
+    *,
+    response_deadline: str = "2030-01-01T00:00:00Z",
+) -> None:
+    """Fase 12 precursor every start-collection call now requires: set a
+    response_deadline + approver, request approval, have the assigned
+    approver approve, then publish. Every pre-Fase-12 test that reaches
+    collecting_responses by calling start-collection directly must run this
+    first - see plan §22/§32 Blocker 1-3."""
+    deadline_response = client.patch(
+        f"/api/v1/evaluations/{evaluation_id}",
+        json={"response_deadline": response_deadline},
+        headers=owner_headers,
+    )
+    assert deadline_response.status_code == 200, deadline_response.text
+
+    approver_response = client.post(
+        f"/api/v1/evaluations/{evaluation_id}/approver",
+        json={"approver_membership_id": approver_membership_id},
+        headers=owner_headers,
+    )
+    assert approver_response.status_code == 200, approver_response.text
+
+    request_response = client.post(
+        f"/api/v1/evaluations/{evaluation_id}/request-approval",
+        headers=owner_headers,
+    )
+    assert request_response.status_code == 200, request_response.text
+
+    approve_response = client.post(
+        f"/api/v1/evaluations/{evaluation_id}/approve",
+        json={},
+        headers=approver_headers,
+    )
+    assert approve_response.status_code == 200, approve_response.text
+
+    publish_response = client.post(
+        f"/api/v1/evaluations/{evaluation_id}/start-collection", headers=owner_headers
+    )
+    assert publish_response.status_code == 200, publish_response.text
+
+
 def unique_actor_by_role(seeded_actors: dict[tuple[str, str], str], role: str) -> tuple[str, str]:
     """Resolves (tenant_id, membership_id) for the seeded actor with this
     role, asserting there is exactly one."""

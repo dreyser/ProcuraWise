@@ -1,6 +1,6 @@
 import pytest
 
-from tests.conftest import bearer_headers_for, tenant_ids, unique_actor_by_role
+from tests.conftest import approve_and_publish, bearer_headers_for, tenant_ids, unique_actor_by_role
 
 pytestmark = pytest.mark.docker
 
@@ -141,10 +141,11 @@ def test_evaluation_lifecycle_generates_exactly_the_expected_audit_events(
     )
     assert relinked.status_code == 201
 
-    started_collection = client.post(
-        f"/api/v1/evaluations/{evaluation_id}/start-collection", headers=owner_headers
+    approver_membership_id = seeded_actors[(tenant_a, "approver")]
+    approver_headers = bearer_headers_for(approver_membership_id, mongo_test_settings)
+    approve_and_publish(
+        client, owner_headers, approver_membership_id, approver_headers, evaluation_id
     )
-    assert started_collection.status_code == 200
 
     started_evaluation = client.post(
         f"/api/v1/evaluations/{evaluation_id}/start-evaluation", headers=owner_headers
@@ -165,17 +166,29 @@ def test_evaluation_lifecycle_generates_exactly_the_expected_audit_events(
         "vendor_linked",
         "vendor_unlinked",
         "vendor_linked",
+        "evaluation_updated",
+        "evaluation_approver_set",
+        "evaluation_approval_requested",
+        "evaluation_approved",
         "evaluation_collection_started",
+        "evaluation_published",
         "evaluation_scoring_started",
     ]
 
-    # Every event: server-derived actor/tenant fields, never trusted from a body.
+    # Every event: server-derived actor/tenant fields, never trusted from a
+    # body. evaluation_approved is the one action in this sequence performed
+    # by the approver, not the owner (plan §17 - only the assigned approver
+    # may decide).
     for event in events:
         assert event["tenant_id"] == tenant_a
-        assert event["actor_membership_id"] == owner_membership_id
-        assert event["actor_role"] == "evaluation_owner"
-        assert event["actor_type"] == "buyer"
         assert event["outcome"] == "success"
+        assert event["actor_type"] == "buyer"
+        if event["action"] == "evaluation_approved":
+            assert event["actor_membership_id"] == approver_membership_id
+            assert event["actor_role"] == "approver"
+        else:
+            assert event["actor_membership_id"] == owner_membership_id
+            assert event["actor_role"] == "evaluation_owner"
 
     created_event = events[0]
     assert created_event["metadata"] == {"name": "Audit RFP"}
@@ -208,13 +221,17 @@ def test_evaluation_lifecycle_generates_exactly_the_expected_audit_events(
     assert vendor_unlinked_event["action"] == "vendor_unlinked"
     assert vendor_unlinked_event["metadata"] == {"vendor_org_id": vendor_org_id}
 
-    collection_started_event = events[10]
+    collection_started_event = events[14]
     assert collection_started_event["metadata"] == {
         "from_status": "draft",
         "to_status": "collecting_responses",
     }
 
-    evaluation_started_event = events[11]
+    published_event = events[15]
+    assert published_event["action"] == "evaluation_published"
+    assert published_event["snapshot_id"] == evaluation_id
+
+    evaluation_started_event = events[16]
     assert evaluation_started_event["action"] == "evaluation_scoring_started"
     assert evaluation_started_event["metadata"] == {
         "from_status": "collecting_responses",

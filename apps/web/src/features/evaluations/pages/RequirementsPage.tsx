@@ -36,6 +36,10 @@ import {
   RequirementForm,
   type RequirementSubmitPayload,
 } from '@/features/evaluations/components/RequirementForm'
+import {
+  APPROVAL_INVALIDATED_MESSAGE,
+  useApprovalInvalidationNotice,
+} from '@/features/evaluations/lib/useApprovalInvalidationNotice'
 
 type Dimension = 'functional' | 'technical'
 type FormTarget =
@@ -70,6 +74,8 @@ export function RequirementsPage() {
     useDeleteRequirementApiV1EvaluationsEvaluationIdRequirementsRequirementIdDelete({
       mutation: { onSuccess: invalidateEvaluation },
     })
+
+  const invalidationNotice = useApprovalInvalidationNotice(evaluation?.approval_status)
 
   if (isLoading) return <LoadingState label="Cargando requerimientos…" />
   if (error instanceof ApiError && error.status === 404) {
@@ -267,6 +273,16 @@ export function RequirementsPage() {
         <StatusBadge label={translateEvaluationStatus(evaluation.status)} />
       </div>
       <EvaluationTabNav evaluationId={evaluation.id} />
+
+      {invalidationNotice.visible && (
+        <div className="mt-4">
+          <ErrorBanner
+            variant="info"
+            message={APPROVAL_INVALIDATED_MESSAGE}
+            onDismiss={invalidationNotice.dismiss}
+          />
+        </div>
+      )}
 
       {!canEdit && (
         <p className="mt-4 text-sm text-muted-foreground">

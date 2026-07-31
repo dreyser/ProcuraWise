@@ -53,6 +53,34 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
   const evaluationId = page.url().split('/evaluations/')[1]
 
+  // 1b. Internal approval (Fase 12) - start-collection now requires
+  // approval_status === "approved". This seeded evaluation starts
+  // "not_requested" (dev_seed.py leaves it that way on purpose), so the
+  // owner requests approval and the assigned approver decides before
+  // publication can proceed. Every navigation below is an in-app link
+  // click, never `page.goto` - the buyer access token lives only in memory
+  // (AUTH-PROD scope decision #2), and a real browser navigation reloads
+  // the SPA from scratch, wiping it and bouncing back to /login.
+  await page.getByRole('link', { name: 'Aprobación' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/approval`, wait)
+  await page.getByLabel('Aprobador').click()
+  await page.getByRole('option', { name: 'Aprobador A' }).click()
+  await page.getByLabel('Fecha límite de respuesta').fill('2030-01-01')
+  await page.getByRole('button', { name: 'Solicitar aprobación' }).click()
+  await expect(page.getByText('Aprobación pendiente')).toBeVisible()
+
+  await loginAsBuyer(page, 'approver.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
+  await page.getByRole('link', { name: 'Aprobación' }).click()
+  await page.getByRole('button', { name: 'Aprobar' }).click()
+  await expect(page.getByText('Aprobada')).toBeVisible()
+
+  await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
   await page.getByRole('link', { name: 'Proveedores' }).click()
   await page.waitForURL(`**/evaluations/${evaluationId}/vendors`, wait)
   await page.getByRole('button', { name: 'Iniciar recepción de propuestas' }).click()

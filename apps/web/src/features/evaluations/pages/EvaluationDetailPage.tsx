@@ -22,6 +22,10 @@ import { Label } from '@/components/ui/label'
 import { translateEvaluationStatus } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
+import {
+  APPROVAL_INVALIDATED_MESSAGE,
+  useApprovalInvalidationNotice,
+} from '@/features/evaluations/lib/useApprovalInvalidationNotice'
 
 const schema = z.object({
   name: z.string().trim().min(1, 'El nombre es obligatorio'),
@@ -68,6 +72,8 @@ export function EvaluationDetailPage() {
     },
   })
 
+  const invalidationNotice = useApprovalInvalidationNotice(evaluation?.approval_status)
+
   if (isLoading) return <LoadingState label="Cargando evaluación…" />
   if (error instanceof ApiError && error.status === 404) {
     return <ErrorBanner message="Esta evaluación no está disponible." />
@@ -91,6 +97,16 @@ export function EvaluationDetailPage() {
         <StatusBadge label={translateEvaluationStatus(evaluation.status)} />
       </div>
       <EvaluationTabNav evaluationId={evaluation.id} />
+
+      {invalidationNotice.visible && (
+        <div className="mt-4">
+          <ErrorBanner
+            variant="info"
+            message={APPROVAL_INVALIDATED_MESSAGE}
+            onDismiss={invalidationNotice.dismiss}
+          />
+        </div>
+      )}
 
       <div className="mt-4">
         {canEdit ? (

@@ -1,7 +1,7 @@
 import pytest
 
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from tests.conftest import bearer_headers_for, unique_actor_by_role
+from tests.conftest import approve_and_publish, bearer_headers_for, unique_actor_by_role
 
 pytestmark = pytest.mark.docker
 
@@ -76,7 +76,11 @@ def test_autosave_never_generates_an_audit_event_only_submit_does(
     )
     proposal_id = link.json()["id"]
 
-    client.post(f"/api/v1/evaluations/{evaluation_id}/start-collection", headers=owner_headers)
+    approver_membership_id = seeded_actors[(tenant_a, "approver")]
+    approver_headers = bearer_headers_for(approver_membership_id, mongo_test_settings)
+    approve_and_publish(
+        client, owner_headers, approver_membership_id, approver_headers, evaluation_id
+    )
 
     # Three autosave writes - none of these should ever produce an AuditEvent.
     for i, value in enumerate(["draft-1", "draft-2", "final answer"]):
@@ -181,7 +185,11 @@ def test_rejected_submit_does_not_generate_an_audit_event(
         json={"vendor_org_id": vendor_org_id},
         headers=owner_headers,
     ).json()["id"]
-    client.post(f"/api/v1/evaluations/{evaluation_id}/start-collection", headers=owner_headers)
+    approver_membership_id = seeded_actors[(tenant_a, "approver")]
+    approver_headers = bearer_headers_for(approver_membership_id, mongo_test_settings)
+    approve_and_publish(
+        client, owner_headers, approver_membership_id, approver_headers, evaluation_id
+    )
 
     rejected = client.post(
         f"/api/v1/vendor-portal/proposals/{proposal_id}/submit",

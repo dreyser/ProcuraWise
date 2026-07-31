@@ -1,7 +1,7 @@
 import pytest
 
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from tests.conftest import bearer_headers_for, unique_actor_by_role
+from tests.conftest import approve_and_publish, bearer_headers_for, unique_actor_by_role
 
 pytestmark = pytest.mark.docker
 
@@ -78,9 +78,12 @@ def test_vertical_slice_happy_path(client, seeded_actors, mongo_test_settings) -
     assert link.status_code == 201
     proposal_id = link.json()["id"]
 
-    start_collection = client.post(
-        f"/api/v1/evaluations/{evaluation_id}/start-collection", headers=owner_headers
+    approver_membership_id = seeded_actors[(tenant_a, "approver")]
+    approver_headers = bearer_headers_for(approver_membership_id, mongo_test_settings)
+    approve_and_publish(
+        client, owner_headers, approver_membership_id, approver_headers, evaluation_id
     )
+    start_collection = client.get(f"/api/v1/evaluations/{evaluation_id}", headers=owner_headers)
     assert start_collection.status_code == 200
     assert start_collection.json()["status"] == "collecting_responses"
 
