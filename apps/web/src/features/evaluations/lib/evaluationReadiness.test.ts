@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   hasCompleteWeights,
   hasLinkedVendor,
+  isReadyToRequestApproval,
   isReadyToStartCollection,
+  requestApprovalPreconditionReasons,
   startCollectionPreconditionReasons,
   weightOf,
 } from './evaluationReadiness'
@@ -42,6 +44,15 @@ function evaluation(overrides: Partial<EvaluationDetailResponse>): EvaluationDet
     collecting_responses_started_at: null,
     evaluating_started_at: null,
     completed_at: null,
+    approval_status: 'not_requested',
+    approver_membership_id: null,
+    response_deadline: null,
+    approval_requested_at: null,
+    approval_requested_by_membership_id: null,
+    approval_decided_at: null,
+    approval_decided_by_membership_id: null,
+    approval_comment: null,
+    approval_snapshot_id: null,
     ...overrides,
   }
 }
@@ -84,21 +95,47 @@ describe('evaluationReadiness', () => {
 
   it('reports one reason per unmet precondition, in order', () => {
     const reasons = startCollectionPreconditionReasons(evaluation({}))
-    expect(reasons).toHaveLength(3)
+    expect(reasons).toHaveLength(4)
     expect(reasons[0]).toContain('funcionales')
     expect(reasons[1]).toContain('técnicos')
     expect(reasons[2]).toContain('proveedor')
+    expect(reasons[3]).toContain('aprobada')
   })
 
-  it('isReadyToStartCollection is true only once every precondition is met', () => {
-    const ready = evaluation({
+  it('isReadyToStartCollection is true only once every precondition is met, including approval', () => {
+    const readyButNotApproved = evaluation({
       requirements: [
         requirement({ dimension: 'functional', weight: 40 }),
         requirement({ dimension: 'technical', weight: 20 }),
       ],
       linked_vendor_count: 1,
     })
+    expect(startCollectionPreconditionReasons(readyButNotApproved)).toHaveLength(1)
+    expect(isReadyToStartCollection(readyButNotApproved)).toBe(false)
+
+    const ready = evaluation({ ...readyButNotApproved, approval_status: 'approved' })
     expect(startCollectionPreconditionReasons(ready)).toHaveLength(0)
     expect(isReadyToStartCollection(ready)).toBe(true)
+  })
+
+  it('requestApprovalPreconditionReasons requires approver and response_deadline too', () => {
+    const readyWeightsAndVendor = evaluation({
+      requirements: [
+        requirement({ dimension: 'functional', weight: 40 }),
+        requirement({ dimension: 'technical', weight: 20 }),
+      ],
+      linked_vendor_count: 1,
+    })
+    const reasons = requestApprovalPreconditionReasons(readyWeightsAndVendor)
+    expect(reasons).toHaveLength(2)
+    expect(isReadyToRequestApproval(readyWeightsAndVendor)).toBe(false)
+
+    const ready = evaluation({
+      ...readyWeightsAndVendor,
+      approver_membership_id: 'approver-1',
+      response_deadline: '2030-01-01T00:00:00Z',
+    })
+    expect(requestApprovalPreconditionReasons(ready)).toHaveLength(0)
+    expect(isReadyToRequestApproval(ready)).toBe(true)
   })
 })

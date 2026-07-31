@@ -116,6 +116,90 @@ def test_vendor_organizations_endpoint_excludes_other_tenants(
     assert names_a.isdisjoint(names_b)
 
 
+def test_evaluation_approval_routes_are_tenant_isolated(
+    client, seeded_actors, mongo_test_settings
+) -> None:
+    """CLAUDE.md §4: every new tenant-scoped route needs a negative
+    cross-tenant isolation test - Fase 12's approval/publication endpoints
+    are no exception. approve/reject are role-gated to "approver" first
+    (shared.context.require_role), so a same-tenant-B actor holding that
+    role (owner_b's second Membership - dev_seed.py's "roles acumulables"
+    fixture) is required to actually exercise the tenant-scoped lookup
+    rather than just tripping the role check."""
+    tenant_a, tenant_b = _tenant_ids(seeded_actors)
+    owner_a_headers = _bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    owner_b_headers = _bearer_headers_for(
+        seeded_actors[(tenant_b, "evaluation_owner")], mongo_test_settings
+    )
+    approver_b_headers = _bearer_headers_for(
+        seeded_actors[(tenant_b, "approver")], mongo_test_settings
+    )
+    approver_a_id = seeded_actors[(tenant_a, "approver")]
+
+    evaluation_id = client.post(
+        "/api/v1/evaluations",
+        json={"name": "Isolation Approval RFP", "description": ""},
+        headers=owner_a_headers,
+    ).json()["id"]
+
+    assert (
+        client.post(
+            f"/api/v1/evaluations/{evaluation_id}/approver",
+            json={"approver_membership_id": approver_a_id},
+            headers=owner_b_headers,
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/api/v1/evaluations/{evaluation_id}/request-approval", headers=owner_b_headers
+        ).status_code
+        == 404
+    )
+    assert (
+        client.delete(
+            f"/api/v1/evaluations/{evaluation_id}/request-approval", headers=owner_b_headers
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get(
+            f"/api/v1/evaluations/{evaluation_id}/publication-readiness", headers=owner_b_headers
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get(
+            f"/api/v1/evaluations/{evaluation_id}/snapshot", headers=owner_b_headers
+        ).status_code
+        == 404
+    )
+
+    # Real tenant_a approver assigned, so approve/reject below fail on
+    # tenant scope, not merely on "not the assigned approver".
+    client.post(
+        f"/api/v1/evaluations/{evaluation_id}/approver",
+        json={"approver_membership_id": approver_a_id},
+        headers=owner_a_headers,
+    )
+    assert (
+        client.post(
+            f"/api/v1/evaluations/{evaluation_id}/approve", json={}, headers=approver_b_headers
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/api/v1/evaluations/{evaluation_id}/reject",
+            json={"comment": "x"},
+            headers=approver_b_headers,
+        ).status_code
+        == 404
+    )
+
+
 def test_seed_dev_is_idempotent(mongo_test_settings: Settings, mongo_test_db) -> None:
     first = seed(mongo_test_settings)
     second = seed(mongo_test_settings)

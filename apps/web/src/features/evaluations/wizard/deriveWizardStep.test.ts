@@ -36,6 +36,15 @@ function evaluation(overrides: Partial<EvaluationDetailResponse>): EvaluationDet
     collecting_responses_started_at: null,
     evaluating_started_at: null,
     completed_at: null,
+    approval_status: 'not_requested',
+    approver_membership_id: null,
+    response_deadline: null,
+    approval_requested_at: null,
+    approval_requested_by_membership_id: null,
+    approval_decided_at: null,
+    approval_decided_by_membership_id: null,
+    approval_comment: null,
+    approval_snapshot_id: null,
     ...overrides,
   }
 }

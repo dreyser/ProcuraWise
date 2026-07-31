@@ -7,7 +7,7 @@ from procurawise.identity.repository import (
     UserRepository,
     VendorOrganizationRepository,
 )
-from tests.conftest import bearer_headers_for, unique_actor_by_role
+from tests.conftest import approve_and_publish, bearer_headers_for, unique_actor_by_role
 
 pytestmark = pytest.mark.docker
 
@@ -47,12 +47,19 @@ def _requirement_payload(dimension: str, weight: float) -> dict:
 
 
 def _create_submittable_proposal(
-    client, owner_headers: dict, vendor_org_id: str
+    client,
+    owner_headers: dict,
+    vendor_org_id: str,
+    *,
+    tenant_id: str,
+    seeded_actors: dict,
+    mongo_test_settings,
 ) -> tuple[str, str]:
-    """Creates an evaluation with valid weights, links vendor_org_id, and
-    starts collection - both requirements are optional (required=False) so
-    the resulting Proposal can submit immediately without answering
-    anything. Returns (evaluation_id, proposal_id)."""
+    """Creates an evaluation with valid weights, links vendor_org_id, runs
+    it through the Fase 12 approval workflow, and publishes - both
+    requirements are optional (required=False) so the resulting Proposal
+    can submit immediately without answering anything. Returns
+    (evaluation_id, proposal_id)."""
     evaluation_id = client.post(
         "/api/v1/evaluations",
         json={"name": "Isolation RFP", "description": ""},
@@ -73,7 +80,11 @@ def _create_submittable_proposal(
         json={"vendor_org_id": vendor_org_id},
         headers=owner_headers,
     ).json()["id"]
-    client.post(f"/api/v1/evaluations/{evaluation_id}/start-collection", headers=owner_headers)
+    approver_membership_id = seeded_actors[(tenant_id, "approver")]
+    approver_headers = bearer_headers_for(approver_membership_id, mongo_test_settings)
+    approve_and_publish(
+        client, owner_headers, approver_membership_id, approver_headers, evaluation_id
+    )
     return evaluation_id, proposal_id
 
 
@@ -121,7 +132,12 @@ def test_vendor_contact_cannot_see_another_vendor_orgs_proposal(
     vendor_b_headers = {DEV_ACTOR_HEADER: vendor_b_membership_id}
 
     _evaluation_id, proposal_id = _create_submittable_proposal(
-        client, owner_headers, vendor_a_org_id
+        client,
+        owner_headers,
+        vendor_a_org_id,
+        tenant_id=tenant_a,
+        seeded_actors=seeded_actors,
+        mongo_test_settings=mongo_test_settings,
     )
 
     response = client.get(
@@ -232,7 +248,14 @@ def test_submitted_proposal_rejects_further_answer_edits(
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
-    evaluation_id, proposal_id = _create_submittable_proposal(client, owner_headers, vendor_org_id)
+    evaluation_id, proposal_id = _create_submittable_proposal(
+        client,
+        owner_headers,
+        vendor_org_id,
+        tenant_id=tenant_a,
+        seeded_actors=seeded_actors,
+        mongo_test_settings=mongo_test_settings,
+    )
     requirement_id = client.get(
         f"/api/v1/evaluations/{evaluation_id}", headers=owner_headers
     ).json()["requirements"][0]["id"]
@@ -261,7 +284,14 @@ def test_stale_proposal_version_is_rejected(client, seeded_actors, mongo_test_se
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
-    evaluation_id, proposal_id = _create_submittable_proposal(client, owner_headers, vendor_org_id)
+    evaluation_id, proposal_id = _create_submittable_proposal(
+        client,
+        owner_headers,
+        vendor_org_id,
+        tenant_id=tenant_a,
+        seeded_actors=seeded_actors,
+        mongo_test_settings=mongo_test_settings,
+    )
     requirement_id = client.get(
         f"/api/v1/evaluations/{evaluation_id}", headers=owner_headers
     ).json()["requirements"][0]["id"]
@@ -287,7 +317,14 @@ def test_score_cannot_reference_requirement_outside_snapshot(
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
-    evaluation_id, proposal_id = _create_submittable_proposal(client, owner_headers, vendor_org_id)
+    evaluation_id, proposal_id = _create_submittable_proposal(
+        client,
+        owner_headers,
+        vendor_org_id,
+        tenant_id=tenant_a,
+        seeded_actors=seeded_actors,
+        mongo_test_settings=mongo_test_settings,
+    )
     client.post(
         f"/api/v1/vendor-portal/proposals/{proposal_id}/submit",
         json={"expected_version": 1},
@@ -314,7 +351,14 @@ def test_score_out_of_range_is_rejected(client, seeded_actors, mongo_test_settin
     vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
 
-    evaluation_id, proposal_id = _create_submittable_proposal(client, owner_headers, vendor_org_id)
+    evaluation_id, proposal_id = _create_submittable_proposal(
+        client,
+        owner_headers,
+        vendor_org_id,
+        tenant_id=tenant_a,
+        seeded_actors=seeded_actors,
+        mongo_test_settings=mongo_test_settings,
+    )
     requirement_id = client.get(
         f"/api/v1/evaluations/{evaluation_id}", headers=owner_headers
     ).json()["requirements"][0]["id"]

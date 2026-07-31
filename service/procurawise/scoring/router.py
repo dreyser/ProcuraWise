@@ -78,6 +78,15 @@ def _evaluation_detail(evaluation: Evaluation) -> EvaluationDetailResponse:
         collecting_responses_started_at=evaluation.collecting_responses_started_at,
         evaluating_started_at=evaluation.evaluating_started_at,
         completed_at=evaluation.completed_at,
+        approval_status=evaluation.approval_status,
+        approver_membership_id=evaluation.approver_membership_id,
+        response_deadline=evaluation.response_deadline,
+        approval_requested_at=evaluation.approval_requested_at,
+        approval_requested_by_membership_id=evaluation.approval_requested_by_membership_id,
+        approval_decided_at=evaluation.approval_decided_at,
+        approval_decided_by_membership_id=evaluation.approval_decided_by_membership_id,
+        approval_comment=evaluation.approval_comment,
+        approval_snapshot_id=evaluation.approval_snapshot_id,
     )
 
 

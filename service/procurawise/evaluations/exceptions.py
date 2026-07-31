@@ -37,3 +37,33 @@ class CompletionPreconditionError(Exception):
     """evaluating -> completed was requested but not every submitted
     Proposal has a canonical Score for every scoreable requirement in its
     snapshot."""
+
+
+class ApproverMembershipNotFoundError(Exception):
+    """target approver_membership_id does not exist in the caller's tenant."""
+
+
+class ApproverRoleMismatchError(Exception):
+    """The target Membership's role is not "approver"."""
+
+
+class SelfApprovalError(Exception):
+    """The target approver shares a user_id with the evaluation's creator -
+    an owner may not appoint themselves as their own approver (plan §18)."""
+
+
+class ApprovalPreconditionError(Exception):
+    """request_approval was called but a precondition (weights complete,
+    at least one vendor linked, approver assigned, response_deadline set)
+    is not met."""
+
+
+class NotAssignedApproverError(Exception):
+    """approve/reject was called by someone other than the evaluation's
+    assigned approver_membership_id."""
+
+
+class SnapshotNotFoundError(Exception):
+    """No EvaluationSnapshot exists yet for this evaluation - either it has
+    never been published, or (plan §29) it was published before Fase 12
+    existed and has no retroactive snapshot."""

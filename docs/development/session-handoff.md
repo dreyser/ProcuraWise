@@ -32,6 +32,38 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-07-31 — Fase 12 (E4): Aprobación interna + publicación + snapshot inmutable
+
+**Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo sobre docs/ADRs/git, backend, y frontend; luego un agente Plan de diseño técnico detallado) seguida de 4 preguntas bloqueantes de arquitectura resueltas explícitamente por el founder vía `AskUserQuestion` antes de implementar (las 4 resueltas con la opción recomendada), más 3 bloqueantes residuales de menor riesgo resueltos en la misma sesión de planeación. Tras la aprobación del plan, implementación completa en 7 bloques incrementales, cada uno verificado contra Docker real antes de avanzar.
+
+**Decisiones bloqueantes resueltas por el founder (2026-07-31):**
+1. Forma del ciclo de vida: gatear la transición `draft → collecting_responses` existente con un campo nuevo `approval_status`, sin agregar valores nuevos a `EvaluationStatus`.
+2. Aprobar y publicar son dos acciones separadas (no una combinada).
+3. Aprobador preasignado (`approver_membership_id`), elegido por el owner, con auto-aprobación bloqueada server-side.
+4. "Pesos" del backlog = el chequeo de completitud de pesos ya existente (40/20), no un sistema de pesos nuevo.
+
+**Archivos tocados:** ver el listado completo por bloque en `current-phase.md` — resumen: `evaluations/{models,repository,service,router,schemas,exceptions}.py` + `snapshot_repository.py` (nuevo) + `migrations/0007_*.py` (backend); `WizardStepReview.tsx`, `EvaluationApprovalPage.tsx` (nueva), `useApprovalInvalidationNotice.ts` (nuevo), `evaluationReadiness.ts`, `ErrorBanner.tsx`, `EvaluationTabNav.tsx`, `RequirementsPage.tsx`/`VendorsPage.tsx`/`EvaluationDetailPage.tsx` (frontend); `dev_seed.py`; 3 specs E2E nuevos/actualizados; 8 archivos de test backend actualizados para pasar por el flujo de aprobación antes de publicar.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- `make test` → 96 passed backend + 96 passed frontend.
+- `make test-integration` (Docker real) → 146 passed (+6 sobre la base de Fase 10/9).
+- `make test-e2e` (Docker + Playwright real) → 6 specs passed.
+- `make contracts` corrido dos veces seguidas → sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Snapshot en colección separada (`evaluation_snapshots`, repositorio insert-only) en vez de embebido en `Evaluation` — justificado por `requirements` sin límite (a diferencia de `MAX_LINKED_VENDORS`) y por inmutabilidad estructural (sin método de update/delete) en vez de solo un filtro condicional. No requiere ADR nuevo bajo CLAUDE.md §3 (no cambia monolito/BD/hosting/patrón de comunicación), pero sería un candidato razonable a un ADR corto siguiendo el precedente de ADR 0008/0009/0013 — no creado en esta sesión, queda como recomendación no bloqueante.
+- Invalidación suave (no bloqueo duro) de la aprobación al editar mientras `pending`/`approved`, con aviso explícito en el frontend en vez de solo un badge — confirmado por el founder junto con los bloqueantes residuales.
+
+**Deuda técnica introducida:**
+- El aviso de invalidación de aprobación no está cableado en los pasos 1-3 del wizard (`WizardStepMetadata`/`WizardStepRequirements`/`WizardStepVendors`), solo en las páginas dedicadas (`RequirementsPage`/`VendorsPage`/`EvaluationDetailPage`) y en el paso 4 (`WizardStepReview`). El wizard sigue siendo alcanzable mientras `approval_status` es `pending`/`approved` (no cambia `EvaluationStatus`), así que editar ahí sin salir del wizard todavía no muestra el aviso explícito — el backend sí invalida correctamente en todos los casos, es solo una brecha de UX. Debe resolverse antes de considerar el flujo de aprobación "pulido" end-to-end, no es bloqueante para el criterio de aceptación del backlog.
+- No existe un endpoint dedicado de historial de aprobación (múltiples ciclos de solicitud/rechazo) — `EvaluationApprovalPage` solo muestra la última decisión desde los campos de `Evaluation`. El audit trail (Fase 8) sí conserva el historial completo si se necesita reconstruirlo.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: Fase 11 (`KnowledgeTemplate`, biblioteca de requerimientos, P1, depende de Fase 9) es la única fase restante de este bloque — Fase 12 queda cerrada.
+- Housekeeping pendiente de sesiones anteriores, opcional: `current-phase.md`'s scaffold final ("Próximos pasos"/"Bloqueos", debajo de todas las secciones de fase) sigue reflejando la era AUTH-PROD, no las fases más recientes — no se tocó en esta sesión por no ser parte del alcance de Fase 12.
+- No tocar todavía: `Colaborador proveedor`/auth real de proveedor (Fase 15), consola `platform_admin`/`Administrador del cliente` (Fase 25), dimensión económica real (Fase 19-20), versionado/reapertura de evaluaciones publicadas (Fase 21).
+
 ### Sesión — 2026-07-31 — Fase 10 (E4): Wizard guiado estático + autosave
 
 **Resumen:** Sesión de planeación en Plan Mode (2 rondas de agentes Explore en paralelo: documentación/roadmap/backlog primero para identificar la fase siguiente, luego código de `evaluations`/frontend existente para el inventario de reutilización) seguida de una única pregunta bloqueante resuelta explícitamente por el founder vía `AskUserQuestion` antes de implementar, y de implementación completa en 5 bloques incrementales (0-4), cada uno verificado antes de avanzar.

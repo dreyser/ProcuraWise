@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  translateApprovalStatus,
   translateCompliantStatus,
   translateDimension,
   translateEvaluationStatus,
@@ -66,6 +67,13 @@ describe('enumLabels translations', () => {
     for (const type of responseTypes) {
       expect(translateResponseType(type)).not.toBe(type)
     }
+  })
+
+  it('translates every real approval_status wire value', () => {
+    expect(translateApprovalStatus('not_requested')).toBe('Sin solicitar')
+    expect(translateApprovalStatus('pending')).toBe('Aprobación pendiente')
+    expect(translateApprovalStatus('approved')).toBe('Aprobada')
+    expect(translateApprovalStatus('rejected')).toBe('Rechazada')
   })
 
   it('falls back to the raw value for an unknown enum (never throws)', () => {

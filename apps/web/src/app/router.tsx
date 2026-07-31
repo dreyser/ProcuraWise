@@ -22,6 +22,7 @@ import { ResultsPage } from '@/features/scoring/pages/ResultsPage'
 import { VendorProposalListPage } from '@/features/vendor-portal/pages/VendorProposalListPage'
 import { VendorProposalDetailPage } from '@/features/vendor-portal/pages/VendorProposalDetailPage'
 import { AssignmentsPage } from '@/features/evaluations/pages/AssignmentsPage'
+import { EvaluationApprovalPage } from '@/features/evaluations/pages/EvaluationApprovalPage'
 
 // Fase 9 (RBAC completo, spec §4): tenant_admin/platform_admin are real,
 // backend-enforced roles that can authenticate, but have no dedicated UI
@@ -171,6 +172,14 @@ export function AppRouter() {
           element={
             <BuyerLayout>
               <AssignmentsPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/evaluations/:evaluationId/approval"
+          element={
+            <BuyerLayout>
+              <EvaluationApprovalPage />
             </BuyerLayout>
           }
         />

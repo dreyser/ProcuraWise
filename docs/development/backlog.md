@@ -38,7 +38,7 @@ Estado por fase se actualiza en [`docs/development/current-phase.md`](current-ph
 |---|---|---|---|---|---|
 | 10 | Wizard guiado estático (sin IA) + autosave | P0 | 9 | Flujo de creación de evaluación guiado paso a paso, sin pérdida de datos al recargar | ✅ Completed (2026-07-31) — implementado y verificado con Docker real: `make lint`/`typecheck`/`test`/`test-integration`/`test-e2e` en verde, `make contracts` sin diff (fase 100% frontend, cero cambios de backend por decisión del founder — ver `current-phase.md`) |
 | 11 | Biblioteca de requerimientos (`KnowledgeTemplate`, plantillas estáticas, sin IA) | P1 | 9 | Plantilla aplicable a nueva evaluación, reduce alta manual | Not Started |
-| 12 | Aprobación interna + publicación con validaciones (pesos/fechas/aprobador) + snapshot inmutable | P0 | 10 | Publicación bloqueada si pesos no suman 100% o falta aprobador; snapshot generado | Not Started |
+| 12 | Aprobación interna + publicación con validaciones (pesos/fechas/aprobador) + snapshot inmutable | P0 | 10 | Publicación bloqueada si pesos no suman 100% o falta aprobador; snapshot generado | ✅ Completed (2026-07-31) — `make lint`/`typecheck`/`test`/`test-integration`/`test-e2e` en verde (96 unit backend + 96 unit frontend, 146 integración Docker, 6 E2E), `make contracts` sin diff. Ver detalle completo en `current-phase.md` |
 
 ### E5 — IA de generación y descubrimiento (Bloque 3, parte 1)
 

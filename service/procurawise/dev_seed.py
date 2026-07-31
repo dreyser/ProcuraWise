@@ -1,11 +1,18 @@
 import logging
 import sys
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+
+from pymongo.database import Database
 
 from procurawise.admin.models import PlatformAdminAccount
 from procurawise.admin.repository import PlatformAdminAccountRepository
+from procurawise.audit.repository import AuditEventRepository
+from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
+from procurawise.evaluations.service import EvaluationService
+from procurawise.evaluations.snapshot_repository import EvaluationSnapshotRepository
 from procurawise.identity.models import Membership, Role, Tenant, User, VendorOrganization
 from procurawise.identity.passwords import hash_password
 from procurawise.identity.repository import (
@@ -17,6 +24,7 @@ from procurawise.identity.repository import (
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.shared.config import Settings, get_settings
+from procurawise.shared.context import ActorContext
 from procurawise.shared.logging import configure_logging
 from procurawise.shared.mongo import get_database
 
@@ -45,6 +53,7 @@ SEEDED_COLLECTIONS = [
     "proposals",
     "scores",
     "platform_admins",
+    "evaluation_snapshots",
 ]
 
 
@@ -175,6 +184,117 @@ def _get_or_create_evaluation(
     return evaluation
 
 
+def _dev_actor(tenant: Tenant, membership: Membership) -> ActorContext:
+    return ActorContext(
+        membership_id=membership.id,
+        user_id=membership.user_id,
+        tenant_id=tenant.id,
+        tenant_name=tenant.name,
+        role=membership.role,
+        vendor_org_id=membership.vendor_org_id,
+        display_name=membership.role,
+    )
+
+
+def _get_or_create_evaluation_with_approval_state(
+    settings: Settings,
+    db: Database,
+    tenant: Tenant,
+    owner: Membership,
+    approver: Membership,
+    vendor_org: VendorOrganization,
+    name: str,
+    approval_state: str,
+) -> Evaluation:
+    """Fase 12: seeds one evaluation per approval_status (not_requested is
+    already covered by `_get_or_create_evaluation` above) so the new
+    approval/publication UI has something to demo/QA against without
+    manually driving the whole flow by hand every time (plan §34 Block 6).
+    Driven through EvaluationService (not raw document construction) so the
+    same validation, transitions, and audit events a real request would
+    produce actually run."""
+    evaluations = EvaluationRepository(db)
+    existing = next((doc for doc in evaluations.find_many(tenant.id) if doc["name"] == name), None)
+    if existing is not None:
+        return Evaluation.from_document(existing)
+
+    service = EvaluationService(
+        evaluations=evaluations,
+        proposals=ProposalRepository(db),
+        vendor_orgs=VendorOrganizationRepository(db),
+        memberships=MembershipRepository(db),
+        snapshots=EvaluationSnapshotRepository(db),
+        audit=AuditEventService(AuditEventRepository(db), settings),
+    )
+    owner_actor = _dev_actor(tenant, owner)
+    approver_actor = _dev_actor(tenant, approver)
+
+    evaluation = service.create_evaluation(
+        tenant.id, owner.id, name, "Evaluacion de ejemplo generada por seed-dev", actor=owner_actor
+    )
+    service.add_requirement(
+        tenant.id,
+        evaluation.id,
+        dimension="functional",
+        category="Capacidades",
+        title="Gestion de flujos de aprobacion",
+        description="La solucion debe soportar flujos de aprobacion configurables.",
+        priority="mandatory",
+        response_type="compliant_status",
+        weight=40.0,
+        required=True,
+        display_order=1,
+        buyer_guidance="Describir el motor de flujos disponible.",
+        options=None,
+        actor=owner_actor,
+    )
+    service.add_requirement(
+        tenant.id,
+        evaluation.id,
+        dimension="technical",
+        category="Integraciones",
+        title="API REST documentada",
+        description="La solucion debe exponer una API REST documentada (OpenAPI).",
+        priority="important",
+        response_type="compliant_status",
+        weight=20.0,
+        required=True,
+        display_order=1,
+        buyer_guidance="Adjuntar enlace a la documentacion de la API.",
+        options=None,
+        actor=owner_actor,
+    )
+    service.link_vendor(tenant.id, evaluation.id, vendor_org.id, actor=owner_actor)
+    service.update_evaluation(
+        tenant.id,
+        evaluation.id,
+        None,
+        None,
+        datetime.now(UTC) + timedelta(days=30),
+        actor=owner_actor,
+    )
+    service.set_approver(tenant.id, evaluation.id, approver.id, actor=owner_actor)
+    evaluation = service.request_approval(tenant.id, evaluation.id, actor=owner_actor)
+
+    if approval_state == "pending":
+        return evaluation
+    if approval_state == "rejected":
+        return service.reject(
+            tenant.id,
+            evaluation.id,
+            "Falta detalle de integracion con el sistema contable.",
+            actor=approver_actor,
+        )
+    if approval_state == "approved":
+        return service.approve(
+            tenant.id, evaluation.id, "Cumple los criterios.", actor=approver_actor
+        )
+    if approval_state == "published":
+        service.approve(tenant.id, evaluation.id, "Cumple los criterios.", actor=approver_actor)
+        return service.start_collection(tenant.id, evaluation.id, actor=owner_actor)
+    raise ValueError(f"unknown approval_state: {approval_state!r}")
+
+
 def seed(settings: Settings) -> list[Membership]:
     """Idempotent: safe to call repeatedly, never duplicates a tenant, user,
     vendor organization, or membership already seeded."""
@@ -247,6 +367,7 @@ def seed(settings: Settings) -> list[Membership]:
     owner_a_membership = _get_or_create_membership(
         memberships, tenant_a, owner_a, "evaluation_owner"
     )
+    approver_a_membership = _get_or_create_membership(memberships, tenant_a, approver_a, "approver")
 
     # owner_b also holds a second Membership (approver, same tenant) on
     # purpose: demonstrates that a single User can carry multiple Memberships
@@ -264,7 +385,7 @@ def seed(settings: Settings) -> list[Membership]:
             memberships, tenant_a, evaluator_economic_a, "evaluator_economic"
         ),
         _get_or_create_membership(memberships, tenant_a, collaborator_a, "internal_collaborator"),
-        _get_or_create_membership(memberships, tenant_a, approver_a, "approver"),
+        approver_a_membership,
         _get_or_create_membership(memberships, tenant_a, tenant_admin_a, "tenant_admin"),
         _get_or_create_membership(
             memberships, tenant_a, vendor_user_a, "vendor_contact", vendor_org_a.id
@@ -286,6 +407,26 @@ def seed(settings: Settings) -> list[Membership]:
         vendor_org_a,
         "Evaluacion de ejemplo (dev)",
     )
+
+    # Fase 12: one evaluation per approval_status beyond "not_requested"
+    # (already the state of "Evaluacion de ejemplo (dev)" above), so the
+    # approval/publication UI has something to demo/QA against.
+    for approval_state, name in [
+        ("pending", "Evaluacion pendiente de aprobacion (dev)"),
+        ("approved", "Evaluacion aprobada (dev)"),
+        ("rejected", "Evaluacion rechazada (dev)"),
+        ("published", "Evaluacion publicada (dev)"),
+    ]:
+        _get_or_create_evaluation_with_approval_state(
+            settings,
+            db,
+            tenant_a,
+            owner_a_membership,
+            approver_a_membership,
+            vendor_org_a,
+            name,
+            approval_state,
+        )
 
     return created
 

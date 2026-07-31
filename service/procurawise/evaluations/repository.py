@@ -76,11 +76,17 @@ class EvaluationRepository:
         return result.matched_count > 0
 
     def add_requirement(
-        self, tenant_id: str, evaluation_id: str, requirement_doc: dict[str, Any]
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        requirement_doc: dict[str, Any],
+        extra_set: dict[str, Any] | None = None,
     ) -> bool:
+        set_fields = {"updated_at": datetime.now(UTC)}
+        set_fields.update(extra_set or {})
         result = self._scoped(tenant_id).update_one(
             {"_id": evaluation_id, "status": "draft"},
-            {"$push": {"requirements": requirement_doc}, "$set": {"updated_at": datetime.now(UTC)}},
+            {"$push": {"requirements": requirement_doc}, "$set": set_fields},
         )
         return result.matched_count > 0
 
@@ -90,37 +96,52 @@ class EvaluationRepository:
         evaluation_id: str,
         requirement_id: str,
         field_updates: dict[str, Any],
+        extra_set: dict[str, Any] | None = None,
     ) -> bool:
         positional_set = {f"requirements.$.{key}": value for key, value in field_updates.items()}
         positional_set["requirements.$.updated_at"] = datetime.now(UTC)
+        positional_set.update(extra_set or {})
         result = self._scoped(tenant_id).update_one(
             {"_id": evaluation_id, "status": "draft", "requirements.id": requirement_id},
             {"$set": positional_set},
         )
         return result.matched_count > 0
 
-    def delete_requirement(self, tenant_id: str, evaluation_id: str, requirement_id: str) -> bool:
+    def delete_requirement(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        requirement_id: str,
+        extra_set: dict[str, Any] | None = None,
+    ) -> bool:
+        set_fields = {"updated_at": datetime.now(UTC)}
+        set_fields.update(extra_set or {})
         result = self._scoped(tenant_id).update_one(
             {"_id": evaluation_id, "status": "draft"},
             {
                 "$pull": {"requirements": {"id": requirement_id}},
-                "$set": {"updated_at": datetime.now(UTC)},
+                "$set": set_fields,
             },
         )
         return result.matched_count > 0
 
-    def reserve_vendor_slot(self, tenant_id: str, evaluation_id: str) -> ReservationOutcome:
+    def reserve_vendor_slot(
+        self, tenant_id: str, evaluation_id: str, extra_set: dict[str, Any] | None = None
+    ) -> ReservationOutcome:
         """Atomically increments linked_vendor_count only if the evaluation
         is draft and still under the cap - a single-document conditional
         $inc, so two concurrent requests for the 6th/7th slot can never both
         succeed (see plan §12)."""
+        update: dict[str, Any] = {"$inc": {"linked_vendor_count": 1}}
+        if extra_set:
+            update["$set"] = extra_set
         result = self._scoped(tenant_id).update_one(
             {
                 "_id": evaluation_id,
                 "status": "draft",
                 "linked_vendor_count": {"$lt": MAX_LINKED_VENDORS},
             },
-            {"$inc": {"linked_vendor_count": 1}},
+            update,
         )
         if result.matched_count > 0:
             return "reserved"
@@ -132,8 +153,60 @@ class EvaluationRepository:
             return "not_draft"
         return "limit_reached"
 
-    def release_vendor_slot(self, tenant_id: str, evaluation_id: str) -> None:
+    def release_vendor_slot(
+        self, tenant_id: str, evaluation_id: str, extra_set: dict[str, Any] | None = None
+    ) -> None:
+        update: dict[str, Any] = {"$inc": {"linked_vendor_count": -1}}
+        if extra_set:
+            update["$set"] = extra_set
         self._scoped(tenant_id).update_one(
             {"_id": evaluation_id},
-            {"$inc": {"linked_vendor_count": -1}},
+            update,
         )
+
+    def set_approver(self, tenant_id: str, evaluation_id: str, approver_membership_id: str) -> bool:
+        result = self._scoped(tenant_id).update_one(
+            {
+                "_id": evaluation_id,
+                "status": "draft",
+                "approval_status": {"$in": ["not_requested", "rejected"]},
+            },
+            {
+                "$set": {
+                    "approver_membership_id": approver_membership_id,
+                    "updated_at": datetime.now(UTC),
+                }
+            },
+        )
+        return result.matched_count > 0
+
+    def backfill_approval_snapshot_id(
+        self, tenant_id: str, evaluation_id: str, snapshot_id: str
+    ) -> bool:
+        """Conditional on approval_snapshot_id being unset (plan §22 step 4)
+        - a retry after this already succeeded simply doesn't match, which
+        is the expected, harmless outcome, not an error."""
+        result = self._scoped(tenant_id).update_one(
+            {"_id": evaluation_id, "approval_snapshot_id": None},
+            {"$set": {"approval_snapshot_id": snapshot_id, "updated_at": datetime.now(UTC)}},
+        )
+        return result.matched_count > 0
+
+    def transition_approval_status(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        from_statuses: tuple[str, ...],
+        to_status: str,
+        extra_set: dict[str, Any] | None = None,
+    ) -> bool:
+        """Same atomic-conditional shape as transition_status (Fase 12, plan
+        §22/§24), generalized to a $in filter: request_approval is valid
+        from two source states (not_requested, rejected)."""
+        update = {"approval_status": to_status, "updated_at": datetime.now(UTC)}
+        update.update(extra_set or {})
+        result = self._scoped(tenant_id).update_one(
+            {"_id": evaluation_id, "approval_status": {"$in": list(from_statuses)}},
+            {"$set": update},
+        )
+        return result.matched_count > 0

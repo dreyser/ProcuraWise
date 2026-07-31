@@ -4,7 +4,7 @@ SaaS B2B multi-tenant que convierte una necesidad de compra de software/tecnolog
 
 ## Estado del proyecto
 
-**Fase 1 — Fundación técnica: completa** (2026-07-18). El vertical slice de negocio (`VS-2A`/`VS-2B`/`VS-2C`: `identity`, `evaluations`, `proposals`, `scoring`, `vendor_portal`), `AUTH-PROD` (auth productiva de comprador — email+password + OIDC Microsoft/Google), Fase 8 (E3 — `audit`, `AuditEvent` append-only) y Fase 9 (E3 — RBAC completo + `Assignment` por sección) están completos y fusionados a `main` (PR #21 y PR #22 respectivamente). Ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle de cada fase y [`docs/development/backlog.md`](docs/development/backlog.md) para el estado de todas las fases del MVP.
+**Fase 1 — Fundación técnica: completa** (2026-07-18). El vertical slice de negocio (`VS-2A`/`VS-2B`/`VS-2C`: `identity`, `evaluations`, `proposals`, `scoring`, `vendor_portal`), `AUTH-PROD` (auth productiva de comprador — email+password + OIDC Microsoft/Google), Fase 8 (E3 — `audit`, `AuditEvent` append-only, PR #21), Fase 9 (E3 — RBAC completo + `Assignment` por sección, PR #22) y Fase 10 (E4 — wizard guiado estático + autosave, PR #23) están completos y fusionados a `main`. Fase 12 (E4 — aprobación interna + publicación + snapshot inmutable) está completa en esta rama, pendiente de PR. Ver [`docs/development/current-phase.md`](docs/development/current-phase.md) para el detalle de cada fase y [`docs/development/backlog.md`](docs/development/backlog.md) para el estado de todas las fases del MVP.
 
 ## Cómo correr el proyecto localmente
 

@@ -7,8 +7,13 @@ from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.models import MAX_LINKED_VENDORS
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.service import EvaluationService
+from procurawise.evaluations.snapshot_repository import EvaluationSnapshotRepository
 from procurawise.identity.models import Tenant, VendorOrganization
-from procurawise.identity.repository import TenantRepository, VendorOrganizationRepository
+from procurawise.identity.repository import (
+    MembershipRepository,
+    TenantRepository,
+    VendorOrganizationRepository,
+)
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.shared.context import ActorContext
 
@@ -28,9 +33,16 @@ def test_vendor_link_reservation_never_exceeds_limit_under_concurrency(
     vendor_orgs = VendorOrganizationRepository(mongo_test_db)
     evaluations = EvaluationRepository(mongo_test_db)
     proposals = ProposalRepository(mongo_test_db)
+    memberships = MembershipRepository(mongo_test_db)
+    snapshots = EvaluationSnapshotRepository(mongo_test_db)
     audit = AuditEventService(AuditEventRepository(mongo_test_db), mongo_test_settings)
     service = EvaluationService(
-        evaluations=evaluations, proposals=proposals, vendor_orgs=vendor_orgs, audit=audit
+        evaluations=evaluations,
+        proposals=proposals,
+        vendor_orgs=vendor_orgs,
+        memberships=memberships,
+        snapshots=snapshots,
+        audit=audit,
     )
 
     tenant = Tenant.create(slug="vs2b-concurrency-tenant", name="Concurrency Tenant")

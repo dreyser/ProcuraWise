@@ -29,6 +29,16 @@ AuditAction = Literal[
     "assignment_created",
     "assignment_removed",
     "platform_admin_cross_tenant_read",
+    # Fase 12 (plan §27) - gate the existing evaluation_collection_started
+    # transition with an internal approval step, plus the immutable
+    # publication snapshot. evaluation_collection_started is unchanged/
+    # unremoved; evaluation_published is emitted alongside it at publish time.
+    "evaluation_approver_set",
+    "evaluation_approval_requested",
+    "evaluation_approval_withdrawn",
+    "evaluation_approved",
+    "evaluation_rejected",
+    "evaluation_published",
 ]
 
 
