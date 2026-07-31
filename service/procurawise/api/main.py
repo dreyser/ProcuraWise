@@ -9,6 +9,8 @@ from procurawise.audit.router import router as audit_router
 from procurawise.evaluations.router import router as evaluations_router
 from procurawise.identity.auth_router import router as auth_router
 from procurawise.identity.router import router as identity_router
+from procurawise.knowledge_templates.router import apply_router as knowledge_template_apply_router
+from procurawise.knowledge_templates.router import router as knowledge_templates_router
 from procurawise.proposals.router import router as proposals_router
 from procurawise.scoring.router import router as scoring_router
 from procurawise.shared.config import get_settings
@@ -44,5 +46,7 @@ app.include_router(audit_router, prefix="/api/v1")
 app.include_router(proposals_router, prefix="/api/v1")
 app.include_router(scoring_router, prefix="/api/v1")
 app.include_router(assignments_router, prefix="/api/v1")
+app.include_router(knowledge_templates_router, prefix="/api/v1")
+app.include_router(knowledge_template_apply_router, prefix="/api/v1")
 app.include_router(vendor_portal_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")

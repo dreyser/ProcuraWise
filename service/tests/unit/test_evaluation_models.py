@@ -2,7 +2,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from procurawise.evaluations.models import Evaluation, EvaluationSnapshot, Requirement
+from procurawise.evaluations.models import (
+    Evaluation,
+    EvaluationSnapshot,
+    Requirement,
+    validate_requirement_patch,
+)
 
 
 def test_evaluation_create_defaults_to_draft_with_no_vendors() -> None:
@@ -155,3 +160,92 @@ def test_evaluation_snapshot_round_trips_through_document() -> None:
     )
     restored = EvaluationSnapshot.from_document(snapshot.to_document())
     assert restored == snapshot
+
+
+def test_validate_requirement_patch_rejects_resultant_single_choice_without_options() -> None:
+    current = Requirement.create(
+        dimension="functional",
+        category="c",
+        title="t",
+        description="d",
+        priority="desirable",
+        response_type="text",
+        weight=1.0,
+        required=False,
+        display_order=1,
+    )
+    with pytest.raises(ValueError, match="requires non-empty options"):
+        validate_requirement_patch(current, {"response_type": "single_choice"})
+
+
+def test_validate_requirement_patch_rejects_options_cleared_while_still_single_choice() -> None:
+    current = Requirement.create(
+        dimension="functional",
+        category="c",
+        title="t",
+        description="d",
+        priority="desirable",
+        response_type="single_choice",
+        weight=1.0,
+        required=False,
+        display_order=1,
+        options=["a", "b"],
+    )
+    with pytest.raises(ValueError, match="requires non-empty options"):
+        validate_requirement_patch(current, {"options": []})
+
+
+def test_validate_requirement_patch_accepts_resultant_single_choice_with_options() -> None:
+    current = Requirement.create(
+        dimension="functional",
+        category="c",
+        title="t",
+        description="d",
+        priority="desirable",
+        response_type="text",
+        weight=1.0,
+        required=False,
+        display_order=1,
+    )
+    validate_requirement_patch(current, {"response_type": "single_choice", "options": ["a", "b"]})
+
+
+def test_validate_requirement_patch_accepts_unrelated_field_change() -> None:
+    current = Requirement.create(
+        dimension="functional",
+        category="c",
+        title="t",
+        description="d",
+        priority="desirable",
+        response_type="text",
+        weight=1.0,
+        required=False,
+        display_order=1,
+    )
+    validate_requirement_patch(current, {"title": "new title"})
+
+
+def test_approval_invalidation_extra_set_empty_when_not_requested() -> None:
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    assert evaluation.approval_invalidation_extra_set() == {}
+
+
+@pytest.mark.parametrize("approval_status", ["pending", "approved"])
+def test_approval_invalidation_extra_set_resets_approval_when_pending_or_approved(
+    approval_status: str,
+) -> None:
+    from dataclasses import replace
+
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    evaluation = replace(evaluation, approval_status=approval_status)  # type: ignore[arg-type]
+    extra_set = evaluation.approval_invalidation_extra_set()
+    assert extra_set == {
+        "approval_status": "not_requested",
+        "approval_decided_at": None,
+        "approval_decided_by_membership_id": None,
+        "approval_comment": None,
+    }

@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/table'
 import { translateEvaluationStatus, translateResponseType } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
+import { ApplyTemplateButton } from '@/features/evaluations/components/ApplyTemplateButton'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
 import { WeightSummary } from '@/features/evaluations/components/WeightSummary'
 import {
@@ -290,6 +291,12 @@ export function RequirementsPage() {
             ? 'Los requerimientos solo pueden editarse mientras la evaluación está en borrador.'
             : 'Vista de solo lectura de los requerimientos.'}
         </p>
+      )}
+
+      {canEdit && (
+        <div className="mt-4">
+          <ApplyTemplateButton evaluationId={evaluation.id} onApplied={invalidateEvaluation} />
+        </div>
       )}
 
       {renderDimension('functional', 'Funcional')}

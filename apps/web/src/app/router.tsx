@@ -23,6 +23,8 @@ import { VendorProposalListPage } from '@/features/vendor-portal/pages/VendorPro
 import { VendorProposalDetailPage } from '@/features/vendor-portal/pages/VendorProposalDetailPage'
 import { AssignmentsPage } from '@/features/evaluations/pages/AssignmentsPage'
 import { EvaluationApprovalPage } from '@/features/evaluations/pages/EvaluationApprovalPage'
+import { KnowledgeTemplatesPage } from '@/features/evaluations/pages/KnowledgeTemplatesPage'
+import { KnowledgeTemplateDetailPage } from '@/features/evaluations/pages/KnowledgeTemplateDetailPage'
 
 // Fase 9 (RBAC completo, spec §4): tenant_admin/platform_admin are real,
 // backend-enforced roles that can authenticate, but have no dedicated UI
@@ -124,6 +126,22 @@ export function AppRouter() {
           element={
             <BuyerLayout>
               <EvaluationListPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/knowledge-templates"
+          element={
+            <BuyerLayout>
+              <KnowledgeTemplatesPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/knowledge-templates/:templateId"
+          element={
+            <BuyerLayout>
+              <KnowledgeTemplateDetailPage />
             </BuyerLayout>
           }
         />

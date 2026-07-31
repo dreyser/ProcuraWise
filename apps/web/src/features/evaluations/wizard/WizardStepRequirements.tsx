@@ -22,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { translateResponseType } from '@/lib/enumLabels'
+import { ApplyTemplateButton } from '@/features/evaluations/components/ApplyTemplateButton'
 import {
   RequirementForm,
   type RequirementSubmitPayload,
@@ -209,6 +210,8 @@ export function WizardStepRequirements({
 
   return (
     <div>
+      <ApplyTemplateButton evaluationId={evaluation.id} onApplied={invalidate} />
+
       {renderDimension('functional', 'Funcional')}
       {renderDimension('technical', 'Técnico')}
 

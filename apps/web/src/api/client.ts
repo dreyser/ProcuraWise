@@ -83,6 +83,14 @@ export interface AnswerWriteRequest {
   expected_version: number
 }
 
+export interface ApplyKnowledgeTemplateRequest {
+  knowledge_template_id: string
+}
+
+export interface ApplyKnowledgeTemplateResponse {
+  added_requirements: RequirementResponse[]
+}
+
 export type ApprovalDecisionRequestComment = string | null
 
 export interface ApprovalDecisionRequest {
@@ -373,6 +381,44 @@ export interface EvaluationUpdateRequest {
 
 export interface HTTPValidationError {
   detail?: ValidationError[]
+}
+
+export interface KnowledgeTemplateCreateRequest {
+  name: string
+  description?: string
+}
+
+export interface KnowledgeTemplateDetailResponse {
+  id: string
+  name: string
+  description: string
+  items: RequirementResponse[]
+  created_by_membership_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface KnowledgeTemplateListResponse {
+  items: KnowledgeTemplateSummaryResponse[]
+}
+
+export interface KnowledgeTemplateSummaryResponse {
+  id: string
+  name: string
+  description: string
+  item_count: number
+  created_by_membership_id: string
+  created_at: string
+  updated_at: string
+}
+
+export type KnowledgeTemplateUpdateRequestName = string | null
+
+export type KnowledgeTemplateUpdateRequestDescription = string | null
+
+export interface KnowledgeTemplateUpdateRequest {
+  name?: KnowledgeTemplateUpdateRequestName
+  description?: KnowledgeTemplateUpdateRequestDescription
 }
 
 export interface LoginRequest {
@@ -6742,6 +6788,1202 @@ export const useDeleteAssignmentApiV1EvaluationsEvaluationIdAssignmentsAssignmen
 > => {
   const mutationOptions =
     getDeleteAssignmentApiV1EvaluationsEvaluationIdAssignmentsAssignmentIdDeleteMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Create Template
+ */
+export type createTemplateApiV1KnowledgeTemplatesPostResponse201 = {
+  data: KnowledgeTemplateDetailResponse
+  status: 201
+}
+
+export type createTemplateApiV1KnowledgeTemplatesPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createTemplateApiV1KnowledgeTemplatesPostResponseSuccess =
+  createTemplateApiV1KnowledgeTemplatesPostResponse201 & {
+    headers: Headers
+  }
+export type createTemplateApiV1KnowledgeTemplatesPostResponseError =
+  createTemplateApiV1KnowledgeTemplatesPostResponse422 & {
+    headers: Headers
+  }
+
+export type createTemplateApiV1KnowledgeTemplatesPostResponse =
+  | createTemplateApiV1KnowledgeTemplatesPostResponseSuccess
+  | createTemplateApiV1KnowledgeTemplatesPostResponseError
+
+export const getCreateTemplateApiV1KnowledgeTemplatesPostUrl = () => {
+  return `/api/v1/knowledge-templates`
+}
+
+export const createTemplateApiV1KnowledgeTemplatesPost = async (
+  knowledgeTemplateCreateRequest: KnowledgeTemplateCreateRequest,
+  options?: RequestInit,
+): Promise<createTemplateApiV1KnowledgeTemplatesPostResponse> => {
+  return apiFetch<createTemplateApiV1KnowledgeTemplatesPostResponse>(
+    getCreateTemplateApiV1KnowledgeTemplatesPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(knowledgeTemplateCreateRequest),
+    },
+  )
+}
+
+export const getCreateTemplateApiV1KnowledgeTemplatesPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTemplateApiV1KnowledgeTemplatesPost>>,
+    TError,
+    { data: KnowledgeTemplateCreateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTemplateApiV1KnowledgeTemplatesPost>>,
+  TError,
+  { data: KnowledgeTemplateCreateRequest },
+  TContext
+> => {
+  const mutationKey = ['createTemplateApiV1KnowledgeTemplatesPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTemplateApiV1KnowledgeTemplatesPost>>,
+    { data: KnowledgeTemplateCreateRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return createTemplateApiV1KnowledgeTemplatesPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateTemplateApiV1KnowledgeTemplatesPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTemplateApiV1KnowledgeTemplatesPost>>
+>
+export type CreateTemplateApiV1KnowledgeTemplatesPostMutationBody = KnowledgeTemplateCreateRequest
+export type CreateTemplateApiV1KnowledgeTemplatesPostMutationError = HTTPValidationError
+
+/**
+ * @summary Create Template
+ */
+export const useCreateTemplateApiV1KnowledgeTemplatesPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createTemplateApiV1KnowledgeTemplatesPost>>,
+      TError,
+      { data: KnowledgeTemplateCreateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createTemplateApiV1KnowledgeTemplatesPost>>,
+  TError,
+  { data: KnowledgeTemplateCreateRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateTemplateApiV1KnowledgeTemplatesPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Templates
+ */
+export type listTemplatesApiV1KnowledgeTemplatesGetResponse200 = {
+  data: KnowledgeTemplateListResponse
+  status: 200
+}
+
+export type listTemplatesApiV1KnowledgeTemplatesGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listTemplatesApiV1KnowledgeTemplatesGetResponseSuccess =
+  listTemplatesApiV1KnowledgeTemplatesGetResponse200 & {
+    headers: Headers
+  }
+export type listTemplatesApiV1KnowledgeTemplatesGetResponseError =
+  listTemplatesApiV1KnowledgeTemplatesGetResponse422 & {
+    headers: Headers
+  }
+
+export type listTemplatesApiV1KnowledgeTemplatesGetResponse =
+  | listTemplatesApiV1KnowledgeTemplatesGetResponseSuccess
+  | listTemplatesApiV1KnowledgeTemplatesGetResponseError
+
+export const getListTemplatesApiV1KnowledgeTemplatesGetUrl = () => {
+  return `/api/v1/knowledge-templates`
+}
+
+export const listTemplatesApiV1KnowledgeTemplatesGet = async (
+  options?: RequestInit,
+): Promise<listTemplatesApiV1KnowledgeTemplatesGetResponse> => {
+  return apiFetch<listTemplatesApiV1KnowledgeTemplatesGetResponse>(
+    getListTemplatesApiV1KnowledgeTemplatesGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListTemplatesApiV1KnowledgeTemplatesGetQueryKey = () => {
+  return [`/api/v1/knowledge-templates`] as const
+}
+
+export const getListTemplatesApiV1KnowledgeTemplatesGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListTemplatesApiV1KnowledgeTemplatesGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>
+  > = () => listTemplatesApiV1KnowledgeTemplatesGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListTemplatesApiV1KnowledgeTemplatesGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>
+>
+export type ListTemplatesApiV1KnowledgeTemplatesGetQueryError = HTTPValidationError
+
+export function useListTemplatesApiV1KnowledgeTemplatesGet<
+  TData = Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListTemplatesApiV1KnowledgeTemplatesGet<
+  TData = Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListTemplatesApiV1KnowledgeTemplatesGet<
+  TData = Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Templates
+ */
+
+export function useListTemplatesApiV1KnowledgeTemplatesGet<
+  TData = Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listTemplatesApiV1KnowledgeTemplatesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListTemplatesApiV1KnowledgeTemplatesGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Get Template
+ */
+export type getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponse200 = {
+  data: KnowledgeTemplateDetailResponse
+  status: 200
+}
+
+export type getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponseSuccess =
+  getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponse200 & {
+    headers: Headers
+  }
+export type getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponseError =
+  getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponse422 & {
+    headers: Headers
+  }
+
+export type getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponse =
+  | getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponseSuccess
+  | getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponseError
+
+export const getGetTemplateApiV1KnowledgeTemplatesTemplateIdGetUrl = (templateId: string) => {
+  return `/api/v1/knowledge-templates/${templateId}`
+}
+
+export const getTemplateApiV1KnowledgeTemplatesTemplateIdGet = async (
+  templateId: string,
+  options?: RequestInit,
+): Promise<getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponse> => {
+  return apiFetch<getTemplateApiV1KnowledgeTemplatesTemplateIdGetResponse>(
+    getGetTemplateApiV1KnowledgeTemplatesTemplateIdGetUrl(templateId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetTemplateApiV1KnowledgeTemplatesTemplateIdGetQueryKey = (templateId?: string) => {
+  return [`/api/v1/knowledge-templates/${templateId}`] as const
+}
+
+export const getGetTemplateApiV1KnowledgeTemplatesTemplateIdGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+  TError = HTTPValidationError,
+>(
+  templateId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTemplateApiV1KnowledgeTemplatesTemplateIdGetQueryKey(templateId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>
+  > = () => getTemplateApiV1KnowledgeTemplatesTemplateIdGet(templateId)
+
+  return { queryKey, queryFn, enabled: !!templateId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetTemplateApiV1KnowledgeTemplatesTemplateIdGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>
+>
+export type GetTemplateApiV1KnowledgeTemplatesTemplateIdGetQueryError = HTTPValidationError
+
+export function useGetTemplateApiV1KnowledgeTemplatesTemplateIdGet<
+  TData = Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+  TError = HTTPValidationError,
+>(
+  templateId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTemplateApiV1KnowledgeTemplatesTemplateIdGet<
+  TData = Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+  TError = HTTPValidationError,
+>(
+  templateId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTemplateApiV1KnowledgeTemplatesTemplateIdGet<
+  TData = Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+  TError = HTTPValidationError,
+>(
+  templateId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Template
+ */
+
+export function useGetTemplateApiV1KnowledgeTemplatesTemplateIdGet<
+  TData = Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+  TError = HTTPValidationError,
+>(
+  templateId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getTemplateApiV1KnowledgeTemplatesTemplateIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetTemplateApiV1KnowledgeTemplatesTemplateIdGetQueryOptions(
+    templateId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Update Template
+ */
+export type updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponse200 = {
+  data: KnowledgeTemplateDetailResponse
+  status: 200
+}
+
+export type updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponseSuccess =
+  updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponse200 & {
+    headers: Headers
+  }
+export type updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponseError =
+  updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponse422 & {
+    headers: Headers
+  }
+
+export type updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponse =
+  | updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponseSuccess
+  | updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponseError
+
+export const getUpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatchUrl = (templateId: string) => {
+  return `/api/v1/knowledge-templates/${templateId}`
+}
+
+export const updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch = async (
+  templateId: string,
+  knowledgeTemplateUpdateRequest: KnowledgeTemplateUpdateRequest,
+  options?: RequestInit,
+): Promise<updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponse> => {
+  return apiFetch<updateTemplateApiV1KnowledgeTemplatesTemplateIdPatchResponse>(
+    getUpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatchUrl(templateId),
+    {
+      ...options,
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(knowledgeTemplateUpdateRequest),
+    },
+  )
+}
+
+export const getUpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch>>,
+    TError,
+    { templateId: string; data: KnowledgeTemplateUpdateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch>>,
+  TError,
+  { templateId: string; data: KnowledgeTemplateUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ['updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch>>,
+    { templateId: string; data: KnowledgeTemplateUpdateRequest }
+  > = (props) => {
+    const { templateId, data } = props ?? {}
+
+    return updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch(templateId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch>>
+>
+export type UpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatchMutationBody =
+  KnowledgeTemplateUpdateRequest
+export type UpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatchMutationError = HTTPValidationError
+
+/**
+ * @summary Update Template
+ */
+export const useUpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch>>,
+      TError,
+      { templateId: string; data: KnowledgeTemplateUpdateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateTemplateApiV1KnowledgeTemplatesTemplateIdPatch>>,
+  TError,
+  { templateId: string; data: KnowledgeTemplateUpdateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateTemplateApiV1KnowledgeTemplatesTemplateIdPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Delete Template
+ */
+export type deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponseSuccess =
+  deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponse204 & {
+    headers: Headers
+  }
+export type deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponseError =
+  deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponse =
+  | deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponseSuccess
+  | deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponseError
+
+export const getDeleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteUrl = (templateId: string) => {
+  return `/api/v1/knowledge-templates/${templateId}`
+}
+
+export const deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete = async (
+  templateId: string,
+  options?: RequestInit,
+): Promise<deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponse> => {
+  return apiFetch<deleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteResponse>(
+    getDeleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteUrl(templateId),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+}
+
+export const getDeleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete>>,
+    TError,
+    { templateId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete>>,
+  TError,
+  { templateId: string },
+  TContext
+> => {
+  const mutationKey = ['deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete>>,
+    { templateId: string }
+  > = (props) => {
+    const { templateId } = props ?? {}
+
+    return deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete(templateId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type DeleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete>>
+>
+
+export type DeleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteMutationError = HTTPValidationError
+
+/**
+ * @summary Delete Template
+ */
+export const useDeleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete>>,
+      TError,
+      { templateId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTemplateApiV1KnowledgeTemplatesTemplateIdDelete>>,
+  TError,
+  { templateId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getDeleteTemplateApiV1KnowledgeTemplatesTemplateIdDeleteMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Add Item
+ */
+export type addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponse201 = {
+  data: RequirementResponse
+  status: 201
+}
+
+export type addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponseSuccess =
+  addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponse201 & {
+    headers: Headers
+  }
+export type addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponseError =
+  addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponse422 & {
+    headers: Headers
+  }
+
+export type addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponse =
+  | addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponseSuccess
+  | addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponseError
+
+export const getAddItemApiV1KnowledgeTemplatesTemplateIdItemsPostUrl = (templateId: string) => {
+  return `/api/v1/knowledge-templates/${templateId}/items`
+}
+
+export const addItemApiV1KnowledgeTemplatesTemplateIdItemsPost = async (
+  templateId: string,
+  requirementCreateRequest: RequirementCreateRequest,
+  options?: RequestInit,
+): Promise<addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponse> => {
+  return apiFetch<addItemApiV1KnowledgeTemplatesTemplateIdItemsPostResponse>(
+    getAddItemApiV1KnowledgeTemplatesTemplateIdItemsPostUrl(templateId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(requirementCreateRequest),
+    },
+  )
+}
+
+export const getAddItemApiV1KnowledgeTemplatesTemplateIdItemsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addItemApiV1KnowledgeTemplatesTemplateIdItemsPost>>,
+    TError,
+    { templateId: string; data: RequirementCreateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addItemApiV1KnowledgeTemplatesTemplateIdItemsPost>>,
+  TError,
+  { templateId: string; data: RequirementCreateRequest },
+  TContext
+> => {
+  const mutationKey = ['addItemApiV1KnowledgeTemplatesTemplateIdItemsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addItemApiV1KnowledgeTemplatesTemplateIdItemsPost>>,
+    { templateId: string; data: RequirementCreateRequest }
+  > = (props) => {
+    const { templateId, data } = props ?? {}
+
+    return addItemApiV1KnowledgeTemplatesTemplateIdItemsPost(templateId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AddItemApiV1KnowledgeTemplatesTemplateIdItemsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addItemApiV1KnowledgeTemplatesTemplateIdItemsPost>>
+>
+export type AddItemApiV1KnowledgeTemplatesTemplateIdItemsPostMutationBody = RequirementCreateRequest
+export type AddItemApiV1KnowledgeTemplatesTemplateIdItemsPostMutationError = HTTPValidationError
+
+/**
+ * @summary Add Item
+ */
+export const useAddItemApiV1KnowledgeTemplatesTemplateIdItemsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof addItemApiV1KnowledgeTemplatesTemplateIdItemsPost>>,
+      TError,
+      { templateId: string; data: RequirementCreateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof addItemApiV1KnowledgeTemplatesTemplateIdItemsPost>>,
+  TError,
+  { templateId: string; data: RequirementCreateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getAddItemApiV1KnowledgeTemplatesTemplateIdItemsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Update Item
+ */
+export type updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponse200 = {
+  data: RequirementResponse
+  status: 200
+}
+
+export type updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponseSuccess =
+  updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponse200 & {
+    headers: Headers
+  }
+export type updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponseError =
+  updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponse422 & {
+    headers: Headers
+  }
+
+export type updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponse =
+  | updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponseSuccess
+  | updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponseError
+
+export const getUpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchUrl = (
+  templateId: string,
+  itemId: string,
+) => {
+  return `/api/v1/knowledge-templates/${templateId}/items/${itemId}`
+}
+
+export const updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch = async (
+  templateId: string,
+  itemId: string,
+  requirementUpdateRequest: RequirementUpdateRequest,
+  options?: RequestInit,
+): Promise<updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponse> => {
+  return apiFetch<updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchResponse>(
+    getUpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchUrl(templateId, itemId),
+    {
+      ...options,
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(requirementUpdateRequest),
+    },
+  )
+}
+
+export const getUpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch>>,
+    TError,
+    { templateId: string; itemId: string; data: RequirementUpdateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch>>,
+  TError,
+  { templateId: string; itemId: string; data: RequirementUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ['updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch>>,
+    { templateId: string; itemId: string; data: RequirementUpdateRequest }
+  > = (props) => {
+    const { templateId, itemId, data } = props ?? {}
+
+    return updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch(templateId, itemId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch>>
+>
+export type UpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchMutationBody =
+  RequirementUpdateRequest
+export type UpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Update Item
+ */
+export const useUpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch>>,
+      TError,
+      { templateId: string; itemId: string; data: RequirementUpdateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatch>>,
+  TError,
+  { templateId: string; itemId: string; data: RequirementUpdateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Delete Item
+ */
+export type deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponseSuccess =
+  deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponse204 & {
+    headers: Headers
+  }
+export type deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponseError =
+  deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponse =
+  | deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponseSuccess
+  | deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponseError
+
+export const getDeleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteUrl = (
+  templateId: string,
+  itemId: string,
+) => {
+  return `/api/v1/knowledge-templates/${templateId}/items/${itemId}`
+}
+
+export const deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete = async (
+  templateId: string,
+  itemId: string,
+  options?: RequestInit,
+): Promise<deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponse> => {
+  return apiFetch<deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteResponse>(
+    getDeleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteUrl(templateId, itemId),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+}
+
+export const getDeleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete>>,
+    TError,
+    { templateId: string; itemId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete>>,
+  TError,
+  { templateId: string; itemId: string },
+  TContext
+> => {
+  const mutationKey = ['deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete>>,
+    { templateId: string; itemId: string }
+  > = (props) => {
+    const { templateId, itemId } = props ?? {}
+
+    return deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete(templateId, itemId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type DeleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete>>
+  >
+
+export type DeleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Delete Item
+ */
+export const useDeleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete>>,
+      TError,
+      { templateId: string; itemId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDelete>>,
+  TError,
+  { templateId: string; itemId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getDeleteItemApiV1KnowledgeTemplatesTemplateIdItemsItemIdDeleteMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Apply Knowledge Template
+ */
+export type applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponse201 =
+  {
+    data: ApplyKnowledgeTemplateResponse
+    status: 201
+  }
+
+export type applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponseSuccess =
+  applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponse201 & {
+    headers: Headers
+  }
+export type applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponseError =
+  applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponse422 & {
+    headers: Headers
+  }
+
+export type applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponse =
+  | applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponseSuccess
+  | applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponseError
+
+export const getApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/apply-knowledge-template`
+}
+
+export const applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost = async (
+  evaluationId: string,
+  applyKnowledgeTemplateRequest: ApplyKnowledgeTemplateRequest,
+  options?: RequestInit,
+): Promise<applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponse> => {
+  return apiFetch<applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostResponse>(
+    getApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostUrl(
+      evaluationId,
+    ),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(applyKnowledgeTemplateRequest),
+    },
+  )
+}
+
+export const getApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost
+        >
+      >,
+      TError,
+      { evaluationId: string; data: ApplyKnowledgeTemplateRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost
+      >
+    >,
+    TError,
+    { evaluationId: string; data: ApplyKnowledgeTemplateRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost
+        >
+      >,
+      { evaluationId: string; data: ApplyKnowledgeTemplateRequest }
+    > = (props) => {
+      const { evaluationId, data } = props ?? {}
+
+      return applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost(
+        evaluationId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type ApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost
+      >
+    >
+  >
+export type ApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostMutationBody =
+  ApplyKnowledgeTemplateRequest
+export type ApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Apply Knowledge Template
+ */
+export const useApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost
+        >
+      >,
+      TError,
+      { evaluationId: string; data: ApplyKnowledgeTemplateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof applyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePost>
+  >,
+  TError,
+  { evaluationId: string; data: ApplyKnowledgeTemplateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostMutationOptions(
       options,
     )
 
