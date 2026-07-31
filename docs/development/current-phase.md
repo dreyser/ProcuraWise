@@ -1,5 +1,36 @@
 # Fase actual
 
+## Fase 10 (E4) — Wizard guiado estático (sin IA) + autosave
+
+**Estado: ✅ Implementado y verificado con Docker real** (2026-07-31) — planeado en Plan Mode (2 rondas de agentes Explore sobre docs/roadmap/backlog y sobre el código de `evaluations`/frontend existente), seguido de una única pregunta bloqueante resuelta explícitamente por el founder antes de implementar: mecanismo de "sin pérdida de datos al recargar". Ejecutado en 5 bloques incrementales (0-4), cada uno verificado antes de avanzar. Plan completo en `~/.claude/plans/you-are-starting-a-cosmic-lollipop.md` (fuera del repo).
+
+**Decisión bloqueante resuelta por el founder antes de implementar:**
+1. **Mecanismo de "sin pérdida de datos al recargar" — opción A aprobada (step-persisted, sin `version`):** cada paso del wizard se guarda de inmediato contra los endpoints ya existentes (`POST/PATCH /evaluations`, `POST/PATCH/DELETE /requirements`, `POST/DELETE /vendors`, `POST /start-collection`); al recargar (o al volver en una sesión nueva, dado que el JWT vive solo en memoria — AUTH-PROD decisión #2), el wizard deriva el paso actual desde el estado real de la `Evaluation` (`requirements[]`, `linked_vendor_count`, `status`), nunca de un campo `wizard_step`/`version` persistido. **Consecuencia directa: Fase 10 no requirió ningún cambio de backend** — sin migración, sin endpoint nuevo, sin campo nuevo en `Evaluation`, sin nueva `AuditAction`. Se descartaron explícitamente las opciones B (autosave real de campo con `version`+migración, espejando `ProposalAnswer`) y C (híbrido).
+
+**Contenido entregado (100% frontend, `apps/web/src/`) — cero archivos bajo `service/` modificados, confirmado por `git status` y por `make contracts` sin diff:**
+- **Bloque 0 — Housekeeping**: corregido un estado de merge desactualizado en `README.md`/`current-phase.md`/`session-handoff.md` — Fase 8 (PR #21) y Fase 9 (PR #22) ya estaban fusionadas a `main` según `git log`, pero la documentación seguía diciendo "verificadas pero sin fusionar" (misma clase de laguna de continuidad que Fase 8 ya había encontrado y corregido para AUTH-PROD).
+- **Bloque 1 — Núcleo del wizard + Paso 1**: `features/evaluations/wizard/deriveWizardStep.ts` (función pura, deriva el paso 1-4 desde `EvaluationDetailResponse`), `EvaluationWizard.tsx` (contenedor — inicializa el paso una sola vez por evaluación desde la derivación, luego lo controla explícitamente "Siguiente"/"Atrás"/el stepper, para no saltar de paso mientras el usuario edita), `WizardStepper.tsx` (pasos más allá de `maxReachableStep` deshabilitados), `WizardStepMetadata.tsx` (absorbe la lógica del ahora eliminado `EvaluationCreatePage.tsx` — `POST` si la evaluación no existe, `PATCH` solo si hubo cambios reales al volver a este paso). Rutas nuevas en `router.tsx`: `/evaluations/new` (antes `EvaluationCreatePage`, ahora el wizard) y `/evaluations/:evaluationId/wizard` (reanudar).
+- **Bloque 2 — Pasos 2/3 + helper compartido**: `features/evaluations/lib/evaluationReadiness.ts` (nuevo — extrae las precondiciones de `start-collection`, antes duplicadas solo en `VendorsPage.tsx`, ahora compartidas con el wizard); `WizardStepRequirements.tsx`/`WizardStepVendors.tsx` (composiciones delgadas de `RequirementForm`/`WeightSummary`/`VendorCatalogPicker` ya existentes, sin fork — la edición completa/reordenamiento sigue viviendo en las pestañas "Requerimientos"/"Proveedores", alcanzables en cualquier momento); `VendorsPage.tsx` migrado a usar el helper compartido en vez de su copia local.
+- **Bloque 3 — Paso 4 + entrada desde la lista**: `WizardStepReview.tsx` (reutiliza `useStartCollectionApiV1...`+el mismo diálogo de confirmación ya usado en `VendorsPage.tsx`); `EvaluationListPage.tsx` gana una columna "Acciones" con enlace "Continuar configuración" para evaluaciones `draft` (visible solo para `evaluation_owner`).
+- **Bloque 4 — E2E y cierre**: `e2e/evaluation-wizard.spec.ts` (nuevo, 2 specs) — cierra explícitamente el hallazgo de cobertura documentado en la sesión de cierre de VS-2C ("`vertical-slice.spec.ts` nunca ejerce 'crear evaluación'/'crear requerimientos'/'vincular proveedor' contra el backend real"): el primer spec crea una evaluación desde cero a través de los 4 pasos del wizard contra Docker real hasta `collecting_responses`; el segundo verifica que una evaluación a medio configurar (solo el requirement funcional guardado) se reanuda correctamente en el paso 2 tras un login nuevo (simulando el límite real de sesión de esta app — el JWT en memoria no sobrevive ninguna navegación completa).
+
+**Diferido explícitamente (alcance de la fase, no deuda pendiente):**
+- Autosave real de tecleo en curso (campo por campo, con `version`/conflicto 409) — descartado por la decisión bloqueante arriba.
+- `Assignment`/asignaciones (Fase 9) no forma parte del wizard — es una actividad continua, no un paso de creación de una sola vez.
+- Fechas/aprobador/snapshot inmutable de publicación — pertenecen a Fase 12.
+- `KnowledgeTemplate`/biblioteca de requerimientos — Fase 11.
+
+**Resultado de pruebas de esta sesión (todas ejecutadas contra Docker real, ninguna asumida):**
+- `make lint` → 0 errores (backend sin cambios; frontend eslint 0 errores/27 warnings preexistentes, prettier limpio).
+- `make typecheck` → limpio (backend sin cambios; `tsc -b` frontend).
+- `make test` → **93 passed backend** (sin cambios) **+ 94 passed frontend** (18 archivos, +15 tests nuevos del wizard).
+- `make test-integration` (Docker real) → **140 passed** (idéntico a Fase 9 — cero tests backend nuevos, cero regresión).
+- `make test-e2e` (Docker + Playwright real) → **4 specs passed** (2 nuevos del wizard + los 2 ya existentes, sin regresión).
+- `make contracts` corrido → **sin diff** (`git status` limpio sobre `openapi.json`/`client.ts`) — evidencia positiva de que el alcance se mantuvo 100% frontend.
+- `pnpm build` (frontend) → build de producción exitoso.
+
+**Estado final: Fase 10 cerrada formalmente.** El único criterio de aceptación del backlog ("Flujo de creación de evaluación guiado paso a paso, sin pérdida de datos al recargar") queda satisfecho bajo la interpretación operacional acordada explícitamente con el founder (ver decisión bloqueante arriba): cada paso confirmado persiste de inmediato server-side, y una sesión nueva siempre reanuda en el paso correcto derivado del estado real.
+
 ## Fase 9 (E3) — RBAC completo + `Assignment` por sección
 
 **Estado: ✅ Implementado y verificado con Docker real** (2026-07-30) — planeado en Plan Mode (investigación con 4 agentes Explore en paralelo sobre roadmap/backlog/handoff, arquitectura/ADRs/threat-model, estructura del código, y el detalle de "§4 de la spec" + estado actual de RBAC). El gap analysis mostró que "RBAC completo (todos los roles del §4)" era mucho más grande que el código existente (3 roles implementados de 10 en la spec) — se presentaron 3 decisiones bloqueantes al founder (alcance de la fase, profundidad de `platform_admin`/`Administrador del cliente`, y si refactorizar "roles acumulables"), resueltas explícitamente antes de implementar. Ejecutado en 6 bloques incrementales, cada uno verificado contra Docker real antes de avanzar.

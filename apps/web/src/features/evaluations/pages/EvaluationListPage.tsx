@@ -57,6 +57,7 @@ export function EvaluationListPage() {
                   <TableHead>Estado</TableHead>
                   <TableHead>Proveedores vinculados</TableHead>
                   <TableHead>Última actualización</TableHead>
+                  {isOwner && <TableHead>Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -77,6 +78,18 @@ export function EvaluationListPage() {
                     <TableCell>
                       {new Date(evaluation.updated_at).toLocaleDateString('es-MX')}
                     </TableCell>
+                    {isOwner && (
+                      <TableCell>
+                        {evaluation.status === 'draft' && (
+                          <Link
+                            to={`/evaluations/${evaluation.id}/wizard`}
+                            className="text-sm text-foreground underline-offset-2 hover:underline"
+                          >
+                            Continuar configuración
+                          </Link>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

@@ -35,9 +35,9 @@ import { translateEvaluationStatus, translateProposalStatus } from '@/lib/enumLa
 import { normalizeApiError } from '@/lib/errors'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
 import { VendorCatalogPicker } from '@/features/evaluations/components/VendorCatalogPicker'
+import { startCollectionPreconditionReasons } from '@/features/evaluations/lib/evaluationReadiness'
 
 const MAX_LINKED_VENDORS = 6
-const WEIGHT_TARGETS = { functional: 40, technical: 20 }
 
 export function VendorsPage() {
   const { evaluationId } = useParams<{ evaluationId: string }>()
@@ -102,27 +102,7 @@ export function VendorsPage() {
   const atCapacity = proposals.length >= MAX_LINKED_VENDORS
   const linkedVendorOrgIds = new Set(proposals.map((p) => p.vendor_org_id))
 
-  const functionalWeight = evaluation.requirements
-    .filter((r) => r.dimension === 'functional')
-    .reduce((sum, r) => sum + r.weight, 0)
-  const technicalWeight = evaluation.requirements
-    .filter((r) => r.dimension === 'technical')
-    .reduce((sum, r) => sum + r.weight, 0)
-
-  const startPreconditionReasons: string[] = []
-  if (Math.abs(functionalWeight - WEIGHT_TARGETS.functional) > 1e-6) {
-    startPreconditionReasons.push(
-      `Los requerimientos funcionales deben sumar ${WEIGHT_TARGETS.functional} puntos (llevan ${functionalWeight}).`,
-    )
-  }
-  if (Math.abs(technicalWeight - WEIGHT_TARGETS.technical) > 1e-6) {
-    startPreconditionReasons.push(
-      `Los requerimientos técnicos deben sumar ${WEIGHT_TARGETS.technical} puntos (llevan ${technicalWeight}).`,
-    )
-  }
-  if (proposals.length === 0) {
-    startPreconditionReasons.push('Debes vincular al menos un proveedor.')
-  }
+  const startPreconditionReasons = startCollectionPreconditionReasons(evaluation)
   const canStartCollection = canEdit && startPreconditionReasons.length === 0
 
   return (

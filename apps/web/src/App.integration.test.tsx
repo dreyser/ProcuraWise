@@ -125,7 +125,7 @@ beforeEach(() => {
 })
 
 describe('App integration - owner creates an evaluation', () => {
-  it('logs in, creates an evaluation, and lands on its detail page', async () => {
+  it('logs in, creates an evaluation through the wizard, and advances to the requirements step', async () => {
     const user = userEvent.setup()
     let evaluations: EvaluationDetailResponse[] = []
 
@@ -167,10 +167,13 @@ describe('App integration - owner creates an evaluation', () => {
     await screen.findByRole('heading', { name: 'Nueva evaluación' })
 
     await user.type(screen.getByLabelText('Nombre'), 'RFP CRM')
-    await user.click(screen.getByRole('button', { name: 'Crear evaluación' }))
+    await user.click(screen.getByRole('button', { name: 'Crear y continuar' }))
 
     await screen.findByRole('heading', { name: 'RFP CRM' })
     expect(screen.getByText('Borrador')).toBeInTheDocument()
+    // Creating advances the wizard straight to step 2 (Requerimientos) on
+    // the same evaluation, rather than landing on the read-only detail page.
+    expect(await screen.findByRole('heading', { name: 'Funcional' })).toBeInTheDocument()
   })
 })
 
