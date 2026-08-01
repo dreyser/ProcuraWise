@@ -8,7 +8,13 @@ from procurawise.shared.context import ActorContext
 AuditActorType = Literal["buyer", "vendor_contact", "platform_admin"]
 
 AuditResourceType = Literal[
-    "evaluation", "requirement", "proposal", "score", "assignment", "knowledge_template"
+    "evaluation",
+    "requirement",
+    "proposal",
+    "score",
+    "assignment",
+    "knowledge_template",
+    "ai_execution",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -52,6 +58,15 @@ AuditAction = Literal[
     "knowledge_template_item_updated",
     "knowledge_template_item_removed",
     "requirements_applied_from_template",
+    # Fase 13 (ai, ADR 0021) - resource_type "ai_execution" for the job
+    # lifecycle events; "ai_requirements_accepted" reuses resource_type
+    # "ai_execution" too (not "evaluation"/"requirement") since it records
+    # which AIExecution's candidates were accepted, same reasoning as
+    # requirements_applied_from_template pointing at its own resource.
+    "ai_generation_requested",
+    "ai_generation_succeeded",
+    "ai_generation_failed",
+    "ai_requirements_accepted",
 ]
 
 

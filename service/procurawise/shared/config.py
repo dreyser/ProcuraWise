@@ -68,6 +68,32 @@ class Settings(BaseSettings):
     # (founder decision §18.3 of the approved plan).
     audit_event_retention_days: int = 365
 
+    # Fase 13 (ai, ADR 0021): Azure OpenAI is the first AIProvider
+    # implementation. None by default so local/test never accidentally calls
+    # a real endpoint without explicit config - the production validator
+    # below requires all four when environment=production.
+    azure_openai_endpoint: str | None = None
+    azure_openai_api_key: str | None = None
+    azure_openai_deployment: str | None = None
+    # Pinned, not left on the SDK default - same rationale as
+    # storage_api_version above: an unpinned default can change under us
+    # between SDK releases without a deliberate compatibility check.
+    azure_openai_api_version: str = "2026-01-01-preview"
+    ai_request_timeout_seconds: int = 30
+    # Same 1-year default as audit_event_retention_days (ADR 0016) but a
+    # separate field - AIExecution is its own collection with its own
+    # lifecycle, not an AuditEvent, even though the retention policy happens
+    # to match today.
+    ai_execution_retention_days: int = 365
+    # Deliberately None by default rather than a hardcoded price table -
+    # Azure OpenAI pricing varies by region/negotiated agreement and changes
+    # over time; AIExecution.cost_estimate stays null (never a guessed
+    # number) until the founder configures the tenant's actual per-1k-token
+    # price here. Observability only (ADR 0021 founder decision) - never
+    # used to enforce a limit.
+    ai_prompt_price_per_1k_tokens_usd: float | None = None
+    ai_completion_price_per_1k_tokens_usd: float | None = None
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":
@@ -96,6 +122,26 @@ class Settings(BaseSettings):
         if missing:
             raise ValueError(
                 f"faltan credenciales oidc requeridas cuando environment=production: "
+                f"{', '.join(missing)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_real_ai_config_in_production(self) -> Self:
+        if self.environment != "production":
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("azure_openai_endpoint", self.azure_openai_endpoint),
+                ("azure_openai_api_key", self.azure_openai_api_key),
+                ("azure_openai_deployment", self.azure_openai_deployment),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                f"faltan credenciales de Azure OpenAI requeridas cuando environment=production: "
                 f"{', '.join(missing)}"
             )
         return self

@@ -32,6 +32,38 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-01 — Fase 13 (E5): Adaptador `AIProvider` real (Azure OpenAI/Foundry)
+
+**Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo sobre docs/ADRs/roadmap, backend, y frontend/tests/CI para confirmar que Fase 13 era la fase siguiente y determinar qué infraestructura de IA ya existía — ninguna) seguida de 3 preguntas bloqueantes resueltas explícitamente por el founder antes de implementar. Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación (sesión que empezó en modo solo-planeación), ejecución completa en 8 bloques incrementales, cada uno verificado contra servicios reales (Mongo, Azurite, y — por primera vez en el repo — el emulador real de Azure Service Bus) antes de avanzar.
+
+**Decisiones bloqueantes resueltas por el founder (2026-08-01):**
+1. Modelo de ejecución asíncrona: adaptador real de `ServiceBusMessageBus` + emulador de Azure Service Bus ahora, no un interino en el mismo proceso.
+2. Persistencia de salida de IA: candidatos efímeros en `AIExecution.candidates`, ningún `Requirement` real se crea sin aceptación humana explícita.
+3. Límite de costo de IA: solo observabilidad esta fase (`token_usage`/`cost_estimate` registrados, sin cuota dura); enforcement diferido a Fase 26.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo paquete `service/procurawise/ai/` (`models`, `provider`, `azure_openai_provider`, `research_provider`, `internal_knowledge_provider`, `repository`, `service`, `router`, `worker`, `schemas`, `exceptions`, `prompts/`); `shared/config.py` (+campos `azure_openai_*`/`ai_*`), `shared/messaging.py` (+`ServiceBusMessageBus`/`get_message_bus`), `shared/health.py`/`api/routers/health.py` (+check `ai_provider`), `audit/models.py` (+resource_type `ai_execution` +4 acciones), `worker/main.py` (reescrito — primer dispatch table real), `api/main.py` (+router); `migrations/0009_ai_executions_indexes.py`; `docker-compose.yml` (+perfil `servicebus`), `docker/servicebus-emulator/config.json` (nuevo), `Makefile` (+`dev-up-servicebus`/`test-integration-ai`), `pyproject.toml` (+`openai`/`azure-servicebus`); frontend: `lib/pollingController.ts` (nuevo), `lib/http.ts` (`ApiError`+`headers`), `features/evaluations/hooks/useAiSuggestionJobStatus.ts` (nuevo), `features/evaluations/components/AiSuggestRequirementsDialog.tsx` (nuevo, montado en `WizardStepRequirements.tsx`/`RequirementsPage.tsx`); `e2e/ai-requirement-suggestions.spec.ts` (nuevo); `docs/architecture/decisions/0021-ai-provider-abstraction.md` (nuevo ADR); `docs/architecture/architecture.md`, `docs/security/threat-model.md`, `docs/operations/deployment.md`, `docs/development/backlog.md` actualizados; ~15 archivos de test backend nuevos/extendidos, 2 archivos de test frontend nuevos.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker and not docker_servicebus"`) → 124 passed.
+- Backend integración Docker (`make test-integration`) → 194 passed.
+- Backend integración contra el emulador real de Azure Service Bus (`make test-integration-ai`, target nuevo) → 5 passed, incluyendo un end-to-end genuino (publish real → `run_worker_loop` real → `AIExecution` succeeded).
+- Frontend (`pnpm test`) → 115 passed.
+- `make test-e2e` → 8 specs passed (1 nuevo, alcance limitado documentado en `current-phase.md` — no cubre el camino `succeeded`/aceptar contra un worker real, eso lo cubren el test de componente y la integración Python).
+- `make contracts` corrido dos veces seguidas → sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna nueva más allá de lo ya cubierto por el ADR 0021 escrito en el Bloque 0 — toda la fase ejecuta arquitectura ya aprobada por ADR 0001/0005/0011/0012/0016/0020, formalizada en un ADR nuevo por tratarse de la primera integración con un proveedor de IA externo (regla CLAUDE.md §3), no por reabrir ninguna decisión previa.
+
+**Deuda técnica introducida:**
+- E2E no cubre el camino completo `succeeded`→revisar→aceptar contra un worker real — requeriría un proveedor de IA determinístico gateado a `environment in (local, test)` (mismo patrón que `DevelopmentIdentityProvider`) más iniciar el worker + perfil `servicebus` dentro de `scripts/test-e2e.sh`. Se decidió explícitamente no construirlo a ciegas en esta sesión dado que ese script ya causó un segfault de CI por complejidad de orquestación de procesos — la cobertura equivalente ya existe (test de componente con fetch mockeado + integración Python contra Mongo+Service Bus reales), así que el riesgo de construir infraestructura nueva sin verificación dedicada superaba el valor incremental.
+- Tabla de precios de Azure OpenAI (`ai_prompt_price_per_1k_tokens_usd`/`ai_completion_price_per_1k_tokens_usd`) no tiene ningún valor por defecto — `cost_estimate` queda `null` hasta que el founder configure el precio real negociado para su región/acuerdo. Deliberado (no adivinar un precio), pero significa que la observabilidad de costo no está activa "de fábrica".
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: **Fase 14 (E5) — `ResearchProvider` completo + `CuratedSourceProvider` + `FoundryWebSearchProvider`** (P1, abstracción P0/activación de Foundry P1 condicionado a aprobación legal — ver ADR 0011), depende de Fase 13 (ya cerrada).
+- No tocar todavía: activación del flag de `FoundryWebSearchProvider` sin aprobación legal documentada (ADR 0011); cuota/límite duro de costo de IA (Fase 26); mejora/reescritura de requerimientos existentes vía IA (no está en el backlog).
+- Housekeeping pendiente heredado, opcional: la deuda técnica de E2E arriba (worker + proveedor determinístico) es candidata a resolverse como parte de Fase 14 si esa fase también necesita un job asíncrono real de bùsqueda web, o puede quedar diferida más allá.
+
 ### Sesión — 2026-07-31 — Fase 11 (E4): Biblioteca de requerimientos (`KnowledgeTemplate`, plantillas estáticas, sin IA)
 
 **Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo sobre docs/roadmap/backlog/handoff — para confirmar que Fase 11 era la fase siguiente, no asumida —, backend, y frontend/tests/CI; luego un agente Plan de diseño técnico detallado) seguida de 3 preguntas bloqueantes resueltas explícitamente por el founder antes de implementar (las 3 resueltas con la opción recomendada). Tras la aprobación del plan, implementación completa en 5 bloques incrementales, cada uno verificado contra Docker real antes de avanzar.
