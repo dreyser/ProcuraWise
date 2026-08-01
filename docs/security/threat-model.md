@@ -65,7 +65,8 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 | `identity`/auth | Spoofing, elevación de privilegios | JWT propio + `tenant_id` como claim, sin confiar en input del cliente |
 | `vendors`/vendor-portal | Repudiation, tampering de aceptación NDA/COI | `Agreement` con `user_id`/`ip`/`timestamp`/`version`, append-only |
 | `proposals` | Tampering post-envío | Snapshot inmutable al enviar propuesta |
-| `ai`/`ResearchProvider` | Information disclosure a terceros | Política de datos sanitizados, `FoundryWebSearchProvider` tras flag + aprobación legal (ADR 0011) |
+| `ai`/`AIProvider` (Fase 13) | Prompt injection vía texto libre del usuario; tampering del output de IA | Texto libre solo en el prompt de usuario (nunca en el de sistema); salida restringida por JSON schema y validada por Pydantic antes de tocar el dominio; candidatos efímeros — ningún `Requirement` real se crea sin aceptación humana explícita (ADR 0021) |
+| `ai`/`ResearchProvider` | Information disclosure a terceros | Política de datos sanitizados, `InternalKnowledgeProvider` (sin red externa) único activo en Fase 13; `FoundryWebSearchProvider` tras flag + aprobación legal, Fase 14 (ADR 0011) |
 | `admin` | Elevación de privilegios cross-tenant | `find_across_tenants()` explícito, auditado, con motivo obligatorio — **implementado desde Fase 9** (antes era diseño aprobado sin código) |
 | `assignments` | Un evaluador ve/califica secciones fuera de su responsabilidad | Rol esperado validado contra la dimensión al crear el `Assignment`; enforcement de sección en `scoring.upsert_score` (Fase 9) |
 | `documents` | Malware, denial of service por tamaño | Escaneo AV stub (Fase 16), hardening real (Fase 26) |
@@ -110,6 +111,7 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 | Retención de datos fija a 1 año, no configurable por tenant | Founder | Post-MVP | [ADR 0016](../architecture/decisions/0016-retencion-datos-1-anio.md) |
 | `AuditEvent` con garantía best-effort (gap posible si el insert falla tras una mutación exitosa); sin protección contra acceso admin directo a Mongo | Founder | Post-MVP, revisitar si surge un requisito de compliance más estricto | Plan de Fase 8 (`~/.claude/plans/dreamy-enchanting-seal.md`, fuera del repo) |
 | `platform_admin`/`Administrador del cliente`: solo esqueleto mínimo (un endpoint cross-tenant auditado, un endpoint de lectura de organización) — sin consola/UI de administración, sin gestión de usuarios/roles/billing | Founder | Fase 25 | `docs/development/backlog.md`, fila Fase 25 |
+| Abuso de costo de IA (llamadas repetidas a `POST .../ai/requirement-suggestions`): `AIExecution` registra costo/uso solo con fines de observabilidad, sin límite duro por tenant | Founder | Fase 26 (Hardening, junto con el resto de rate limiting) | [ADR 0021](../architecture/decisions/0021-ai-provider-abstraction.md) |
 
 ## Bandera GDPR
 

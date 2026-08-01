@@ -21,6 +21,72 @@ import type {
 } from '@tanstack/react-query'
 
 import { apiFetch } from '../lib/http'
+export type AIRequirementCandidateDimension =
+  (typeof AIRequirementCandidateDimension)[keyof typeof AIRequirementCandidateDimension]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AIRequirementCandidateDimension = {
+  functional: 'functional',
+  technical: 'technical',
+} as const
+
+export type AIRequirementCandidatePriority =
+  (typeof AIRequirementCandidatePriority)[keyof typeof AIRequirementCandidatePriority]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AIRequirementCandidatePriority = {
+  mandatory: 'mandatory',
+  important: 'important',
+  desirable: 'desirable',
+} as const
+
+export type AIRequirementCandidateResponseType =
+  (typeof AIRequirementCandidateResponseType)[keyof typeof AIRequirementCandidateResponseType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AIRequirementCandidateResponseType = {
+  compliant_status: 'compliant_status',
+  text: 'text',
+  single_choice: 'single_choice',
+  multi_choice: 'multi_choice',
+  number: 'number',
+  percentage: 'percentage',
+  date: 'date',
+  url: 'url',
+  comment: 'comment',
+  currency: 'currency',
+} as const
+
+/**
+ * The AI-facing candidate shape (ADR 0021 §12): every field required,
+non-nullable - Azure OpenAI's structured-output "strict" mode rejects
+optional/nullable properties, so `buyer_guidance`/`options` use empty
+string/list as "not applicable" rather than None. `ai.service` converts
+an accepted candidate into a real `evaluations.models.Requirement`
+(where those fields ARE optional) at accept time, never before.
+ */
+export interface AIRequirementCandidate {
+  dimension: AIRequirementCandidateDimension
+  category: string
+  title: string
+  description: string
+  priority: AIRequirementCandidatePriority
+  response_type: AIRequirementCandidateResponseType
+  weight: number
+  required: boolean
+  buyer_guidance: string
+  options: string[]
+  rationale: string
+}
+
+export interface AcceptSuggestionsRequest {
+  candidate_indices: number[]
+}
+
+export interface AcceptSuggestionsResponse {
+  added_requirements: RequirementResponse[]
+}
+
 export type ActorContextResponseVendorOrgId = string | null
 
 export interface ActorContextResponse {
@@ -847,6 +913,48 @@ export interface SubmitRequest {
   expected_version: number
 }
 
+export type SuggestionJobStatusResponseStatus =
+  (typeof SuggestionJobStatusResponseStatus)[keyof typeof SuggestionJobStatusResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const SuggestionJobStatusResponseStatus = {
+  queued: 'queued',
+  running: 'running',
+  succeeded: 'succeeded',
+  failed: 'failed',
+} as const
+
+export type SuggestionJobStatusResponseCandidates = AIRequirementCandidate[] | null
+
+export type SuggestionJobStatusResponseError = string | null
+
+export type SuggestionJobStatusResponseModel = string | null
+
+export type SuggestionJobStatusResponseTokenUsage = TokenUsageResponse | null
+
+export type SuggestionJobStatusResponseCostEstimate = number | null
+
+export type SuggestionJobStatusResponseLatencyMs = number | null
+
+/**
+ * Shape follows ADR 0012's job status contract:
+queued|running|succeeded|failed. `candidates` is only populated once
+`status == "succeeded"` - never written to Evaluation.requirements
+until POST .../accept is called (ADR 0021 founder decision).
+ */
+export interface SuggestionJobStatusResponse {
+  job_id: string
+  status: SuggestionJobStatusResponseStatus
+  candidates: SuggestionJobStatusResponseCandidates
+  error: SuggestionJobStatusResponseError
+  model: SuggestionJobStatusResponseModel
+  prompt_version: string
+  token_usage: SuggestionJobStatusResponseTokenUsage
+  cost_estimate: SuggestionJobStatusResponseCostEstimate
+  latency_ms: SuggestionJobStatusResponseLatencyMs
+  accepted_requirement_ids: string[]
+}
+
 export interface SwitchTenantRequest {
   membership_id: string
 }
@@ -860,6 +968,31 @@ export interface TokenResponse {
   token_type?: string
   expires_in: number
   actor: ActorContextResponse
+}
+
+export interface TokenUsageResponse {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+}
+
+export type TriggerSuggestionRequestDimension =
+  (typeof TriggerSuggestionRequestDimension)[keyof typeof TriggerSuggestionRequestDimension]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const TriggerSuggestionRequestDimension = {
+  functional: 'functional',
+  technical: 'technical',
+} as const
+
+export interface TriggerSuggestionRequest {
+  dimension: TriggerSuggestionRequestDimension
+  description: string
+}
+
+export interface TriggerSuggestionResponse {
+  job_id: string
+  status_url: string
 }
 
 export type ValidationErrorLocItem = string | number
@@ -5139,6 +5272,594 @@ export const useStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost =
 
   return useMutation(mutationOptions, queryClient)
 }
+
+/**
+ * Fase 13 (ADR 0021/0012): returns 202 immediately - the worker's
+dispatch loop processes the job asynchronously, never this request.
+ * @summary Trigger Requirement Suggestions
+ */
+export type triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponse202 =
+  {
+    data: TriggerSuggestionResponse
+    status: 202
+  }
+
+export type triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponseSuccess =
+  triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponse202 & {
+    headers: Headers
+  }
+export type triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponseError =
+  triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponse422 & {
+    headers: Headers
+  }
+
+export type triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponse =
+  | triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponseSuccess
+  | triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponseError
+
+export const getTriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostUrl =
+  (evaluationId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/ai/requirement-suggestions`
+  }
+
+export const triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost =
+  async (
+    evaluationId: string,
+    triggerSuggestionRequest: TriggerSuggestionRequest,
+    options?: RequestInit,
+  ): Promise<triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponse> => {
+    return apiFetch<triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostResponse>(
+      getTriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostUrl(
+        evaluationId,
+      ),
+      {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(triggerSuggestionRequest),
+      },
+    )
+  }
+
+export const getTriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost
+        >
+      >,
+      TError,
+      { evaluationId: string; data: TriggerSuggestionRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost
+      >
+    >,
+    TError,
+    { evaluationId: string; data: TriggerSuggestionRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost
+        >
+      >,
+      { evaluationId: string; data: TriggerSuggestionRequest }
+    > = (props) => {
+      const { evaluationId, data } = props ?? {}
+
+      return triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost(
+        evaluationId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type TriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost
+      >
+    >
+  >
+export type TriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostMutationBody =
+  TriggerSuggestionRequest
+export type TriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Trigger Requirement Suggestions
+ */
+export const useTriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost
+          >
+        >,
+        TError,
+        { evaluationId: string; data: TriggerSuggestionRequest },
+        TContext
+      >
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof triggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPost
+      >
+    >,
+    TError,
+    { evaluationId: string; data: TriggerSuggestionRequest },
+    TContext
+  > => {
+    const mutationOptions =
+      getTriggerRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsPostMutationOptions(
+        options,
+      )
+
+    return useMutation(mutationOptions, queryClient)
+  }
+
+/**
+ * @summary Get Requirement Suggestion Status
+ */
+export type getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponse200 =
+  {
+    data: SuggestionJobStatusResponse
+    status: 200
+  }
+
+export type getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponseSuccess =
+  getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponse200 & {
+    headers: Headers
+  }
+export type getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponseError =
+  getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponse422 & {
+    headers: Headers
+  }
+
+export type getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponse =
+  | getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponseSuccess
+  | getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponseError
+
+export const getGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetUrl =
+  (evaluationId: string, jobId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/ai/requirement-suggestions/${jobId}`
+  }
+
+export const getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet =
+  async (
+    evaluationId: string,
+    jobId: string,
+    options?: RequestInit,
+  ): Promise<getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponse> => {
+    return apiFetch<getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetResponse>(
+      getGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetUrl(
+        evaluationId,
+        jobId,
+      ),
+      {
+        ...options,
+        method: 'GET',
+      },
+    )
+  }
+
+export const getGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetQueryKey =
+  (evaluationId?: string, jobId?: string) => {
+    return [`/api/v1/evaluations/${evaluationId}/ai/requirement-suggestions/${jobId}`] as const
+  }
+
+export const getGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    evaluationId: string,
+    jobId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {}
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetQueryKey(
+        evaluationId,
+        jobId,
+      )
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+        >
+      >
+    > = () =>
+      getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet(
+        evaluationId,
+        jobId,
+      )
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!(evaluationId && jobId),
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> }
+  }
+
+export type GetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+      >
+    >
+  >
+export type GetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetQueryError =
+  HTTPValidationError
+
+export function useGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  jobId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Requirement Suggestion Status
+ */
+
+export function useGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetRequirementSuggestionStatusApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdGetQueryOptions(
+      evaluationId,
+      jobId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Accept Requirement Suggestions
+ */
+export type acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponse201 =
+  {
+    data: AcceptSuggestionsResponse
+    status: 201
+  }
+
+export type acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponseSuccess =
+  acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponse201 & {
+    headers: Headers
+  }
+export type acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponseError =
+  acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponse422 & {
+    headers: Headers
+  }
+
+export type acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponse =
+  | acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponseSuccess
+  | acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponseError
+
+export const getAcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostUrl =
+  (evaluationId: string, jobId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/ai/requirement-suggestions/${jobId}/accept`
+  }
+
+export const acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost =
+  async (
+    evaluationId: string,
+    jobId: string,
+    acceptSuggestionsRequest: AcceptSuggestionsRequest,
+    options?: RequestInit,
+  ): Promise<acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponse> => {
+    return apiFetch<acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostResponse>(
+      getAcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostUrl(
+        evaluationId,
+        jobId,
+      ),
+      {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(acceptSuggestionsRequest),
+      },
+    )
+  }
+
+export const getAcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost
+        >
+      >,
+      TError,
+      { evaluationId: string; jobId: string; data: AcceptSuggestionsRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost
+      >
+    >,
+    TError,
+    { evaluationId: string; jobId: string; data: AcceptSuggestionsRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost
+        >
+      >,
+      { evaluationId: string; jobId: string; data: AcceptSuggestionsRequest }
+    > = (props) => {
+      const { evaluationId, jobId, data } = props ?? {}
+
+      return acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost(
+        evaluationId,
+        jobId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type AcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost
+      >
+    >
+  >
+export type AcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostMutationBody =
+  AcceptSuggestionsRequest
+export type AcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Accept Requirement Suggestions
+ */
+export const useAcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost
+          >
+        >,
+        TError,
+        { evaluationId: string; jobId: string; data: AcceptSuggestionsRequest },
+        TContext
+      >
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof acceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPost
+      >
+    >,
+    TError,
+    { evaluationId: string; jobId: string; data: AcceptSuggestionsRequest },
+    TContext
+  > => {
+    const mutationOptions =
+      getAcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequirementSuggestionsJobIdAcceptPostMutationOptions(
+        options,
+      )
+
+    return useMutation(mutationOptions, queryClient)
+  }
 
 /**
  * @summary List Audit Events

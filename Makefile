@@ -90,6 +90,17 @@ dev-reset:
 test-integration: dev-up
 	cd service && uv run pytest -m docker
 
+# Fase 13 (ai, ADR 0021): the Service Bus emulator is an opt-in profile
+# (ADR 0020 discipline - no infra without a concrete consumer in the default
+# `make dev-up` set), so it gets its own target - `test-integration`'s
+# `-m docker` run does not start this profile and does not select
+# `docker_servicebus`-marked tests.
+dev-up-servicebus:
+	docker compose --profile servicebus up -d --wait
+
+test-integration-ai: dev-up-servicebus
+	cd service && uv run pytest -m docker_servicebus
+
 # Reproducible Playwright E2E run: infra -> deterministic seed -> API+Vite in
 # background -> wait for real readiness (not a fixed sleep) -> tests ->
 # guaranteed cleanup, even on failure/Ctrl-C. The cleanup/wait/run logic

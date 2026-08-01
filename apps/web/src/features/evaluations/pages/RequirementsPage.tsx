@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/table'
 import { translateEvaluationStatus, translateResponseType } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
+import { AiSuggestRequirementsDialog } from '@/features/evaluations/components/AiSuggestRequirementsDialog'
 import { ApplyTemplateButton } from '@/features/evaluations/components/ApplyTemplateButton'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
 import { WeightSummary } from '@/features/evaluations/components/WeightSummary'
@@ -294,8 +295,12 @@ export function RequirementsPage() {
       )}
 
       {canEdit && (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <ApplyTemplateButton evaluationId={evaluation.id} onApplied={invalidateEvaluation} />
+          <AiSuggestRequirementsDialog
+            evaluationId={evaluation.id}
+            onAccepted={invalidateEvaluation}
+          />
         </div>
       )}
 

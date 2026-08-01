@@ -40,6 +40,9 @@ _VALID_PRODUCTION_AUTH_OVERRIDES = {
     "oidc_microsoft_client_secret": "msecret",
     "oidc_google_client_id": "gid",
     "oidc_google_client_secret": "gsecret",
+    "azure_openai_endpoint": "https://example.openai.azure.com",
+    "azure_openai_api_key": "aikey",
+    "azure_openai_deployment": "gpt-test-deployment",
 }
 
 
@@ -91,3 +94,29 @@ def test_settings_production_requires_oidc_credentials() -> None:
             queue_backend="service_bus",
             jwt_secret="x" * 32,
         )
+
+
+def test_settings_local_allows_missing_azure_openai_config() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.azure_openai_endpoint is None
+    assert settings.azure_openai_api_key is None
+    assert settings.azure_openai_deployment is None
+
+
+def test_settings_production_requires_azure_openai_config() -> None:
+    overrides = {**_VALID_PRODUCTION_AUTH_OVERRIDES}
+    del overrides["azure_openai_endpoint"]
+    del overrides["azure_openai_api_key"]
+    del overrides["azure_openai_deployment"]
+    with pytest.raises(ValidationError, match="Azure OpenAI"):
+        Settings(_env_file=None, environment="production", queue_backend="service_bus", **overrides)
+
+
+def test_settings_production_allows_complete_azure_openai_config() -> None:
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        queue_backend="service_bus",
+        **_VALID_PRODUCTION_AUTH_OVERRIDES,
+    )
+    assert settings.azure_openai_deployment == "gpt-test-deployment"

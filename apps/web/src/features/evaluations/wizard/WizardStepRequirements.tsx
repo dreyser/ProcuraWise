@@ -22,6 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { translateResponseType } from '@/lib/enumLabels'
+import { AiSuggestRequirementsDialog } from '@/features/evaluations/components/AiSuggestRequirementsDialog'
 import { ApplyTemplateButton } from '@/features/evaluations/components/ApplyTemplateButton'
 import {
   RequirementForm,
@@ -210,7 +211,10 @@ export function WizardStepRequirements({
 
   return (
     <div>
-      <ApplyTemplateButton evaluationId={evaluation.id} onApplied={invalidate} />
+      <div className="flex flex-wrap items-center gap-2">
+        <ApplyTemplateButton evaluationId={evaluation.id} onApplied={invalidate} />
+        <AiSuggestRequirementsDialog evaluationId={evaluation.id} onAccepted={invalidate} />
+      </div>
 
       {renderDimension('functional', 'Funcional')}
       {renderDimension('technical', 'Técnico')}

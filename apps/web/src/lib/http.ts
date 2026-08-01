@@ -24,12 +24,18 @@ export function setActiveAccessToken(token: string | null): void {
 export class ApiError extends Error {
   readonly status: number
   readonly data: unknown
+  /** Fase 13 (ai, ADR 0012): the adaptive polling controller reads
+   * `Retry-After` off this to respect the server's backoff hint - optional
+   * since most call sites never need it and older tests construct
+   * ApiError(status, data) without a third argument. */
+  readonly headers?: Headers
 
-  constructor(status: number, data: unknown) {
+  constructor(status: number, data: unknown, headers?: Headers) {
     super(`API request failed with status ${status}`)
     this.name = 'ApiError'
     this.status = status
     this.data = data
+    this.headers = headers
   }
 }
 
@@ -74,7 +80,7 @@ export async function apiFetch<T>(url: string, options: RequestInit = {}): Promi
     : await response.text()
 
   if (!response.ok) {
-    throw new ApiError(response.status, data)
+    throw new ApiError(response.status, data, response.headers)
   }
 
   return { status: response.status, data, headers: response.headers } as T

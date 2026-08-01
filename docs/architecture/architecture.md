@@ -108,7 +108,7 @@ UI construida con shadcn/ui + Tailwind + TanStack Table (ver [ADR 0006](decision
     /scoring /tco /decisions /documents /notifications
     /ai /billing /admin /audit /shared
     /api                       # FastAPI: main.py, router aggregation, middleware, deps.py
-    /worker                    # main.py, dispatch table de jobs
+    /worker                    # main.py, dispatch table de jobs (real desde Fase 13 — ai-requirement-generation)
   /tests/{unit,integration,security,e2e_support}
   /migrations                   # migraciones numeradas, aplicadas idempotentemente vía `make migrate`
   pyproject.toml  uv.lock  Dockerfile.api  Dockerfile.worker
@@ -118,14 +118,16 @@ UI construida con shadcn/ui + Tailwind + TanStack Table (ver [ADR 0006](decision
   /planning /product /development /architecture/decisions /security /operations
   /requirements (ya existe)
 /.github/workflows
-docker-compose.yml             # mongo, azurite (cola local en proceso: InMemoryMessageBus — ver ADR 0020)
-Makefile                        # make dev/test/lint/contracts/migrate
+docker-compose.yml             # mongo, azurite (cola local en proceso: InMemoryMessageBus — ver ADR 0020);
+                                # perfil opcional `servicebus` (Fase 13, ADR 0021): emulador de Azure Service Bus
+Makefile                        # make dev/test/lint/contracts/migrate/dev-up-servicebus/test-integration-ai
 CLAUDE.md  README.md
 ```
 
 ## 10. Puntos de extensión conocidos
 
-- **`ResearchProvider`**: interfaz intercambiable con tres implementaciones (`InternalKnowledgeProvider` default, `CuratedSourceProvider`, `FoundryWebSearchProvider` tras flag + aprobación legal). Ver [ADR 0011](decisions/0011-research-provider-gate-legal-foundry.md).
+- **`AIProvider`** (Fase 13): interfaz `typing.Protocol` para llamadas a un modelo de lenguaje, con `AzureOpenAIProvider` como única implementación del MVP. Un segundo proveedor (OpenAI directo, Anthropic, un modelo local) se agrega escribiendo una clase nueva contra el Protocol, sin tocar `ai.service` ni ningún módulo de dominio. Ver [ADR 0021](decisions/0021-ai-provider-abstraction.md).
+- **`ResearchProvider`**: interfaz intercambiable con tres implementaciones (`InternalKnowledgeProvider` default —la única activa en Fase 13—, `CuratedSourceProvider`, `FoundryWebSearchProvider` tras flag + aprobación legal, ambas Fase 14). Ver [ADR 0011](decisions/0011-research-provider-gate-legal-foundry.md).
 - **Polling → eventos futuros**: el contrato de job asíncrono deja el punto de extensión abierto para SSE/WebSockets/Azure SignalR en una versión futura, sin comprometerlo en el MVP. Ver [ADR 0012](decisions/0012-polling-adaptativo.md).
 - **Más de 6 proveedores**: el límite de 6 es una regla de producto de la spec, no una limitación estructural de datos; ampliar el límite no requiere cambio de modelo, solo de validación.
 - **MFA NO es un punto de extensión activo.** Fue removido del proyecto, no solo diferido — no hay ganchos ni flags preparados para él. Si se retoma, se evalúa desde cero en una versión futura independiente. Ver [ADR 0014](decisions/0014-mfa-excluido-conflicto-interes-eula.md).

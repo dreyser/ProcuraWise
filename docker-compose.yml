@@ -1,10 +1,13 @@
-# Entorno local de ProcuraWise: MongoDB Community + Azurite (Blob Storage).
+# Entorno local de ProcuraWise: MongoDB Community + Azurite (Blob Storage) por
+# defecto. El emulador de Azure Service Bus (Fase 13, ADR 0005/0020/0021) vive
+# detrás del perfil opcional `servicebus` — `make dev-up` NO lo levanta; solo
+# `docker compose --profile servicebus up -d --wait` o `make test-integration-ai`
+# lo hacen, manteniendo la disciplina de ADR 0020 de no levantar infraestructura
+# sin consumidor concreto en el arranque por defecto.
 #
-# Redis y Mailhog quedan fuera del perfil por defecto (ver ADR 0020) — la cola local
-# usa InMemoryMessageBus dentro del proceso, y el correo se difiere hasta que exista
-# notificación real. El emulador de Azure Service Bus queda documentado en
-# docs/operations/deployment.md como incorporación futura opcional, no un servicio
-# de este archivo todavía.
+# Redis y Mailhog quedan fuera de todo perfil (ver ADR 0020) — la cola local
+# usa InMemoryMessageBus dentro del proceso salvo que se use el perfil
+# `servicebus`, y el correo se difiere hasta que exista notificación real.
 #
 # Versionado: imágenes fijadas a una versión explícita, nunca `latest`. Se actualizan
 # manualmente en un commit dedicado (p. ej. al parchear un CVE conocido o alinear con
@@ -44,6 +47,48 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  # Fase 13 (ai, ADR 0021): backs ServiceBusMessageBus - profile `servicebus`,
+  # opt-in only (see header comment). MSSQL_SA_PASSWORD/ACCEPT_EULA below are
+  # fixed, obviously-local-only values (same convention as
+  # storage_connection_string's "UseDevelopmentStorage=true" in
+  # shared/config.py) - never used against a real Azure Service Bus resource,
+  # never a production secret.
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
+    container_name: procurawise-servicebus-mssql
+    profiles: ["servicebus"]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "ProcuraWise-Local-Dev-1!"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  servicebus-emulator:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1
+    container_name: procurawise-servicebus-emulator
+    profiles: ["servicebus"]
+    volumes:
+      - "./docker/servicebus-emulator/config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro"
+    ports:
+      - "5672:5672"
+      - "5300:5300"
+    environment:
+      SQL_SERVER: mssql
+      MSSQL_SA_PASSWORD: "ProcuraWise-Local-Dev-1!"
+      ACCEPT_EULA: "Y"
+      EMULATOR_HTTP_PORT: "5300"
+    depends_on:
+      mssql:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

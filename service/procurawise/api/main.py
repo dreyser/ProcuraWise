@@ -3,6 +3,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import FastAPI, Request, Response
 
 from procurawise.admin.router import router as admin_router
+from procurawise.ai.router import router as ai_router
 from procurawise.api.routers.health import router as health_router
 from procurawise.assignments.router import router as assignments_router
 from procurawise.audit.router import router as audit_router
@@ -42,6 +43,7 @@ app.include_router(health_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(identity_router, prefix="/api/v1")
 app.include_router(evaluations_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(proposals_router, prefix="/api/v1")
 app.include_router(scoring_router, prefix="/api/v1")

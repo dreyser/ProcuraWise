@@ -21,6 +21,14 @@ dependencies = [
     # deprecated in favor of this since authlib 1.7; declared directly
     # rather than relying on it being pulled in transitively by authlib.
     "joserfc>=1.0",
+    # Fase 13 (ai, ADR 0021): `openai` is the official SDK for both OpenAI
+    # and Azure OpenAI (via its `AzureOpenAI` client) - not a separate
+    # "azure-ai" package. `azure-servicebus` backs the first real
+    # cross-process MessageBus adapter (ADR 0005/0020: "arrives with the
+    # first async job, Fase 13+"). Neither reopens architecture already
+    # approved by those ADRs - both execute previously-approved decisions.
+    "openai>=2.52.0",
+    "azure-servicebus>=7.14.3",
 ]
 
 [dependency-groups]
@@ -46,6 +54,11 @@ asyncio_mode = "auto"
 addopts = "--cov=procurawise --cov-report=term-missing --cov-report=xml"
 markers = [
     "docker: requires local Docker services (mongo/azurite) via `make dev-up`",
+    # Fase 13 (ai, ADR 0021): separate from `docker` because the Service Bus
+    # emulator is an opt-in profile (`--profile servicebus`), not part of the
+    # default `make dev-up` set (ADR 0020) - `make test-integration` must not
+    # start failing for everyone just because this profile isn't running.
+    "docker_servicebus: requires the Service Bus emulator profile via `make dev-up-servicebus`",
 ]
 
 [tool.coverage.run]

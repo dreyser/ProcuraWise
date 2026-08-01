@@ -6,7 +6,7 @@ Este documento describe el diseño de despliegue aprobado. **Ninguna infraestruc
 
 | Ambiente | Infraestructura | Cuándo existe | Propósito |
 |---|---|---|---|
-| Local | Docker Compose: Mongo, Azurite. Cola: `InMemoryMessageBus` en proceso (ver [ADR 0020](../architecture/decisions/0020-composicion-servicios-desarrollo-local.md)) | Desde Fase 1B | Desarrollo con datos sintéticos, sin Azure real |
+| Local | Docker Compose: Mongo, Azurite por defecto; perfil opcional `servicebus` (emulador de Azure Service Bus + SQL Server, Fase 13) vía `make dev-up-servicebus`. Cola: `InMemoryMessageBus` en proceso por defecto, `ServiceBusMessageBus` contra el emulador si `queue_backend=service_bus` (ver [ADR 0020](../architecture/decisions/0020-composicion-servicios-desarrollo-local.md) y [ADR 0021](../architecture/decisions/0021-ai-provider-abstraction.md)) | Desde Fase 1B (perfil `servicebus` desde Fase 13) | Desarrollo con datos sintéticos, sin Azure real |
 | Development | CI (GitHub Actions), recursos económicos | Desde Fase 1C (`.github/workflows/`; despliegue real Fase 27) | Validación automatizada en cada PR |
 | Staging | Azure real, similar a producción | Desde Fase 27 | E2E, UAT antes del piloto |
 | Production | Azure Container Apps, aprobaciones, backups, alertas, mínimo privilegio | Desde Fase 27-28 | Piloto (Fase 28) y operación real |
@@ -16,11 +16,11 @@ Este documento describe el diseño de despliegue aprobado. **Ninguna infraestruc
 - **Azure Container Apps**: hosting de API y worker (ver [ADR 0019](../architecture/decisions/0019-azure-container-apps-hosting.md)).
 - **MongoDB Atlas**: tier M0 (free) con IP allowlist para todo el MVP (ver [ADR 0015](../architecture/decisions/0015-tier-mongodb-atlas-m0.md)).
 - **Azure Blob Storage**: almacenamiento de documentos (Azurite como equivalente local).
-- **Azure Service Bus**: cola de jobs asíncronos en staging/producción (`InMemoryMessageBus` como equivalente local en proceso, no Redis — ver [ADR 0005](../architecture/decisions/0005-worker-asincrono-service-bus.md) y [ADR 0020](../architecture/decisions/0020-composicion-servicios-desarrollo-local.md)). El emulador oficial de Azure Service Bus podrá agregarse como perfil opcional del compose local cuando exista el adaptador real (Fase 13+); no es requisito de `make dev`/`make test`/`make dev-up`.
-- **Azure Key Vault**: gestión de secretos vía identidad administrada — sin secretos en código ni en GitHub.
+- **Azure Service Bus**: cola de jobs asíncronos en staging/producción, adaptador real (`ServiceBusMessageBus`) implementado desde Fase 13 (`shared/messaging.py`, `queue_backend=service_bus` — ver [ADR 0005](../architecture/decisions/0005-worker-asincrono-service-bus.md), [ADR 0020](../architecture/decisions/0020-composicion-servicios-desarrollo-local.md) y [ADR 0021](../architecture/decisions/0021-ai-provider-abstraction.md)). El emulador oficial (`mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1` + `mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04`, pinned) vive en `docker-compose.yml` bajo el perfil opcional `servicebus` (`make dev-up-servicebus` / `make test-integration-ai`) — no es requisito de `make dev`/`make test`/`make dev-up`, siguiendo la disciplina de ADR 0020 de no levantar infraestructura sin consumidor concreto en el arranque por defecto.
+- **Azure Key Vault**: gestión de secretos vía identidad administrada — sin secretos en código ni en GitHub. En producción, `azure_openai_api_key` y `service_bus_connection_string` se resuelven desde Key Vault, nunca desde `.env`.
 - **Azure Container Registry**: imágenes firmadas/escaneadas.
 - **Azure Communication Services**: notificaciones reales (desde Fase 24).
-- **Azure OpenAI / Foundry**: `AIProvider` (desde Fase 13); Foundry Web Search desactivado por flag hasta aprobación legal (ver [ADR 0011](../architecture/decisions/0011-research-provider-gate-legal-foundry.md)).
+- **Azure OpenAI / Foundry**: `AIProvider` implementado desde Fase 13 (`AzureOpenAIProvider`, sobre el SDK oficial `openai`). Config requerida en producción (`Settings._require_real_ai_config_in_production`): `azure_openai_endpoint`, `azure_openai_api_key`, `azure_openai_deployment` — ninguno tiene default fuera de `production`, así que el despliegue falla explícitamente si falta alguno en vez de arrancar con IA silenciosamente deshabilitada. Foundry Web Search (`FoundryWebSearchProvider`, Fase 14) desactivado por flag hasta aprobación legal (ver [ADR 0011](../architecture/decisions/0011-research-provider-gate-legal-foundry.md)) — distinto del `AIProvider`/Azure OpenAI de esta fase.
 
 ## Pipeline CI/CD
 
