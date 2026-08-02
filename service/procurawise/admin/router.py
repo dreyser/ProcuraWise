@@ -16,6 +16,15 @@ from procurawise.admin.service import (
 )
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
+from procurawise.curated_sources.models import CuratedSource
+from procurawise.curated_sources.repository import CuratedSourceRepository
+from procurawise.curated_sources.schemas import (
+    CreateCuratedSourceRequest,
+    CuratedSourceListResponse,
+    CuratedSourceResponse,
+    UpdateCuratedSourceRequest,
+)
+from procurawise.curated_sources.service import CuratedSourceNotFoundError, CuratedSourceService
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.jwt_provider import create_admin_access_token
 from procurawise.shared.config import Settings, get_settings
@@ -26,6 +35,25 @@ from procurawise.shared.mongo import get_database
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 require_admin = require_platform_admin()
+
+
+def get_curated_source_service(
+    settings: Settings = Depends(get_settings),
+) -> CuratedSourceService:
+    return CuratedSourceService(CuratedSourceRepository(get_database(settings)))
+
+
+def _curated_source_response(source: CuratedSource) -> CuratedSourceResponse:
+    return CuratedSourceResponse(
+        id=source.id,
+        title=source.title,
+        url=source.url,
+        summary=source.summary,
+        tags=source.tags,
+        active=source.active,
+        created_at=source.created_at,
+        updated_at=source.updated_at,
+    )
 
 
 def get_admin_auth_service(settings: Settings = Depends(get_settings)) -> AdminAuthService:
@@ -92,3 +120,81 @@ def list_evaluations_across_tenants(
         ],
         next_cursor=next_cursor,
     )
+
+
+# Fase 14 (ADR 0011): minimal CuratedSourceProvider content management.
+# platform_admin-only, no dedicated frontend screen this phase (founder
+# decision, Fase 14 planning) - managed via this API directly.
+
+
+@router.post("/curated-sources", response_model=CuratedSourceResponse, status_code=201)
+def create_curated_source(
+    body: CreateCuratedSourceRequest,
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: CuratedSourceService = Depends(get_curated_source_service),
+) -> CuratedSourceResponse:
+    source = service.create(
+        title=body.title,
+        url=body.url,
+        summary=body.summary,
+        tags=body.tags,
+        admin_id=admin.admin_id,
+    )
+    return _curated_source_response(source)
+
+
+@router.get("/curated-sources", response_model=CuratedSourceListResponse)
+def list_curated_sources(
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: CuratedSourceService = Depends(get_curated_source_service),
+) -> CuratedSourceListResponse:
+    return CuratedSourceListResponse(
+        items=[_curated_source_response(source) for source in service.list_all()]
+    )
+
+
+@router.patch("/curated-sources/{source_id}", response_model=CuratedSourceResponse)
+def update_curated_source(
+    source_id: str,
+    body: UpdateCuratedSourceRequest,
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: CuratedSourceService = Depends(get_curated_source_service),
+) -> CuratedSourceResponse:
+    try:
+        source = service.update(
+            source_id,
+            title=body.title,
+            url=body.url,
+            summary=body.summary,
+            tags=body.tags,
+            admin_id=admin.admin_id,
+        )
+    except CuratedSourceNotFoundError:
+        raise HTTPException(status_code=404) from None
+    return _curated_source_response(source)
+
+
+@router.post("/curated-sources/{source_id}/activate", response_model=CuratedSourceResponse)
+def activate_curated_source(
+    source_id: str,
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: CuratedSourceService = Depends(get_curated_source_service),
+) -> CuratedSourceResponse:
+    try:
+        source = service.activate(source_id, admin_id=admin.admin_id)
+    except CuratedSourceNotFoundError:
+        raise HTTPException(status_code=404) from None
+    return _curated_source_response(source)
+
+
+@router.post("/curated-sources/{source_id}/deactivate", response_model=CuratedSourceResponse)
+def deactivate_curated_source(
+    source_id: str,
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: CuratedSourceService = Depends(get_curated_source_service),
+) -> CuratedSourceResponse:
+    try:
+        source = service.deactivate(source_id, admin_id=admin.admin_id)
+    except CuratedSourceNotFoundError:
+        raise HTTPException(status_code=404) from None
+    return _curated_source_response(source)

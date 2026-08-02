@@ -29,6 +29,17 @@ dependencies = [
     # approved by those ADRs - both execute previously-approved decisions.
     "openai>=2.52.0",
     "azure-servicebus>=7.14.3",
+    # Fase 14 (ResearchProvider completo, ADR 0011): FoundryWebSearchProvider
+    # calls the Foundry Responses API directly over `httpx` (already a
+    # dependency) - no `azure-ai-projects`/`azure-ai-agents` SDK is added,
+    # per the founder's Fase 14 planning decision to prefer direct REST over
+    # a heavy agent/toolbox SDK. `azure-identity` is the one narrow
+    # exception: the Responses API authenticates with Entra ID Bearer tokens,
+    # not a static API key (unlike Azure OpenAI's azure_openai_api_key), and
+    # hand-rolling OAuth2 client-credentials token acquisition/caching would
+    # just reinvent what this small, official, single-purpose credential
+    # library already does. It is not itself an AI/agent SDK.
+    "azure-identity>=1.19",
 ]
 
 [dependency-groups]

@@ -11,6 +11,8 @@ from procurawise.ai.schemas import (
     AcceptSuggestionsRequest,
     AcceptSuggestionsResponse,
     AIRequirementCandidate,
+    ResearchSnippetResponse,
+    ResearchWarningResponse,
     SuggestionJobStatusResponse,
     TokenUsageResponse,
     TriggerSuggestionRequest,
@@ -84,6 +86,24 @@ def _status_response(execution: AIExecution) -> SuggestionJobStatusResponse:
         cost_estimate=execution.cost_estimate,
         latency_ms=execution.latency_ms,
         accepted_requirement_ids=execution.accepted_requirement_ids,
+        # Fase 14: mapped straight from the persisted, immutable snapshot -
+        # never re-derived from the live curated_sources collection.
+        source_catalog=[
+            ResearchSnippetResponse(
+                source_type=doc["source_type"],
+                source_id=doc["source_id"],
+                title=doc["title"],
+                url=doc.get("url"),
+                retrieved_at=doc.get("retrieved_at"),
+            )
+            for doc in execution.source_catalog
+        ],
+        warnings=[
+            ResearchWarningResponse(
+                code=doc["code"], source_type=doc["source_type"], message=doc["message"]
+            )
+            for doc in execution.warnings
+        ],
     )
 
 

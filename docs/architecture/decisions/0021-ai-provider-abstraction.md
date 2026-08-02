@@ -52,6 +52,12 @@ Azure OpenAI (`AzureOpenAIProvider`, sobre el SDK oficial `openai`) es la primer
 - Un segundo proveedor de IA en el futuro (Fase 14 en adelante, u otro vendor) implementa `AIProvider`/`ResearchProvider` sin tocar `evaluations`, `knowledge_templates` ni ningún router de dominio.
 - El riesgo de abuso de costo queda documentado como aceptado temporalmente en `threat-model.md`, con dueño (founder) y fecha de revisión (Fase 26).
 
+## Addendum (2026-08-01, Fase 14)
+
+`ResearchProvider` (§16 arriba, "implementada por primera vez en esta fase" — Fase 13) gana sus implementaciones restantes en la Fase 14: `CuratedSourceProvider` y `FoundryWebSearchProvider` (esta última implementada pero desactivada en todo ambiente — ver la clarificación de 2026-08-01 en [ADR 0011](0011-research-provider-gate-legal-foundry.md)), compuestas vía `ai.composite_research_provider.build_research_provider()`. Ningún servicio de dominio cambia — siguen dependiendo únicamente del Protocol `ResearchProvider`, exactamente como esta ADR ya preveía.
+
+También en Fase 14: el audit de frontera de IA de esa sesión de planeación encontró que `shared/health.py` importaba `AzureOpenAIProvider` directamente (en vez de pasar por `resolve_ai_provider()`) para el chequeo `/health/ready` — la única desviación del principio "ningún módulo fuera de `ai/` importa un adaptador concreto" que esta ADR establece implícitamente. Corregido en la misma fase, antes de que CLAUDE.md declarara la regla no negociable (§5.1).
+
 ## Referencias
 
 - [ADR 0001 — Monolito modular](0001-monolito-modular.md)

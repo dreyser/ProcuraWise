@@ -20,6 +20,7 @@ function candidate(overrides: Partial<AIRequirementCandidate> = {}): AIRequireme
     buyer_guidance: '',
     options: [],
     rationale: 'Matches the described reporting need',
+    sources: [],
     ...overrides,
   }
 }
@@ -170,5 +171,71 @@ describe('AiSuggestRequirementsDialog', () => {
 
     expect(await screen.findByText('Azure OpenAI is not configured')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+
+  it('renders citations resolved from source_catalog and a degradation warning banner', async () => {
+    const router = createFetchRouter()
+    router.on('POST', /\/ai\/requirement-suggestions$/, () => ({
+      status: 202,
+      body: { job_id: 'job-3', status_url: '/x' },
+    }))
+    router.on('GET', /\/ai\/requirement-suggestions\/job-3$/, () => ({
+      status: 200,
+      body: {
+        job_id: 'job-3',
+        status: 'succeeded',
+        candidates: [
+          candidate({ sources: ['src-1', 'src-unknown'] }),
+          candidate({ title: 'Uncited candidate', sources: [] }),
+        ],
+        error: null,
+        model: 'gpt-4o-mini',
+        prompt_version: 'v2',
+        token_usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+        cost_estimate: null,
+        latency_ms: 500,
+        accepted_requirement_ids: [],
+        source_catalog: [
+          {
+            source_type: 'curated_source',
+            source_id: 'src-1',
+            title: 'Gartner ERP guide',
+            url: 'https://example.com/erp-guide',
+            retrieved_at: '2026-08-01T00:00:00Z',
+          },
+        ],
+        warnings: [
+          {
+            code: 'research_provider_unavailable',
+            source_type: 'web_search',
+            message: 'no disponible',
+          },
+        ],
+      },
+    }))
+    vi.stubGlobal('fetch', router.fetchImpl)
+
+    const user = userEvent.setup()
+    renderDialog()
+
+    await user.click(screen.getByRole('button', { name: 'Sugerir con IA' }))
+    await user.type(screen.getByLabelText('¿Qué necesitas comprar?'), 'algo')
+    await user.click(screen.getByRole('button', { name: 'Generar sugerencias' }))
+
+    // A valid, resolvable source_id renders as a link to the catalog entry.
+    const citation = await screen.findByRole('link', { name: 'Gartner ERP guide' })
+    expect(citation).toHaveAttribute('href', 'https://example.com/erp-guide')
+    // An unknown/invented source_id (not in source_catalog) never renders -
+    // founder decision, Fase 14 planning: URLs shown to users always come
+    // from the persisted catalog, never directly from model output.
+    expect(screen.queryByText('src-unknown')).not.toBeInTheDocument()
+    // A candidate with no sources at all shows no "Fuentes:" line.
+    expect(screen.getByText('Uncited candidate')).toBeInTheDocument()
+
+    expect(
+      screen.getByText(
+        'Algunas fuentes de investigación no estuvieron disponibles para esta consulta; se usaron únicamente las fuentes restantes.',
+      ),
+    ).toBeInTheDocument()
   })
 })

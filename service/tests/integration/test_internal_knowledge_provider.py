@@ -68,12 +68,13 @@ def test_discover_filters_by_dimension_and_ranks_by_relevance(mongo_test_db) -> 
         TENANT_A, DiscoveryQuery(dimension="functional", description="we need reporting dashboards")
     )
 
-    assert len(result) == 2
+    assert result.warnings == []
+    assert len(result.snippets) == 2
     allowed_source_types = ("internal_template", "internal_evaluation")
-    assert all(snippet.source_type in allowed_source_types for snippet in result)
+    assert all(snippet.source_type in allowed_source_types for snippet in result.snippets)
     # The two functional-dimension snippets both mention "reporting" - the
     # technical-dimension SSO item must be excluded entirely.
-    assert all("SSO" not in snippet.content for snippet in result)
+    assert all("SSO" not in snippet.content for snippet in result.snippets)
 
 
 def test_discover_excludes_current_evaluation(mongo_test_db) -> None:
@@ -99,7 +100,7 @@ def test_discover_excludes_current_evaluation(mongo_test_db) -> None:
         ),
     )
 
-    assert result == []
+    assert result.snippets == []
 
 
 def test_discover_never_crosses_tenants(mongo_test_db) -> None:
@@ -118,4 +119,4 @@ def test_discover_never_crosses_tenants(mongo_test_db) -> None:
         TENANT_A, DiscoveryQuery(dimension="functional", description="reporting")
     )
 
-    assert result == []
+    assert result.snippets == []

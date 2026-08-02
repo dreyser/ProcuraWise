@@ -1,10 +1,13 @@
-import re
+from datetime import UTC, datetime
 
 from procurawise.ai.research_provider import (
     DiscoveryQuery,
+    DiscoveryResult,
     ResearchSnippet,
     ResearchSourceType,
 )
+from procurawise.ai.text_relevance import keywords as _keywords
+from procurawise.ai.text_relevance import relevance as _relevance
 from procurawise.evaluations.models import Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.knowledge_templates.models import KnowledgeTemplate
@@ -14,16 +17,6 @@ from procurawise.knowledge_templates.repository import KnowledgeTemplateReposito
 # large a tenant's library grows - ADR 0021 keeps this phase's grounding
 # source internal-only, but "internal" can still be large.
 MAX_SNIPPETS = 8
-
-_WORD_RE = re.compile(r"[a-záéíóúñ0-9]+", re.IGNORECASE)
-
-
-def _keywords(text: str) -> set[str]:
-    return {word for word in _WORD_RE.findall(text.lower()) if len(word) > 2}
-
-
-def _relevance(query_keywords: set[str], candidate_text: str) -> int:
-    return len(query_keywords & _keywords(candidate_text))
 
 
 class InternalKnowledgeProvider:
@@ -41,7 +34,7 @@ class InternalKnowledgeProvider:
         self._templates = templates
         self._evaluations = evaluations
 
-    def discover(self, tenant_id: str, query: DiscoveryQuery) -> list[ResearchSnippet]:
+    def discover(self, tenant_id: str, query: DiscoveryQuery) -> DiscoveryResult:
         query_keywords = _keywords(query.description)
         scored: list[tuple[int, ResearchSnippet]] = []
 
@@ -78,7 +71,8 @@ class InternalKnowledgeProvider:
                 scored.append((score, snippet))
 
         scored.sort(key=lambda pair: pair[0], reverse=True)
-        return [snippet for _score, snippet in scored[:MAX_SNIPPETS]]
+        snippets = [snippet for _score, snippet in scored[:MAX_SNIPPETS]]
+        return DiscoveryResult(snippets=snippets, warnings=[])
 
 
 def _snippet_from_requirement(
@@ -89,4 +83,6 @@ def _snippet_from_requirement(
         source_id=source_id,
         title=title,
         content=f"[{item.category}] {item.description}",
+        url=None,
+        retrieved_at=datetime.now(UTC),
     )

@@ -60,10 +60,20 @@ export const AIRequirementCandidateResponseType = {
 /**
  * The AI-facing candidate shape (ADR 0021 §12): every field required,
 non-nullable - Azure OpenAI's structured-output "strict" mode rejects
-optional/nullable properties, so `buyer_guidance`/`options` use empty
-string/list as "not applicable" rather than None. `ai.service` converts
-an accepted candidate into a real `evaluations.models.Requirement`
-(where those fields ARE optional) at accept time, never before.
+optional/nullable properties, so `buyer_guidance`/`options`/`sources`
+use empty string/list as "not applicable" rather than None. `ai.service`
+converts an accepted candidate into a real `evaluations.models.
+Requirement` (where those fields ARE optional) at accept time, never
+before.
+
+Fase 14 (ADR 0011): `sources` holds `ResearchSnippet.source_id` values
+the model was instructed to cite from the job's own `source_catalog` -
+never a `url` directly. `ai.service` validates every id against that
+job's immutable catalog (never the live, mutable curated_sources
+collection) both at generation time and again at accept time, stripping
+any unknown/invented id - a URL shown to a user always comes from the
+persisted catalog, never from raw model output (founder decision, Fase
+14 planning).
  */
 export interface AIRequirementCandidate {
   dimension: AIRequirementCandidateDimension
@@ -77,6 +87,7 @@ export interface AIRequirementCandidate {
   buyer_guidance: string
   options: string[]
   rationale: string
+  sources: string[]
 }
 
 export interface AcceptSuggestionsRequest {
@@ -268,6 +279,28 @@ export interface AuditEventResponse {
   outcome: string
   correlation_id?: AuditEventResponseCorrelationId
   metadata: AuditEventResponseMetadata
+}
+
+export interface CreateCuratedSourceRequest {
+  title: string
+  url: string
+  summary: string
+  tags?: string[]
+}
+
+export interface CuratedSourceListResponse {
+  items: CuratedSourceResponse[]
+}
+
+export interface CuratedSourceResponse {
+  id: string
+  title: string
+  url: string
+  summary: string
+  tags: string[]
+  active: boolean
+  created_at: string
+  updated_at: string
 }
 
 export type DevActorSummaryVendorOrgId = string | null
@@ -830,6 +863,61 @@ export interface RequirementUpdateRequest {
   options?: RequirementUpdateRequestOptions
 }
 
+export type ResearchSnippetResponseSourceType =
+  (typeof ResearchSnippetResponseSourceType)[keyof typeof ResearchSnippetResponseSourceType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ResearchSnippetResponseSourceType = {
+  internal_template: 'internal_template',
+  internal_evaluation: 'internal_evaluation',
+  curated_source: 'curated_source',
+  web_search: 'web_search',
+} as const
+
+export type ResearchSnippetResponseUrl = string | null
+
+export type ResearchSnippetResponseRetrievedAt = string | null
+
+/**
+ * Fase 14: one entry of a job's immutable `source_catalog` snapshot -
+the only place a citation's `url` is ever read from when rendering it to
+a user (never from `AIRequirementCandidate` directly, which only carries
+`source_id` references).
+ */
+export interface ResearchSnippetResponse {
+  source_type: ResearchSnippetResponseSourceType
+  source_id: string
+  title: string
+  url: ResearchSnippetResponseUrl
+  retrieved_at: ResearchSnippetResponseRetrievedAt
+}
+
+export type ResearchWarningResponseCode =
+  (typeof ResearchWarningResponseCode)[keyof typeof ResearchWarningResponseCode]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ResearchWarningResponseCode = {
+  research_provider_unavailable: 'research_provider_unavailable',
+  research_provider_timeout: 'research_provider_timeout',
+} as const
+
+export type ResearchWarningResponseSourceType =
+  (typeof ResearchWarningResponseSourceType)[keyof typeof ResearchWarningResponseSourceType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ResearchWarningResponseSourceType = {
+  internal_template: 'internal_template',
+  internal_evaluation: 'internal_evaluation',
+  curated_source: 'curated_source',
+  web_search: 'web_search',
+} as const
+
+export interface ResearchWarningResponse {
+  code: ResearchWarningResponseCode
+  source_type: ResearchWarningResponseSourceType
+  message: string
+}
+
 export type ResultsResponseScoringStatus =
   (typeof ResultsResponseScoringStatus)[keyof typeof ResultsResponseScoringStatus]
 
@@ -953,6 +1041,8 @@ export interface SuggestionJobStatusResponse {
   cost_estimate: SuggestionJobStatusResponseCostEstimate
   latency_ms: SuggestionJobStatusResponseLatencyMs
   accepted_requirement_ids: string[]
+  source_catalog: ResearchSnippetResponse[]
+  warnings: ResearchWarningResponse[]
 }
 
 export interface SwitchTenantRequest {
@@ -993,6 +1083,21 @@ export interface TriggerSuggestionRequest {
 export interface TriggerSuggestionResponse {
   job_id: string
   status_url: string
+}
+
+export type UpdateCuratedSourceRequestTitle = string | null
+
+export type UpdateCuratedSourceRequestUrl = string | null
+
+export type UpdateCuratedSourceRequestSummary = string | null
+
+export type UpdateCuratedSourceRequestTags = string[] | null
+
+export interface UpdateCuratedSourceRequest {
+  title?: UpdateCuratedSourceRequestTitle
+  url?: UpdateCuratedSourceRequestUrl
+  summary?: UpdateCuratedSourceRequestSummary
+  tags?: UpdateCuratedSourceRequestTags
 }
 
 export type ValidationErrorLocItem = string | number
@@ -9632,4 +9737,646 @@ export function useListEvaluationsAcrossTenantsApiV1AdminEvaluationsGet<
   query.queryKey = queryOptions.queryKey
 
   return query
+}
+
+/**
+ * @summary Create Curated Source
+ */
+export type createCuratedSourceApiV1AdminCuratedSourcesPostResponse201 = {
+  data: CuratedSourceResponse
+  status: 201
+}
+
+export type createCuratedSourceApiV1AdminCuratedSourcesPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createCuratedSourceApiV1AdminCuratedSourcesPostResponseSuccess =
+  createCuratedSourceApiV1AdminCuratedSourcesPostResponse201 & {
+    headers: Headers
+  }
+export type createCuratedSourceApiV1AdminCuratedSourcesPostResponseError =
+  createCuratedSourceApiV1AdminCuratedSourcesPostResponse422 & {
+    headers: Headers
+  }
+
+export type createCuratedSourceApiV1AdminCuratedSourcesPostResponse =
+  | createCuratedSourceApiV1AdminCuratedSourcesPostResponseSuccess
+  | createCuratedSourceApiV1AdminCuratedSourcesPostResponseError
+
+export const getCreateCuratedSourceApiV1AdminCuratedSourcesPostUrl = () => {
+  return `/api/v1/admin/curated-sources`
+}
+
+export const createCuratedSourceApiV1AdminCuratedSourcesPost = async (
+  createCuratedSourceRequest: CreateCuratedSourceRequest,
+  options?: RequestInit,
+): Promise<createCuratedSourceApiV1AdminCuratedSourcesPostResponse> => {
+  return apiFetch<createCuratedSourceApiV1AdminCuratedSourcesPostResponse>(
+    getCreateCuratedSourceApiV1AdminCuratedSourcesPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(createCuratedSourceRequest),
+    },
+  )
+}
+
+export const getCreateCuratedSourceApiV1AdminCuratedSourcesPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCuratedSourceApiV1AdminCuratedSourcesPost>>,
+    TError,
+    { data: CreateCuratedSourceRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createCuratedSourceApiV1AdminCuratedSourcesPost>>,
+  TError,
+  { data: CreateCuratedSourceRequest },
+  TContext
+> => {
+  const mutationKey = ['createCuratedSourceApiV1AdminCuratedSourcesPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createCuratedSourceApiV1AdminCuratedSourcesPost>>,
+    { data: CreateCuratedSourceRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return createCuratedSourceApiV1AdminCuratedSourcesPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateCuratedSourceApiV1AdminCuratedSourcesPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createCuratedSourceApiV1AdminCuratedSourcesPost>>
+>
+export type CreateCuratedSourceApiV1AdminCuratedSourcesPostMutationBody = CreateCuratedSourceRequest
+export type CreateCuratedSourceApiV1AdminCuratedSourcesPostMutationError = HTTPValidationError
+
+/**
+ * @summary Create Curated Source
+ */
+export const useCreateCuratedSourceApiV1AdminCuratedSourcesPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createCuratedSourceApiV1AdminCuratedSourcesPost>>,
+      TError,
+      { data: CreateCuratedSourceRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createCuratedSourceApiV1AdminCuratedSourcesPost>>,
+  TError,
+  { data: CreateCuratedSourceRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateCuratedSourceApiV1AdminCuratedSourcesPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Curated Sources
+ */
+export type listCuratedSourcesApiV1AdminCuratedSourcesGetResponse200 = {
+  data: CuratedSourceListResponse
+  status: 200
+}
+
+export type listCuratedSourcesApiV1AdminCuratedSourcesGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listCuratedSourcesApiV1AdminCuratedSourcesGetResponseSuccess =
+  listCuratedSourcesApiV1AdminCuratedSourcesGetResponse200 & {
+    headers: Headers
+  }
+export type listCuratedSourcesApiV1AdminCuratedSourcesGetResponseError =
+  listCuratedSourcesApiV1AdminCuratedSourcesGetResponse422 & {
+    headers: Headers
+  }
+
+export type listCuratedSourcesApiV1AdminCuratedSourcesGetResponse =
+  | listCuratedSourcesApiV1AdminCuratedSourcesGetResponseSuccess
+  | listCuratedSourcesApiV1AdminCuratedSourcesGetResponseError
+
+export const getListCuratedSourcesApiV1AdminCuratedSourcesGetUrl = () => {
+  return `/api/v1/admin/curated-sources`
+}
+
+export const listCuratedSourcesApiV1AdminCuratedSourcesGet = async (
+  options?: RequestInit,
+): Promise<listCuratedSourcesApiV1AdminCuratedSourcesGetResponse> => {
+  return apiFetch<listCuratedSourcesApiV1AdminCuratedSourcesGetResponse>(
+    getListCuratedSourcesApiV1AdminCuratedSourcesGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListCuratedSourcesApiV1AdminCuratedSourcesGetQueryKey = () => {
+  return [`/api/v1/admin/curated-sources`] as const
+}
+
+export const getListCuratedSourcesApiV1AdminCuratedSourcesGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListCuratedSourcesApiV1AdminCuratedSourcesGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>
+  > = () => listCuratedSourcesApiV1AdminCuratedSourcesGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCuratedSourcesApiV1AdminCuratedSourcesGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>
+>
+export type ListCuratedSourcesApiV1AdminCuratedSourcesGetQueryError = HTTPValidationError
+
+export function useListCuratedSourcesApiV1AdminCuratedSourcesGet<
+  TData = Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCuratedSourcesApiV1AdminCuratedSourcesGet<
+  TData = Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCuratedSourcesApiV1AdminCuratedSourcesGet<
+  TData = Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Curated Sources
+ */
+
+export function useListCuratedSourcesApiV1AdminCuratedSourcesGet<
+  TData = Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listCuratedSourcesApiV1AdminCuratedSourcesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListCuratedSourcesApiV1AdminCuratedSourcesGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Update Curated Source
+ */
+export type updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponse200 = {
+  data: CuratedSourceResponse
+  status: 200
+}
+
+export type updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponseSuccess =
+  updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponse200 & {
+    headers: Headers
+  }
+export type updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponseError =
+  updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponse422 & {
+    headers: Headers
+  }
+
+export type updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponse =
+  | updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponseSuccess
+  | updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponseError
+
+export const getUpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchUrl = (
+  sourceId: string,
+) => {
+  return `/api/v1/admin/curated-sources/${sourceId}`
+}
+
+export const updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch = async (
+  sourceId: string,
+  updateCuratedSourceRequest: UpdateCuratedSourceRequest,
+  options?: RequestInit,
+): Promise<updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponse> => {
+  return apiFetch<updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchResponse>(
+    getUpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchUrl(sourceId),
+    {
+      ...options,
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(updateCuratedSourceRequest),
+    },
+  )
+}
+
+export const getUpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch>>,
+    TError,
+    { sourceId: string; data: UpdateCuratedSourceRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch>>,
+  TError,
+  { sourceId: string; data: UpdateCuratedSourceRequest },
+  TContext
+> => {
+  const mutationKey = ['updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch>>,
+    { sourceId: string; data: UpdateCuratedSourceRequest }
+  > = (props) => {
+    const { sourceId, data } = props ?? {}
+
+    return updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch(sourceId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch>>
+>
+export type UpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchMutationBody =
+  UpdateCuratedSourceRequest
+export type UpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Update Curated Source
+ */
+export const useUpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch>>,
+      TError,
+      { sourceId: string; data: UpdateCuratedSourceRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatch>>,
+  TError,
+  { sourceId: string; data: UpdateCuratedSourceRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateCuratedSourceApiV1AdminCuratedSourcesSourceIdPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Activate Curated Source
+ */
+export type activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponse200 = {
+  data: CuratedSourceResponse
+  status: 200
+}
+
+export type activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponseSuccess =
+  activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponse200 & {
+    headers: Headers
+  }
+export type activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponseError =
+  activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponse422 & {
+    headers: Headers
+  }
+
+export type activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponse =
+  | activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponseSuccess
+  | activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponseError
+
+export const getActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostUrl = (
+  sourceId: string,
+) => {
+  return `/api/v1/admin/curated-sources/${sourceId}/activate`
+}
+
+export const activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost = async (
+  sourceId: string,
+  options?: RequestInit,
+): Promise<activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponse> => {
+  return apiFetch<activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostResponse>(
+    getActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostUrl(sourceId),
+    {
+      ...options,
+      method: 'POST',
+    },
+  )
+}
+
+export const getActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost>>,
+    TError,
+    { sourceId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost>>,
+  TError,
+  { sourceId: string },
+  TContext
+> => {
+  const mutationKey = ['activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost>>,
+    { sourceId: string }
+  > = (props) => {
+    const { sourceId } = props ?? {}
+
+    return activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost(sourceId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type ActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost>>
+  >
+
+export type ActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Activate Curated Source
+ */
+export const useActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost>>,
+      TError,
+      { sourceId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof activateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePost>>,
+  TError,
+  { sourceId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Deactivate Curated Source
+ */
+export type deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponse200 = {
+  data: CuratedSourceResponse
+  status: 200
+}
+
+export type deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponseSuccess =
+  deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponse200 & {
+    headers: Headers
+  }
+export type deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponseError =
+  deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponse422 & {
+    headers: Headers
+  }
+
+export type deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponse =
+  | deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponseSuccess
+  | deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponseError
+
+export const getDeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostUrl = (
+  sourceId: string,
+) => {
+  return `/api/v1/admin/curated-sources/${sourceId}/deactivate`
+}
+
+export const deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost = async (
+  sourceId: string,
+  options?: RequestInit,
+): Promise<deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponse> => {
+  return apiFetch<deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostResponse>(
+    getDeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostUrl(sourceId),
+    {
+      ...options,
+      method: 'POST',
+    },
+  )
+}
+
+export const getDeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost>
+      >,
+      TError,
+      { sourceId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost>
+    >,
+    TError,
+    { sourceId: string },
+    TContext
+  > => {
+    const mutationKey = ['deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost>
+      >,
+      { sourceId: string }
+    > = (props) => {
+      const { sourceId } = props ?? {}
+
+      return deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost(sourceId)
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type DeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost>
+    >
+  >
+
+export type DeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Deactivate Curated Source
+ */
+export const useDeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost>
+      >,
+      TError,
+      { sourceId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof deactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePost>>,
+  TError,
+  { sourceId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getDeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }

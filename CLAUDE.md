@@ -40,6 +40,16 @@ Monolito modular: un solo paquete Python `procurawise` (`service/`), entrypoints
 - `FoundryWebSearchProvider` permanece con su feature flag apagado por defecto; **nunca se activa sin aprobación legal documentada** (ver [ADR 0011](docs/architecture/decisions/0011-research-provider-gate-legal-foundry.md)).
 - No implementar MFA — fue removido del proyecto, no es deuda técnica (ver [ADR 0014](docs/architecture/decisions/0014-mfa-excluido-conflicto-interes-eula.md)).
 
+### 5.1 Frontera de proveedores de IA (no negociable)
+
+Verificada explícitamente en la sesión de planeación de la Fase 14 (audit de imports/parsing en todo `service/procurawise/`) y corregida el único punto donde fallaba (`shared/health.py` importaba `AzureOpenAIProvider` directamente — ya corregido).
+
+- Ningún módulo de negocio fuera de `service/procurawise/ai/` importa un SDK de proveedor de IA (`openai`, `azure.ai.*`, `azure-identity` para tokens de Foundry) ni una clase de adaptador concreto (`AzureOpenAIProvider`, `FoundryWebSearchProvider`, `CuratedSourceProvider`) — solo los Protocols `AIProvider`/`ResearchProvider` (`ai/provider.py`, `ai/research_provider.py`) y `resolve_ai_provider()`/`build_research_provider()` como puntos de construcción.
+- Solo `ai/` parsea la salida cruda de un proveedor (texto, JSON, excepciones del SDK). El resto de la aplicación consume exclusivamente DTOs provider-independientes ya validados (`AIRequirementCandidate`, `ResearchSnippet`/`ResearchSnippetResponse`, `ResearchWarning`/`ResearchWarningResponse`).
+- La salida cruda de un proveedor de IA es siempre no confiable — se valida por schema (Pydantic) y por reglas de negocio antes de tocar cualquier módulo de dominio.
+- La IA genera candidatos, nunca entidades canónicas directamente. Un candidato se vuelve una entidad real (`Requirement`) solo después de: parseo, validación de schema, validación de negocio, validación de tenant/autorización, y aceptación humana explícita donde el flujo la requiera (ADR 0021).
+- Toda cita/fuente mostrada a un usuario proviene del catálogo de fuentes inmutable persistido en el job (`AIExecution.source_catalog`), nunca de una URL u otro dato emitido directamente por el modelo (ADR 0011, Fase 14).
+
 ## 6. Reglas de calidad
 
 - La calificación final de una propuesta siempre es humana — la IA sugiere, nunca decide ni auto-adjudica.
@@ -64,6 +74,8 @@ Código + tests correspondientes (unit/integration, y de aislamiento si toca dat
 - No hardcodear secretos.
 - No saltarse el snapshot inmutable en publicación de RFP o envío de propuesta.
 - No activar `FoundryWebSearchProvider` sin aprobación legal documentada.
+- No importar un SDK de proveedor de IA ni una clase de adaptador concreto fuera de `service/procurawise/ai/` (ver §5.1).
+- No crear un `Requirement` (u otra entidad canónica) directamente desde la salida de un proveedor de IA, sin pasar por validación de schema/negocio/tenant y, donde aplique, aceptación humana explícita.
 - No implementar MFA.
 - No implementar adjudicación automática — la decisión final siempre requiere aprobación humana explícita.
 

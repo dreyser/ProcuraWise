@@ -32,6 +32,39 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-01 — Fase 14 (E5): `ResearchProvider` completo + `CuratedSourceProvider` + `FoundryWebSearchProvider` (desactivado)
+
+**Resumen:** Sesión de planeación en Plan Mode (2 rondas de agentes Explore sobre docs/ADRs/roadmap/código de `ai/`, más un research spike vía WebFetch/WebSearch sobre la API real de Microsoft Foundry Web Search) que identificó 3 preguntas bloqueantes, resueltas explícitamente por el founder junto con 5 requisitos adicionales (catálogo de fuentes inmutable, validación de `source_id`, foco de seguridad admin/comprador, warnings estructurados, fix de `shared/health.py`). Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación, ejecución completa en 9 bloques incrementales, cada uno verificado contra servicios reales (Mongo, Azurite) y, para `FoundryWebSearchProvider`, fakes HTTP determinísticos — sin credenciales reales de Foundry en ningún punto.
+
+**Decisiones bloqueantes resueltas por el founder (2026-08-01):**
+1. `CuratedSourceProvider`: colección Mongo a nivel plataforma (no tenant-scoped), CRUD `platform_admin`-only, solo soft-delete, sin admin UI esta fase, sin crawling de URLs.
+2. `FoundryWebSearchProvider`: REST directo (`httpx`+`azure-identity` para el token), no el SDK `azure-ai-projects`/`azure-ai-agents` — confirmado viable por el research spike.
+3. Gate de activación: solo flag a nivel de ambiente esta fase (+ referencia de aprobación legal, fail-closed en todo ambiente); activación por tenant diferida a cuando la aprobación legal esté cerca.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo módulo `service/procurawise/curated_sources/` (`models`, `repository`, `service`, `schemas`); nuevos `ai/curated_source_provider.py`, `ai/foundry_web_search_provider.py`, `ai/composite_research_provider.py`, `ai/text_relevance.py`, `ai/prompts/requirement_generation/v2/`; modificados `ai/research_provider.py` (`DiscoveryResult`/`ResearchWarning`/`ResearchSnippet.url`+`.retrieved_at`), `ai/internal_knowledge_provider.py`, `ai/models.py` (`AIExecution.source_catalog`/`.warnings`), `ai/schemas.py`, `ai/service.py`, `ai/router.py`, `admin/router.py` (+5 endpoints `/curated-sources`), `shared/config.py` (+campos `foundry_*` +validador fail-closed), `shared/health.py` (fix de boundary leak), `pyproject.toml` (+`azure-identity`); `migrations/0010_curated_sources_indexes.py`; frontend: `AiSuggestRequirementsDialog.tsx` (panel de citaciones + banner de degradación), `client.ts` regenerado; ~10 archivos de test backend nuevos + 6 extendidos, 1 archivo de test frontend extendido; `docs/security/threat-model.md`, `docs/operations/deployment.md`, `docs/development/backlog.md`, `docs/development/current-phase.md` actualizados; `CLAUDE.md`, `docs/architecture/architecture.md`, ADR 0011, ADR 0021 actualizados (ver bloque de documentación de frontera de IA).
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker and not docker_servicebus"`) → 147 passed.
+- Backend integración/API/seguridad Docker (`make test-integration`) → 208 passed, incluyendo el foco de seguridad priorizado por el founder (JWT comprador/`tenant_admin` rechazado en rutas admin de `curated-sources`).
+- Frontend (`pnpm test`) → 116 passed.
+- `make test-e2e` → 8 specs passed, sin regresión (ninguno nuevo esta fase — ver nota de alcance en `current-phase.md`).
+- `make contracts` corrido dos veces seguidas → sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere un ADR nuevo — todo lo implementado ejecuta el alcance ya aprobado por ADR 0011 (`ResearchProvider`/gate legal) y ADR 0021 (`AIProvider`/`AIExecution`), formalizado como una clarificación fechada en ADR 0011 y un addendum en ADR 0021 (ver bloque de documentación de frontera de IA), no como decisiones arquitectónicas nuevas.
+- Se optó por **no** usar `AuditEventService` para las acciones de administración de `curated_sources` (logging estructurado en su lugar) — `AuditEventRepository` siempre escribe vía `TenantCollection`, y contenido de plataforma sin `tenant_id` no encaja en ese modelo. Documentado en `curated_sources/service.py`.
+
+**Deuda técnica introducida:**
+- El E2E existente (`ai-requirement-suggestions.spec.ts`, Fase 13) no se extendió para ejercer citaciones/warnings — ese spec no llega al estado `succeeded` sin un worker/proveedor determinístico cableado en `scripts/test-e2e.sh` (deuda ya documentada en la sesión de Fase 13, no nueva de esta sesión). La cobertura equivalente existe en `AiSuggestRequirementsDialog.test.tsx`.
+- Sin wrapper tipado de excepción de proveedor (`AIProviderError`/`AIProviderTimeoutError`) — gap de documentación identificado en el audit de frontera de IA (item 5), no bloqueante para esta fase, no introducido por ella.
+- `CuratedSourceProvider` no filtra por `Dimension` (a diferencia de `InternalKnowledgeProvider`) — solo ranking por relevancia de palabras clave sobre título/resumen/tags. Aceptable con biblioteca curada pequeña; si el volumen crece, podría valer la pena un filtro por dimensión/tag más estricto — no comprometido para ninguna fase futura concreta.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: **Fase 15** (auth real de `vendor_contact`/`Colaborador proveedor`, spec §6.5 FR-043), depende de Fase 9 (ya cerrada) — confirmar contra `roadmap.md`/`backlog.md` antes de planear, no asumir desde este texto.
+- No tocar todavía: activación del flag de `FoundryWebSearchProvider` en ningún ambiente sin aprobación legal documentada (ADR 0011); consentimiento/activación por tenant de Foundry (diferido a cerca de la Fase 28); cuota/límite duro de costo de IA (Fase 26).
+- Housekeeping pendiente heredado, opcional: wrapper tipado de excepción de proveedor (`AIProviderError`) si se retoma la frontera de IA en una fase futura; filtro por dimensión en `CuratedSourceProvider` si el volumen de contenido curado lo justifica.
+
 ### Sesión — 2026-08-01 — Fase 13 (E5): Adaptador `AIProvider` real (Azure OpenAI/Foundry)
 
 **Resumen:** Sesión de planeación en Plan Mode (3 agentes Explore en paralelo sobre docs/ADRs/roadmap, backend, y frontend/tests/CI para confirmar que Fase 13 era la fase siguiente y determinar qué infraestructura de IA ya existía — ninguna) seguida de 3 preguntas bloqueantes resueltas explícitamente por el founder antes de implementar. Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación (sesión que empezó en modo solo-planeación), ejecución completa en 8 bloques incrementales, cada uno verificado contra servicios reales (Mongo, Azurite, y — por primera vez en el repo — el emulador real de Azure Service Bus) antes de avanzar.

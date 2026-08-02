@@ -37,6 +37,7 @@ def _valid_response() -> AIResponse:
                 "buyer_guidance": "",
                 "options": [],
                 "rationale": "Matches the described reporting need",
+                "sources": [],
             }
         ]
     }
