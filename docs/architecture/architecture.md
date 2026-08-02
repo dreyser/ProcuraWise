@@ -31,7 +31,9 @@ Un solo proyecto Python (`service/`), un solo `pyproject.toml`/entorno virtual (
 
 ## 3. Bounded contexts ↔ entidades
 
-Subpaquetes autocontenidos bajo `service/procurawise/`, mapeados a las entidades y módulos de API de la especificación (§17): `identity`, `evaluations`, `vendors`, `proposals`, `qna`, `scoring`, `tco`, `decisions`, `documents`, `notifications`, `ai`, `billing`, `admin`, `audit`, `shared`.
+Subpaquetes autocontenidos bajo `service/procurawise/`, mapeados a las entidades y módulos de API de la especificación (§17): `identity`, `evaluations`, `vendors`, `proposals`, `qna`, `scoring`, `tco`, `decisions`, `documents`, `notifications`, `ai`, `curated_sources`, `billing`, `admin`, `audit`, `shared`.
+
+`curated_sources` (Fase 14) es una excepción deliberada a la tabla de forma interna de abajo: no tiene `router.py` propio — sus endpoints viven en `admin/router.py` (CLAUDE.md §4: rutas `platform_admin` en un router físicamente separado), y `curated_sources.service.CuratedSourceService` no usa `audit.service.AuditEventService` porque `AuditEvent` es intrínsecamente tenant-scoped (`AuditEventRepository` siempre escribe vía `TenantCollection`) y `CuratedSource` es contenido de plataforma sin `tenant_id`.
 
 Cada bounded context sigue la misma forma interna:
 
@@ -106,7 +108,7 @@ UI construida con shadcn/ui + Tailwind + TanStack Table (ver [ADR 0006](decision
   /procurawise
     /identity /evaluations /vendors /proposals /qna
     /scoring /tco /decisions /documents /notifications
-    /ai /billing /admin /audit /shared
+    /ai /curated_sources /billing /admin /audit /shared
     /api                       # FastAPI: main.py, router aggregation, middleware, deps.py
     /worker                    # main.py, dispatch table de jobs (real desde Fase 13 — ai-requirement-generation)
   /tests/{unit,integration,security,e2e_support}
@@ -127,7 +129,37 @@ CLAUDE.md  README.md
 ## 10. Puntos de extensión conocidos
 
 - **`AIProvider`** (Fase 13): interfaz `typing.Protocol` para llamadas a un modelo de lenguaje, con `AzureOpenAIProvider` como única implementación del MVP. Un segundo proveedor (OpenAI directo, Anthropic, un modelo local) se agrega escribiendo una clase nueva contra el Protocol, sin tocar `ai.service` ni ningún módulo de dominio. Ver [ADR 0021](decisions/0021-ai-provider-abstraction.md).
-- **`ResearchProvider`**: interfaz intercambiable con tres implementaciones (`InternalKnowledgeProvider` default —la única activa en Fase 13—, `CuratedSourceProvider`, `FoundryWebSearchProvider` tras flag + aprobación legal, ambas Fase 14). Ver [ADR 0011](decisions/0011-research-provider-gate-legal-foundry.md).
+- **`ResearchProvider`** (Fase 14 — completo): interfaz intercambiable, composición vía `ai.composite_research_provider.build_research_provider()`. `InternalKnowledgeProvider` es el default obligatorio (su fallo es un fallo duro del job); `CuratedSourceProvider` (biblioteca curada por `platform_admin`, plataforma no tenant-scoped) es siempre aditivo; `FoundryWebSearchProvider` (REST directo sobre `httpx`/`azure-identity`, sin SDK de agentes) se compone solo si `Settings.foundry_web_search_enabled` pasa el validador fail-closed (`foundry_legal_approval_reference` + endpoint + agent name, exigidos en **todo** ambiente) — **no activado en ningún ambiente del MVP**. Cualquier fuente secundaria que falle degrada a un `ResearchWarning` estructurado sin fallar el job (nunca texto crudo de excepción). Cada `discover()` produce `ResearchSnippet`s que se persisten, sin modificar, como el `source_catalog` inmutable de ese job (`AIExecution.source_catalog`) — la única fuente de verdad para las citaciones que ve un usuario; `AIRequirementCandidate.sources` solo referencia `source_id`s de ese catálogo, nunca una URL directamente del modelo. Ver [ADR 0011](decisions/0011-research-provider-gate-legal-foundry.md).
+
+```text
+Flujo de negocio (AIService.request_generation)
+    ↓
+AIService (ai/service.py) — orquesta discover → render → generate → validate → persist
+    ↓
+ResearchProvider (Protocol)         AIProvider (Protocol)
+    ↓                                    ↓
+CompositeResearchProvider          AzureOpenAIProvider
+  ├─ InternalKnowledgeProvider     (SDK oficial `openai`, único adaptador
+  ├─ CuratedSourceProvider          fuera de este diagrama que ve texto/JSON
+  └─ FoundryWebSearchProvider       crudo del proveedor)
+     (nunca activo en el MVP)
+    ↓
+ResearchSnippet[] + ResearchWarning[]  →  AIRequest (prompt versionado)
+    ↓                                       ↓
+source_catalog (persistido, inmutable)   AIResponse (raw_output + parsed_output)
+    ↓                                       ↓
+                              Validación de schema (Pydantic) + de negocio
+                                            ↓
+                        AIRequirementCandidate[] (sources ⊆ source_catalog ids)
+                                            ↓
+                         AIExecution.candidates (efímero, no es Requirement)
+                                            ↓
+                    Revisión y aceptación humana explícita (POST .../accept)
+                                            ↓
+                              Requirement real (Evaluation.requirements)
+```
+
+Ningún módulo fuera de `ai/` ve el texto/JSON crudo del proveedor, una excepción de su SDK, o una URL sin pasar por el `source_catalog` persistido — ver CLAUDE.md §5.1.
 - **Polling → eventos futuros**: el contrato de job asíncrono deja el punto de extensión abierto para SSE/WebSockets/Azure SignalR en una versión futura, sin comprometerlo en el MVP. Ver [ADR 0012](decisions/0012-polling-adaptativo.md).
 - **Más de 6 proveedores**: el límite de 6 es una regla de producto de la spec, no una limitación estructural de datos; ampliar el límite no requiere cambio de modelo, solo de validación.
 - **MFA NO es un punto de extensión activo.** Fue removido del proyecto, no solo diferido — no hay ganchos ni flags preparados para él. Si se retoma, se evalúa desde cero en una versión futura independiente. Ver [ADR 0014](decisions/0014-mfa-excluido-conflicto-interes-eula.md).

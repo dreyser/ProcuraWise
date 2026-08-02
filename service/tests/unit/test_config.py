@@ -120,3 +120,70 @@ def test_settings_production_allows_complete_azure_openai_config() -> None:
         **_VALID_PRODUCTION_AUTH_OVERRIDES,
     )
     assert settings.azure_openai_deployment == "gpt-test-deployment"
+
+
+# Fase 14 (ResearchProvider completo, ADR 0011): FoundryWebSearchProvider
+# stays off by default in every environment - the fail-closed gate below
+# runs regardless of `environment`, unlike the azure_openai/oidc validators
+# above which only fire in production.
+
+
+def test_settings_foundry_disabled_by_default() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.foundry_web_search_enabled is False
+    assert settings.foundry_legal_approval_reference is None
+
+
+def test_settings_local_allows_foundry_disabled_with_no_other_config() -> None:
+    settings = Settings(_env_file=None, environment="local")
+    assert settings.foundry_web_search_enabled is False
+
+
+def test_settings_rejects_foundry_enabled_with_no_other_config_in_any_environment() -> None:
+    with pytest.raises(ValidationError, match="foundry_web_search_enabled=true"):
+        Settings(_env_file=None, environment="local", foundry_web_search_enabled=True)
+
+
+def test_settings_rejects_foundry_enabled_missing_approval_reference_in_production() -> None:
+    overrides = {**_VALID_PRODUCTION_AUTH_OVERRIDES}
+    with pytest.raises(ValidationError, match="foundry_legal_approval_reference"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            queue_backend="service_bus",
+            foundry_web_search_enabled=True,
+            foundry_web_search_endpoint="https://example.services.ai.azure.com/api/projects/p",
+            foundry_web_search_agent_name="agent",
+            **overrides,
+        )
+
+
+def test_settings_rejects_foundry_enabled_missing_endpoint() -> None:
+    with pytest.raises(ValidationError, match="foundry_web_search_endpoint"):
+        Settings(
+            _env_file=None,
+            foundry_web_search_enabled=True,
+            foundry_legal_approval_reference="LEGAL-2026-001",
+            foundry_web_search_agent_name="agent",
+        )
+
+
+def test_settings_rejects_foundry_enabled_missing_agent_name() -> None:
+    with pytest.raises(ValidationError, match="foundry_web_search_agent_name"):
+        Settings(
+            _env_file=None,
+            foundry_web_search_enabled=True,
+            foundry_legal_approval_reference="LEGAL-2026-001",
+            foundry_web_search_endpoint="https://example.services.ai.azure.com/api/projects/p",
+        )
+
+
+def test_settings_allows_foundry_enabled_with_complete_config() -> None:
+    settings = Settings(
+        _env_file=None,
+        foundry_web_search_enabled=True,
+        foundry_legal_approval_reference="LEGAL-2026-001",
+        foundry_web_search_endpoint="https://example.services.ai.azure.com/api/projects/p",
+        foundry_web_search_agent_name="agent",
+    )
+    assert settings.foundry_web_search_enabled is True

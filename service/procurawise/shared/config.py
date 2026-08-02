@@ -94,6 +94,39 @@ class Settings(BaseSettings):
     ai_prompt_price_per_1k_tokens_usd: float | None = None
     ai_completion_price_per_1k_tokens_usd: float | None = None
 
+    # Fase 14 (ResearchProvider completo, ADR 0011): FoundryWebSearchProvider
+    # is built but stays off in every environment, including production -
+    # unlike azure_openai_* above (required only in production),
+    # foundry_web_search_enabled defaults False everywhere and the validator
+    # below runs regardless of `environment`. Auth to the Foundry Responses
+    # API is Entra ID Bearer tokens (azure-identity's DefaultAzureCredential),
+    # not a static API key - there is deliberately no
+    # foundry_web_search_api_key field; the credential is resolved from the
+    # process's standard Azure identity (managed identity in Azure, service
+    # principal env vars locally), the same way any other Azure SDK client
+    # would, and FoundryWebSearchProvider accepts it as an injectable
+    # dependency for deterministic tests.
+    foundry_web_search_enabled: bool = False
+    # Foundry project endpoint, e.g. "https://<account>.services.ai.azure.com/api/projects/<project>".
+    foundry_web_search_endpoint: str | None = None
+    # Name of the pre-provisioned Foundry agent (with the web_search tool
+    # already attached) that FoundryWebSearchProvider calls via
+    # `extra_body.agent_reference`. Provisioning the agent/Bing connection is
+    # a one-time infra/ops step (documented in deployment.md), not something
+    # this adapter does at runtime.
+    foundry_web_search_agent_name: str | None = None
+    # Pinned to the path segment Microsoft's docs use for the Responses API
+    # (`/openai/v1/responses`) as of the Block 1 research spike (2026-08) -
+    # re-verify against the official OpenAPI reference before bumping.
+    foundry_web_search_api_version: str = "v1"
+    foundry_web_search_timeout_seconds: int = 20
+    # Founder-directed (Phase 14 planning): activation must never depend on
+    # the boolean flag alone (backlog.md: "no solo config") - a human-entered
+    # identifier for the documented legal-approval record (ADR 0011). This
+    # field existing and being non-empty is not itself legal approval; it is
+    # the required, auditable pointer to where that approval lives.
+    foundry_legal_approval_reference: str | None = None
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":
@@ -143,6 +176,34 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"faltan credenciales de Azure OpenAI requeridas cuando environment=production: "
                 f"{', '.join(missing)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_foundry_preconditions_when_enabled(self) -> Self:
+        """Fase 14 (ADR 0011): fail closed in *every* environment, not only
+        production - `foundry_web_search_enabled=true` alone must never be
+        sufficient to activate live web search. Runs unconditionally
+        (contrast `_require_real_ai_config_in_production`, which only checks
+        when environment=="production") because there is no environment
+        where an incomplete Foundry config should silently no-op instead of
+        refusing to start."""
+        if not self.foundry_web_search_enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("foundry_legal_approval_reference", self.foundry_legal_approval_reference),
+                ("foundry_web_search_endpoint", self.foundry_web_search_endpoint),
+                ("foundry_web_search_agent_name", self.foundry_web_search_agent_name),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "foundry_web_search_enabled=true requiere también: "
+                f"{', '.join(missing)} (ADR 0011: la activación nunca depende solo del flag "
+                "booleano; ver también CLAUDE.md §5)"
             )
         return self
 

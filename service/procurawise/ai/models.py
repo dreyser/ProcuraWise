@@ -87,6 +87,19 @@ class AIExecution:
     candidates: list[dict[str, Any]] | None
     accepted_requirement_ids: list[str]
     error: str | None
+    # Fase 14 (ADR 0011): the exact ResearchSnippets gathered for this job,
+    # written once at generation time and never updated afterward - the
+    # source of truth for candidate citations (schemas.AIRequirementCandidate
+    # .sources references these ids). Deliberately NOT re-derived from the
+    # live curated_sources collection on read, so a later edit/deactivation
+    # of a CuratedSource never retroactively changes what an already-
+    # generated job cites (founder decision, Fase 14 planning).
+    source_catalog: list[dict[str, Any]]
+    # Structured, provider-neutral degradation of a *secondary* research
+    # source (never InternalKnowledgeProvider, whose failure is still a hard
+    # job failure) - distinct from `error`, which stays reserved for jobs
+    # that fail outright. Never raw provider exception text.
+    warnings: list[dict[str, Any]]
     created_at: datetime
     completed_at: datetime | None
     expires_at: datetime
@@ -121,6 +134,8 @@ class AIExecution:
             candidates=None,
             accepted_requirement_ids=[],
             error=None,
+            source_catalog=[],
+            warnings=[],
             created_at=now,
             completed_at=None,
             expires_at=now + timedelta(days=retention_days),
@@ -144,6 +159,8 @@ class AIExecution:
             "candidates": self.candidates,
             "accepted_requirement_ids": self.accepted_requirement_ids,
             "error": self.error,
+            "source_catalog": self.source_catalog,
+            "warnings": self.warnings,
             "created_at": self.created_at,
             "completed_at": self.completed_at,
             "expires_at": self.expires_at,
@@ -169,6 +186,8 @@ class AIExecution:
             candidates=doc.get("candidates"),
             accepted_requirement_ids=doc.get("accepted_requirement_ids", []),
             error=doc.get("error"),
+            source_catalog=doc.get("source_catalog", []),
+            warnings=doc.get("warnings", []),
             created_at=doc["created_at"],
             completed_at=doc.get("completed_at"),
             expires_at=doc["expires_at"],

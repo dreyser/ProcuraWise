@@ -27,6 +27,7 @@ def _valid_response() -> AIResponse:
                 "buyer_guidance": "",
                 "options": [],
                 "rationale": "Matches the described reporting need",
+                "sources": [],
             }
         ]
     }
@@ -65,6 +66,7 @@ def _partially_valid_response() -> AIResponse:
         "buyer_guidance": "",
         "options": [],
         "rationale": "Matches the described reporting need",
+        "sources": [],
     }
     payload = {"candidates": [valid_candidate, {"title": "missing every other required field"}]}
     return AIResponse(

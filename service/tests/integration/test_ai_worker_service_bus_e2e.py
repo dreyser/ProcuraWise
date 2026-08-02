@@ -75,6 +75,7 @@ def test_worker_loop_consumes_real_service_bus_message_and_completes_job(
                 "buyer_guidance": "",
                 "options": [],
                 "rationale": "Matches the described reporting need",
+                "sources": [],
             }
         ]
     }

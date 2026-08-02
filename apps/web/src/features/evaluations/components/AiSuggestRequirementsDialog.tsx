@@ -188,6 +188,18 @@ export function AiSuggestRequirementsDialog({
                   message="Esto está tardando más de lo esperado, pero seguimos intentando."
                 />
               )}
+              {/* Fase 14 (ADR 0011): structured, provider-neutral degradation -
+               * never the job's terminal `error` field, since the job still
+               * succeeded. Only ever populated if a secondary research
+               * source (curated/web) was unavailable - InternalKnowledgeProvider
+               * failing is still a hard job failure handled by the `failed`
+               * branch above. */}
+              {(job.result.warnings ?? []).length > 0 && (
+                <ErrorBanner
+                  variant="info"
+                  message="Algunas fuentes de investigación no estuvieron disponibles para esta consulta; se usaron únicamente las fuentes restantes."
+                />
+              )}
               {accept.isError && <ErrorBanner message={normalizeApiError(accept.error).message} />}
               {(job.result.candidates ?? []).length === 0 && (
                 <p className="text-sm text-muted-foreground">
@@ -195,25 +207,62 @@ export function AiSuggestRequirementsDialog({
                 </p>
               )}
               <ul className="flex flex-col gap-3">
-                {(job.result.candidates ?? []).map((candidate, index) => (
-                  <li
-                    key={index}
-                    className="flex items-start gap-3 rounded-md border border-border p-3"
-                  >
-                    <Checkbox
-                      id={`ai-candidate-${index}`}
-                      checked={selectedIndices.has(index)}
-                      onCheckedChange={() => toggleCandidate(index)}
-                    />
-                    <Label htmlFor={`ai-candidate-${index}`} className="flex flex-col gap-1">
-                      <span className="font-medium text-foreground">{candidate.title}</span>
-                      <span className="text-sm text-muted-foreground">{candidate.description}</span>
-                      <span className="text-xs text-muted-foreground italic">
-                        {candidate.rationale}
-                      </span>
-                    </Label>
-                  </li>
-                ))}
+                {(job.result.candidates ?? []).map((candidate, index) => {
+                  // Fase 14: citations are resolved only from this job's own
+                  // immutable source_catalog snapshot - never from a live
+                  // query, and never a URL taken directly from model output
+                  // (candidate.sources only ever carries source_id references).
+                  const citedSources = candidate.sources
+                    .map((sourceId) =>
+                      (job.result?.source_catalog ?? []).find((s) => s.source_id === sourceId),
+                    )
+                    .filter((snippet) => snippet !== undefined)
+
+                  return (
+                    <li
+                      key={index}
+                      className="flex items-start gap-3 rounded-md border border-border p-3"
+                    >
+                      <Checkbox
+                        id={`ai-candidate-${index}`}
+                        checked={selectedIndices.has(index)}
+                        onCheckedChange={() => toggleCandidate(index)}
+                      />
+                      <Label htmlFor={`ai-candidate-${index}`} className="flex flex-col gap-1">
+                        <span className="font-medium text-foreground">{candidate.title}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {candidate.description}
+                        </span>
+                        <span className="text-xs text-muted-foreground italic">
+                          {candidate.rationale}
+                        </span>
+                        {citedSources.length > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            Fuentes:{' '}
+                            {citedSources.map((snippet, sourceIndex) => (
+                              <span key={snippet.source_id}>
+                                {sourceIndex > 0 && ', '}
+                                {snippet.url ? (
+                                  <a
+                                    href={snippet.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="underline"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    {snippet.title}
+                                  </a>
+                                ) : (
+                                  snippet.title
+                                )}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </Label>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}

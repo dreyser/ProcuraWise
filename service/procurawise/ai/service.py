@@ -3,17 +3,22 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
+from procurawise.ai.composite_research_provider import build_research_provider
 from procurawise.ai.exceptions import (
     AIExecutionNotFoundError,
     InvalidAIExecutionStateError,
     InvalidCandidateSelectionError,
 )
-from procurawise.ai.internal_knowledge_provider import InternalKnowledgeProvider
 from procurawise.ai.models import AIExecution, AIRequest, TokenUsage
 from procurawise.ai.prompt_renderer import render_prompt
 from procurawise.ai.provider import AIProvider
 from procurawise.ai.repository import AIExecutionRepository
-from procurawise.ai.research_provider import DiscoveryQuery, ResearchProvider, ResearchSnippet
+from procurawise.ai.research_provider import (
+    DiscoveryQuery,
+    ResearchProvider,
+    ResearchSnippet,
+    ResearchWarning,
+)
 from procurawise.ai.schemas import AIRequirementCandidate, AIRequirementCandidateBatch
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
@@ -22,7 +27,6 @@ from procurawise.evaluations.models import Dimension, Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.repository import MembershipRepository, TenantRepository, UserRepository
 from procurawise.identity.service import ActorNotFoundError, IdentityService
-from procurawise.knowledge_templates.repository import KnowledgeTemplateRepository
 from procurawise.shared.config import Settings
 from procurawise.shared.context import ActorContext
 from procurawise.shared.messaging import MessageBus, get_message_bus
@@ -31,7 +35,10 @@ from procurawise.shared.mongo import get_database
 logger = logging.getLogger("procurawise.ai")
 
 PROMPT_TEMPLATE = "requirement_generation"
-PROMPT_VERSION = "v1"
+# Fase 14 (ADR 0011): v2 adds source-id citation instructions to the prompt -
+# v1 is left on disk, untouched, per ADR 0021's versioned-prompt discipline
+# (never mutate a shipped prompt version in place).
+PROMPT_VERSION = "v2"
 JOB_TOPIC = "ai-requirement-generation"
 
 _MAX_TOKENS = 2000
@@ -41,8 +48,33 @@ _MAX_GENERATION_ATTEMPTS = 2
 
 def _render_context(snippets: list[ResearchSnippet]) -> str:
     if not snippets:
-        return "(sin contexto interno disponible)"
-    return "\n".join(f"- {snippet.title}: {snippet.content}" for snippet in snippets)
+        return "(sin contexto disponible)"
+    # Fase 14: each line is prefixed with its source_id in brackets so the
+    # v2 prompt can instruct the model to cite it in AIRequirementCandidate
+    # .sources - the only way a citation ever gets attached to a candidate.
+    return "\n".join(
+        f"- [{snippet.source_id}] {snippet.title}: {snippet.content}" for snippet in snippets
+    )
+
+
+def _valid_source_ids(snippets: list[ResearchSnippet]) -> set[str]:
+    return {snippet.source_id for snippet in snippets}
+
+
+def _sanitize_candidate_sources(
+    candidate: AIRequirementCandidate, valid_source_ids: set[str]
+) -> AIRequirementCandidate | None:
+    """Fase 14 (ADR 0011, founder decision): strips any source_id the model
+    cited that isn't in this job's own source_catalog - unknown/invented ids
+    never reach a user. A candidate that cited only invalid ids is dropped
+    entirely rather than silently presented as uncited; a candidate with no
+    sources at all (never claimed to be grounded) is left untouched."""
+    if not candidate.sources:
+        return candidate
+    valid = [source_id for source_id in candidate.sources if source_id in valid_source_ids]
+    if not valid:
+        return None
+    return candidate.model_copy(update={"sources": valid})
 
 
 class _NoValidCandidatesError(Exception):
@@ -178,7 +210,15 @@ class AIService:
             return
 
         try:
-            candidates, model, token_usage, latency_ms, dropped_count = self._generate_candidates(
+            (
+                candidates,
+                model,
+                token_usage,
+                latency_ms,
+                dropped_count,
+                snippets,
+                warnings,
+            ) = self._generate_candidates(
                 tenant_id, execution, dimension=dimension, description=description
             )
         except Exception as exc:  # noqa: BLE001 - any provider/validation failure lands the job in `failed`, never crashes the worker loop
@@ -209,6 +249,8 @@ class AIService:
                 "cost_estimate": cost_estimate,
                 "latency_ms": latency_ms,
                 "candidates": [candidate.model_dump() for candidate in candidates],
+                "source_catalog": [snippet.to_document() for snippet in snippets],
+                "warnings": [warning.to_document() for warning in warnings],
                 "completed_at": datetime.now(UTC),
             },
         )
@@ -227,6 +269,12 @@ class AIService:
         if execution.status != "succeeded" or execution.candidates is None:
             raise InvalidAIExecutionStateError(execution_id)
         evaluation = self._draft_evaluation_or_raise(tenant_id, evaluation_id)
+        # Fase 14 (ADR 0011, founder decision): re-validate source ids at
+        # accept time too, not only at generation time - defense-in-depth
+        # against a tampered/directly-edited AIExecution document. In
+        # practice this is a no-op, since candidates are already sanitized
+        # against this same catalog when persisted (_generate_candidates).
+        valid_source_ids = {doc["source_id"] for doc in execution.source_catalog}
 
         next_display_order = len(evaluation.requirements) + 1
         new_requirements: list[Requirement] = []
@@ -234,9 +282,14 @@ class AIService:
             if index < 0 or index >= len(execution.candidates):
                 raise InvalidCandidateSelectionError(f"candidate index {index} out of range")
             candidate = AIRequirementCandidate.model_validate(execution.candidates[index])
+            sanitized = _sanitize_candidate_sources(candidate, valid_source_ids)
+            if sanitized is None:
+                raise InvalidCandidateSelectionError(
+                    f"candidate at index {index} cites only unknown source ids"
+                )
             try:
                 new_requirements.append(
-                    _requirement_from_candidate(candidate, next_display_order + offset)
+                    _requirement_from_candidate(sanitized, next_display_order + offset)
                 )
             except ValueError as exc:
                 raise InvalidCandidateSelectionError(
@@ -277,8 +330,16 @@ class AIService:
 
     def _generate_candidates(
         self, tenant_id: str, execution: AIExecution, *, dimension: Dimension, description: str
-    ) -> tuple[list[AIRequirementCandidate], str, TokenUsage, int, int]:
-        snippets = self._research.discover(
+    ) -> tuple[
+        list[AIRequirementCandidate],
+        str,
+        TokenUsage,
+        int,
+        int,
+        list[ResearchSnippet],
+        list[ResearchWarning],
+    ]:
+        discovery = self._research.discover(
             tenant_id,
             DiscoveryQuery(
                 dimension=dimension,
@@ -286,6 +347,9 @@ class AIService:
                 exclude_evaluation_id=execution.evaluation_id,
             ),
         )
+        snippets = discovery.snippets
+        warnings = discovery.warnings
+        valid_source_ids = _valid_source_ids(snippets)
         rendered = render_prompt(
             PROMPT_TEMPLATE,
             PROMPT_VERSION,
@@ -335,12 +399,33 @@ class AIService:
                 candidate.model_copy(update={"dimension": dimension})
                 for candidate in valid_candidates
             ]
+            # Fase 14 (ADR 0011, founder decision): strip/reject any cited
+            # source_id that isn't in this job's own catalog before the
+            # candidate is ever persisted - the only point where a citation
+            # can be attached to AIExecution.candidates.
+            sanitized_candidates: list[AIRequirementCandidate] = []
+            source_forgery_drops = 0
+            for candidate in candidates:
+                sanitized = _sanitize_candidate_sources(candidate, valid_source_ids)
+                if sanitized is None:
+                    source_forgery_drops += 1
+                    continue
+                sanitized_candidates.append(sanitized)
+
             token_usage = TokenUsage(
                 prompt_tokens=total_prompt_tokens,
                 completion_tokens=total_completion_tokens,
                 total_tokens=total_prompt_tokens + total_completion_tokens,
             )
-            return candidates, last_model, token_usage, total_latency_ms, dropped_count
+            return (
+                sanitized_candidates,
+                last_model,
+                token_usage,
+                total_latency_ms,
+                dropped_count + source_forgery_drops,
+                snippets,
+                warnings,
+            )
 
         assert last_error is not None
         raise last_error
@@ -421,9 +506,7 @@ def build_ai_service(settings: Settings, provider: AIProvider) -> AIService:
     return AIService(
         executions=AIExecutionRepository(db),
         evaluations=EvaluationRepository(db),
-        research=InternalKnowledgeProvider(
-            KnowledgeTemplateRepository(db), EvaluationRepository(db)
-        ),
+        research=build_research_provider(settings, db),
         provider=provider,
         identity=IdentityService(
             TenantRepository(db), UserRepository(db), MembershipRepository(db)

@@ -25,6 +25,7 @@ def _valid_candidate(dimension: str = "functional") -> dict:
         "buyer_guidance": "",
         "options": [],
         "rationale": "Matches the described reporting need",
+        "sources": [],
     }
 
 
