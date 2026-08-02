@@ -1,14 +1,17 @@
 import { type ReactElement } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { useActor } from '@/actor/ActorContext'
 import { useAuth } from '@/auth/AuthContext'
-import { RequireActor, RequireAuth, RequireRole } from '@/app/guards'
+import { useVendorAuth } from '@/vendor-auth/VendorAuthContext'
+import { RequireAuth, RequireRole, RequireVendorAuth } from '@/app/guards'
 import { AppShell } from '@/app/AppShell'
 import { roleHomePath } from '@/app/roleHomePath'
 import { SelectActorPage } from '@/actor/SelectActorPage'
 import { LoginPage } from '@/auth/LoginPage'
 import { AuthCallbackPage } from '@/auth/AuthCallbackPage'
 import { SelectWorkspacePage } from '@/auth/SelectWorkspacePage'
+import { VendorLoginPage } from '@/vendor-auth/VendorLoginPage'
+import { AcceptInvitationPage } from '@/vendor-auth/AcceptInvitationPage'
+import { RequireAgreementsAccepted } from '@/features/agreements/RequireAgreementsAccepted'
 import { UnauthorizedPage } from '@/app/UnauthorizedPage'
 import { NotFoundPage } from '@/app/NotFoundPage'
 import { EvaluationListPage } from '@/features/evaluations/pages/EvaluationListPage'
@@ -67,35 +70,34 @@ function BuyerLayout({ children }: { children: ReactElement }) {
 }
 
 function VendorLayout({ children }: { children: ReactElement }) {
-  const { actor, clearActor } = useActor()
+  const { actor, logout } = useVendorAuth()
   const navigate = useNavigate()
 
   return (
-    <RequireActor>
+    <RequireVendorAuth>
       <RequireRole roles={VENDOR_ROLES} actor={actor}>
         {actor ? (
           <AppShell
             actor={actor}
-            exitLabel="Cambiar de actor"
-            devModeNotice
+            exitLabel="Cerrar sesión"
             onExit={() => {
-              clearActor()
-              navigate('/dev/select-actor', { replace: true })
+              logout()
+              navigate('/vendor/login', { replace: true })
             }}
           >
-            {children}
+            <RequireAgreementsAccepted>{children}</RequireAgreementsAccepted>
           </AppShell>
         ) : (
           <></>
         )}
       </RequireRole>
-    </RequireActor>
+    </RequireVendorAuth>
   )
 }
 
 function RootRedirect() {
   const { status: authStatus, actor: buyerActor } = useAuth()
-  const { status: vendorStatus, actor: vendorActor } = useActor()
+  const { status: vendorAuthStatus, actor: vendorActor } = useVendorAuth()
 
   if (authStatus === 'ready' && buyerActor) {
     return <Navigate to={roleHomePath(buyerActor.role)} replace />
@@ -103,10 +105,14 @@ function RootRedirect() {
   if (authStatus === 'awaiting_workspace') {
     return <Navigate to="/auth/select-workspace" replace />
   }
-  if (vendorStatus === 'loading') return null
-  if (vendorStatus === 'ready' && vendorActor) {
+  if (vendorAuthStatus === 'ready' && vendorActor) {
     return <Navigate to={roleHomePath(vendorActor.role)} replace />
   }
+  // Neither a buyer nor a vendor session is active - real auth for either
+  // (Fase 15) is never persisted across a refresh, so there is no reliable
+  // signal here for which login screen to prefer. Buyer is the more common
+  // entry point; a vendor hitting a specific deep link still lands on
+  // /vendor/login via RequireVendorAuth's own redirect, which does know.
   return <Navigate to="/login" replace />
 }
 
@@ -119,6 +125,8 @@ export function AppRouter() {
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/auth/select-workspace" element={<SelectWorkspacePage />} />
         <Route path="/dev/select-actor" element={<SelectActorPage />} />
+        <Route path="/vendor/login" element={<VendorLoginPage />} />
+        <Route path="/vendor/accept-invitation" element={<AcceptInvitationPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
         <Route

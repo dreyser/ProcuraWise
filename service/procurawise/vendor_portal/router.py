@@ -5,7 +5,6 @@ from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import RequirementNotFoundError
 from procurawise.evaluations.models import Requirement
 from procurawise.evaluations.repository import EvaluationRepository
-from procurawise.identity.dev_provider import get_current_context as get_dev_context
 from procurawise.identity.repository import VendorOrganizationRepository
 from procurawise.proposals.exceptions import (
     AnswerValidationError,
@@ -20,6 +19,7 @@ from procurawise.proposals.service import ProposalService
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext
 from procurawise.shared.mongo import get_database
+from procurawise.vendor_portal.dependencies import require_agreements_accepted
 from procurawise.vendor_portal.schemas import (
     AnswerWriteRequest,
     SubmitRequest,
@@ -33,19 +33,6 @@ from procurawise.vendor_portal.service import VendorPortalService
 router = APIRouter(prefix="/vendor-portal/proposals", tags=["vendor-portal"])
 
 
-# Deliberately NOT shared.context.require_role (AUTH-PROD scope decision #1):
-# vendor_contact stays on the interim dev-header mechanism
-# (identity.dev_provider) until Fase 15 delivers real invitation-token auth
-# for vendors, while require_role now resolves buyer identity via a real JWT.
-# Anchoring directly here, instead of through shared.context, means a future
-# change to require_role can never accidentally drag the vendor portal along
-# with it - the coupling is explicit and visible in this import line.
-def require_vendor_role(context: ActorContext = Depends(get_dev_context)) -> ActorContext:
-    if context.role != "vendor_contact":
-        raise HTTPException(status_code=403, detail="role not permitted")
-    return context
-
-
 def get_vendor_portal_service(settings: Settings = Depends(get_settings)) -> VendorPortalService:
     db = get_database(settings)
     proposals_service = ProposalService(
@@ -55,17 +42,6 @@ def get_vendor_portal_service(settings: Settings = Depends(get_settings)) -> Ven
         audit=AuditEventService(AuditEventRepository(db), settings),
     )
     return VendorPortalService(proposals=proposals_service, evaluations=EvaluationRepository(db))
-
-
-def require_vendor_context(
-    context: ActorContext = Depends(require_vendor_role),
-) -> ActorContext:
-    # Membership.create already forbids a vendor_contact row without
-    # vendor_org_id, but this is the boundary where an untrusted request
-    # meets that invariant - fail closed rather than trust it silently.
-    if context.vendor_org_id is None:
-        raise HTTPException(status_code=403)
-    return context
 
 
 def _requirement_response(requirement: Requirement) -> VendorRequirementResponse:
@@ -124,7 +100,7 @@ def _summary(proposal: Proposal, evaluation_name: str) -> VendorProposalSummaryR
 
 @router.get("", response_model=list[VendorProposalSummaryResponse])
 def list_proposals(
-    context: ActorContext = Depends(require_vendor_context),
+    context: ActorContext = Depends(require_agreements_accepted),
     service: VendorPortalService = Depends(get_vendor_portal_service),
 ) -> list[VendorProposalSummaryResponse]:
     assert context.vendor_org_id is not None
@@ -139,7 +115,7 @@ def list_proposals(
 @router.get("/{proposal_id}", response_model=VendorProposalDetailResponse)
 def get_proposal(
     proposal_id: str,
-    context: ActorContext = Depends(require_vendor_context),
+    context: ActorContext = Depends(require_agreements_accepted),
     service: VendorPortalService = Depends(get_vendor_portal_service),
 ) -> VendorProposalDetailResponse:
     assert context.vendor_org_id is not None
@@ -157,7 +133,7 @@ def update_answer(
     proposal_id: str,
     requirement_id: str,
     body: AnswerWriteRequest,
-    context: ActorContext = Depends(require_vendor_context),
+    context: ActorContext = Depends(require_agreements_accepted),
     service: VendorPortalService = Depends(get_vendor_portal_service),
 ) -> VendorProposalDetailResponse:
     assert context.vendor_org_id is not None
@@ -192,7 +168,7 @@ def update_answer(
 def submit_proposal(
     proposal_id: str,
     body: SubmitRequest,
-    context: ActorContext = Depends(require_vendor_context),
+    context: ActorContext = Depends(require_agreements_accepted),
     service: VendorPortalService = Depends(get_vendor_portal_service),
 ) -> VendorProposalDetailResponse:
     assert context.vendor_org_id is not None

@@ -32,6 +32,43 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-02 — Fase 15 (E6): NDA/conflicto de interés reales (`Agreement`) + auth productiva de proveedor + colaboradores múltiples
+
+**Resumen:** Sesión de planeación en Plan Mode (verificación no destructiva de git sobre el cierre de Fase 14 — encontró que el reporte citaba el hash pre-squash `afe06c1` en vez del real `f36f471`, y que la rama de Fase 14 no había sido borrada — más 3 agentes Explore en paralelo sobre identity/vendor_portal, proposals/vendor linking, y frontend/e2e) que identificó 4 preguntas bloqueantes, resueltas explícitamente por el founder vía `AskUserQuestion`. Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación, ejecución completa en 10 bloques incrementales (módulo `agreements/`, JWT+invitación de proveedor, endpoints de alta/invitación, gates de `vendor_portal`, auditoría+`dev_seed.py`, tests backend, contratos, frontend, e2e, documentación), cada uno verificado contra servicios reales antes de avanzar.
+
+**Decisiones bloqueantes resueltas por el founder (2026-08-02):**
+1. Colaboradores: mismo rol `vendor_contact` para todos (permisos idénticos), invitación siempre a cargo del comprador — nunca autoinvitación por el proveedor.
+2. Alcance de la invitación: por organización (no por evaluación) — el JWT de proveedor no lleva lista de `evaluation_id`s, el alcance se resuelve en cada request vía `vendor_org_id`+`tenant_id`.
+3. Alta de `VendorOrganization`: combinada con la invitación inicial en un solo endpoint, utilizable standalone o antes de vincular a una evaluación.
+4. Contenido legal: texto único a nivel plataforma, versionado como constantes de código, sin grandfathering al subir de versión.
+
+**Corrección de diseño durante la implementación (resuelta a favor de la seguridad, no un bug):** el plan original recomendaba loguear el token de invitación en texto plano — contradecía el requisito explícito "secretos/tokens ausentes de logs y auditoría". Resuelto devolviendo el token una sola vez en la respuesta HTTP autenticada de creación, nunca logueado (solo su hash SHA-256 se persiste).
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo módulo `service/procurawise/agreements/` (`models`, `repository`, `service`, `schemas`, `legal_content`); `identity/models.py` (+`VendorInvitation`), `identity/repository.py` (+`VendorInvitationRepository`, `UserRepository.update_password`), `identity/jwt_provider.py` (+`vendor_access` token_use, `create_vendor_access_token`/`get_current_vendor_context`), `identity/vendor_auth_service.py` + `identity/vendor_auth_router.py` (nuevos), `identity/vendor_auth_schemas.py` (nuevo); `vendor_portal/dependencies.py` (nuevo), `vendor_portal/router.py` (migrado a JWT real), `vendor_portal/agreements_router.py` (nuevo); `shared/config.py` (+`vendor_invitation_ttl_days`/`trusted_proxy_hops`), `shared/request_ip.py` (nuevo); `audit/models.py` (+`vendor_organization` resource_type +5 acciones); `dev_seed.py` (password real de `vendor_user_a`, nuevo `vendor_user_a2`, Agreements pre-aceptados solo para el contacto principal); `api/main.py` (+4 routers); `migrations/0011_agreements_indexes.py`, `migrations/0012_vendor_invitations_indexes.py`; frontend: `vendor-auth/` (nuevo — `VendorAuthContext`/`VendorLoginPage`/`AcceptInvitationPage`), `features/agreements/` (nuevo — `RequireAgreementsAccepted`/`AgreementAcceptanceScreen`), `features/evaluations/components/` (+`CreateVendorOrganizationForm`/`InviteLinkNotice`/`VendorCollaboratorsPanel`), `app/router.tsx`/`guards.tsx` (`VendorLayout` migrado a auth real), `lib/http.ts` (+`activeVendorAccessToken`), `VendorsPage.tsx` (alta de proveedor + colaboradores); `e2e/vertical-slice.spec.ts`/`isolation.spec.ts` reescritos, `e2e/vendor-onboarding.spec.ts` (nuevo); ~15 archivos de test backend nuevos/extendidos, `App.integration.test.tsx` actualizado.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker and not docker_servicebus"`) → 156 passed.
+- Backend integración/API/seguridad Docker (`make test-integration`) → 228 passed (incl. replay concurrente con `ThreadPoolExecutor` en `test_vendor_auth.py`).
+- Frontend (`pnpm test`) → 116 passed.
+- `pnpm build` → build de producción exitoso.
+- `make test-e2e` → 9/9 specs passed (1 nuevo — `vendor-onboarding.spec.ts` — + 2 reescritos sin regresión).
+- `make contracts` corrido dos veces seguidas → sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere un ADR nuevo — la aclaración de D2 (alcance de invitación por organización, no lista de `evaluation_id`s en el JWT) se documentó como nota fechada en `architecture.md` §5, no como reapertura de arquitectura (no cambia monolito/BD/hosting/patrón de comunicación, CLAUDE.md §3).
+- Corrección de diseño sobre R2 del plan (token en logs) — ver arriba, resuelta a favor del requisito de seguridad explícito, no como decisión arquitectónica nueva.
+
+**Deuda técnica introducida:**
+- `VendorAuthService.login` resuelve determinísticamente a la membership más antigua si un email tiene más de un `vendor_contact` (edge case sin requisito de producto detrás) — documentado, no bloqueante.
+- `VendorOrganization.country`/`region` (GDPR) siguen sin existir en el modelo — la referencia obsoleta en `threat-model.md` que afirmaba lo contrario se corrigió, el campo en sí no se agregó (no era parte del criterio de aceptación textual).
+- Rama `phase-14/research-provider-curated-foundry` (obsoleta desde el squash-merge de Fase 14) sigue sin borrarse — requiere confirmación explícita del founder, acción destructiva fuera del alcance de esta sesión.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: **Fase 16 (E6) — `documents`: subida vía Azurite, escaneo AV stub, versionado, URLs temporales**, depende de Fase 15 (ya cerrada).
+- No tocar todavía: envío real de invitaciones por correo (Fase 24); contenido legal administrable/personalizable por tenant (fuera de alcance); extracción de `vendors/` como bounded context separado (recomendación no bloqueante, no comprometida).
+- Housekeeping pendiente heredado, opcional: borrar la rama `phase-14/research-provider-curated-foundry` si el founder confirma; agregar `VendorOrganization.country`/`region` si Fase 16 (documentos) o una fase posterior necesita el flag GDPR real.
+
 ### Sesión — 2026-08-01 — Fase 14 (E5): `ResearchProvider` completo + `CuratedSourceProvider` + `FoundryWebSearchProvider` (desactivado)
 
 **Resumen:** Sesión de planeación en Plan Mode (2 rondas de agentes Explore sobre docs/ADRs/roadmap/código de `ai/`, más un research spike vía WebFetch/WebSearch sobre la API real de Microsoft Foundry Web Search) que identificó 3 preguntas bloqueantes, resueltas explícitamente por el founder junto con 5 requisitos adicionales (catálogo de fuentes inmutable, validación de `source_id`, foco de seguridad admin/comprador, warnings estructurados, fix de `shared/health.py`). Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación, ejecución completa en 9 bloques incrementales, cada uno verificado contra servicios reales (Mongo, Azurite) y, para `FoundryWebSearchProvider`, fakes HTTP determinísticos — sin credenciales reales de Foundry en ningún punto.

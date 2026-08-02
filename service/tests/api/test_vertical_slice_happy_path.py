@@ -1,7 +1,12 @@
 import pytest
 
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from tests.conftest import approve_and_publish, bearer_headers_for, unique_actor_by_role
+from tests.conftest import (
+    approve_and_publish,
+    bearer_headers_for,
+    unique_actor_by_role,
+    vendor_bearer_headers_for,
+)
 
 pytestmark = pytest.mark.docker
 
@@ -20,11 +25,12 @@ def test_vertical_slice_happy_path(client, seeded_actors, mongo_test_settings) -
     evaluator_headers = bearer_headers_for(
         seeded_actors[(tenant_a, "evaluator_functional")], mongo_test_settings
     )
-    # vendor_contact stays on the dev-header mechanism (AUTH-PROD scope
-    # decision #1) - unchanged.
-    vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
+    # /me still resolves via the interim dev-header mechanism (unchanged);
+    # vendor_portal itself now requires a real vendor JWT (Fase 15).
+    vendor_dev_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
+    vendor_headers = vendor_bearer_headers_for(vendor_membership_id, mongo_test_settings)
 
-    vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
+    vendor_org_id = client.get("/api/v1/me", headers=vendor_dev_headers).json()["vendor_org_id"]
 
     created = client.post(
         "/api/v1/evaluations",

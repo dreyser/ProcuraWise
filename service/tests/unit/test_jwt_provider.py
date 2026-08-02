@@ -7,6 +7,7 @@ from procurawise.identity.jwt_provider import (
     TokenInvalidError,
     create_access_token,
     create_pre_session_token,
+    create_vendor_access_token,
     decode_token,
 )
 from procurawise.shared.config import Settings
@@ -26,6 +27,18 @@ def _context() -> ActorContext:
         role="evaluation_owner",
         vendor_org_id=None,
         display_name="Owner",
+    )
+
+
+def _vendor_context() -> ActorContext:
+    return ActorContext(
+        membership_id="vm1",
+        user_id="vu1",
+        tenant_id="t1",
+        tenant_name="Acme",
+        role="vendor_contact",
+        vendor_org_id="vo1",
+        display_name="Vendor Contact",
     )
 
 
@@ -94,3 +107,31 @@ def test_decode_rejects_expired_token() -> None:
     time.sleep(1)
     with pytest.raises(TokenExpiredError):
         decode_token(token, settings, expected_use="access")
+
+
+def test_vendor_access_token_round_trips_vendor_context() -> None:
+    settings = _settings()
+    token, expires_in = create_vendor_access_token(_vendor_context(), settings)
+    assert expires_in == settings.access_token_ttl_minutes * 60
+    claims = decode_token(token, settings, expected_use="vendor_access")
+    assert claims["membership_id"] == "vm1"
+    assert claims["vendor_org_id"] == "vo1"
+    assert claims["role"] == "vendor_contact"
+    assert claims["sub"] == "vu1"
+
+
+def test_vendor_access_token_rejected_as_buyer_access_token() -> None:
+    # A vendor token must never be mistaken for a buyer ActorContext -
+    # decode_token's expected_use check is the structural boundary, not just
+    # a role check downstream.
+    settings = _settings()
+    token, _ = create_vendor_access_token(_vendor_context(), settings)
+    with pytest.raises(TokenInvalidError):
+        decode_token(token, settings, expected_use="access")
+
+
+def test_buyer_access_token_rejected_as_vendor_access_token() -> None:
+    settings = _settings()
+    token, _ = create_access_token(_context(), settings)
+    with pytest.raises(TokenInvalidError):
+        decode_token(token, settings, expected_use="vendor_access")

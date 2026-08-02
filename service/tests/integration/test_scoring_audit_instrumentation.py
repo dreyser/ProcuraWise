@@ -1,7 +1,12 @@
 import pytest
 
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from tests.conftest import approve_and_publish, bearer_headers_for, unique_actor_by_role
+from tests.conftest import (
+    approve_and_publish,
+    bearer_headers_for,
+    unique_actor_by_role,
+    vendor_bearer_headers_for,
+)
 
 pytestmark = pytest.mark.docker
 
@@ -25,8 +30,9 @@ def _submitted_proposal(client, seeded_actors, mongo_test_settings):
     owner_headers = bearer_headers_for(
         seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
     )
-    vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
-    vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
+    vendor_dev_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
+    vendor_org_id = client.get("/api/v1/me", headers=vendor_dev_headers).json()["vendor_org_id"]
+    vendor_headers = vendor_bearer_headers_for(vendor_membership_id, mongo_test_settings)
 
     evaluation_id = client.post(
         "/api/v1/evaluations",

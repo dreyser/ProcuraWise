@@ -2,6 +2,7 @@ import { type ReactElement } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useActor } from '@/actor/ActorContext'
 import { useAuth } from '@/auth/AuthContext'
+import { useVendorAuth } from '@/vendor-auth/VendorAuthContext'
 
 /** Deep link without an active vendor dev-actor: redirect to the interim
  * selector, preserving the destination via ?next=. Route guards are UX
@@ -23,6 +24,23 @@ export function RequireActor({ children }: { children: ReactElement }) {
   if (status === 'anonymous') {
     const next = encodeURIComponent(`${location.pathname}${location.search}`)
     return <Navigate to={`/dev/select-actor?next=${next}`} replace />
+  }
+
+  return children
+}
+
+/** Fase 15: vendor equivalent of RequireAuth below, backed by real vendor
+ * auth (vendor-auth/VendorAuthContext) instead of the interim dev-header
+ * mechanism RequireActor still guards. Redirects to /vendor/login,
+ * preserving the destination via ?next= - never to /dev/select-actor,
+ * which remains a devtools-only path with no production consumer left. */
+export function RequireVendorAuth({ children }: { children: ReactElement }) {
+  const { status } = useVendorAuth()
+  const location = useLocation()
+
+  if (status === 'anonymous') {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`)
+    return <Navigate to={`/vendor/login?next=${next}`} replace />
   }
 
   return children

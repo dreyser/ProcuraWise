@@ -3,22 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { createFetchRouter } from '@/testUtils/mockFetchRouter'
-import type { DevActorSummary, EvaluationDetailResponse } from '@/api/client'
+import type { EvaluationDetailResponse } from '@/api/client'
 
 const OWNER_ID = 'membership-owner'
 const VENDOR_ID = 'membership-vendor'
 const OWNER_EMAIL = 'owner.a@dev.procurawise.local'
 const OWNER_PASSWORD = 'dev-password-2026'
-
-const DEV_ACTORS: DevActorSummary[] = [
-  {
-    actor_id: VENDOR_ID,
-    display_name: 'Vendor Contact A',
-    tenant_name: 'Acme Compradora (dev)',
-    role: 'vendor_contact',
-    vendor_org_id: 'vendor-1',
-  },
-]
+const VENDOR_EMAIL = 'vendor.a@dev.procurawise.local'
+const VENDOR_PASSWORD = 'dev-vendor-password-2026'
 
 function meFor(actorId: string) {
   const known: Record<string, ReturnType<typeof buildActor>> = {
@@ -201,27 +193,43 @@ describe('App integration - buyer and vendor identities never leak into each oth
     expect(screen.getByRole('link', { name: 'Nueva evaluación' })).toBeInTheDocument()
     buyerRender.unmount()
 
-    // The vendor portal is a physically separate mechanism/URL (AUTH-PROD
-    // scope decision #1 - vendor_contact stays on the interim dev-header
-    // selector, not real login) - simulated here as a fresh visit to
-    // /dev/select-actor, the same way a developer would exercise it
-    // independently of any buyer session.
+    // The vendor portal is a physically separate mechanism/URL (Fase 15:
+    // real vendor login, token_use=vendor_access) - simulated here as a
+    // fresh visit to /vendor/login, the same way a real vendor contact
+    // would reach it independently of any buyer session.
     const vendorRouter = createFetchRouter()
-    vendorRouter.on('GET', /\/api\/v1\/dev\/actors$/, () => ({ status: 200, body: DEV_ACTORS }))
-    vendorRouter.on('GET', /\/api\/v1\/me$/, ({ headers }) => ({
+    vendorRouter.on('POST', /\/api\/v1\/vendor-auth\/login$/, () => ({
       status: 200,
-      body: meFor(headers.get('X-Dev-Membership-Id')!),
+      body: {
+        access_token: 'vendor-access-token-1',
+        token_type: 'bearer',
+        expires_in: 1800,
+        actor: meFor(VENDOR_ID),
+      },
+    }))
+    vendorRouter.on('GET', /\/api\/v1\/vendor-portal\/agreements\/status$/, () => ({
+      status: 200,
+      body: {
+        nda_accepted: true,
+        conflict_of_interest_accepted: true,
+        current_nda_version: 'v1',
+        current_conflict_of_interest_version: 'v1',
+        nda_text: 'nda',
+        conflict_of_interest_text: 'coi',
+      },
     }))
     vendorRouter.on('GET', /\/api\/v1\/vendor-portal\/proposals$/, () => ({
       status: 200,
       body: [],
     }))
     vi.stubGlobal('fetch', vendorRouter.fetchImpl)
-    window.history.pushState({}, '', '/dev/select-actor')
+    window.history.pushState({}, '', '/vendor/login')
 
     render(<App />)
-    await screen.findByRole('heading', { name: 'Selecciona un actor' })
-    await user.click(await screen.findByRole('button', { name: /Vendor Contact A/ }))
+    await screen.findByRole('heading', { name: 'Acceso de proveedor' })
+    await user.type(screen.getByLabelText('Correo'), VENDOR_EMAIL)
+    await user.type(screen.getByLabelText('Contraseña'), VENDOR_PASSWORD)
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
 
     await screen.findByRole('heading', { name: 'Mis propuestas' })
     expect(screen.queryByRole('link', { name: 'Nueva evaluación' })).not.toBeInTheDocument()

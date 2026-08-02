@@ -31,9 +31,11 @@ Un solo proyecto Python (`service/`), un solo `pyproject.toml`/entorno virtual (
 
 ## 3. Bounded contexts ↔ entidades
 
-Subpaquetes autocontenidos bajo `service/procurawise/`, mapeados a las entidades y módulos de API de la especificación (§17): `identity`, `evaluations`, `vendors`, `proposals`, `qna`, `scoring`, `tco`, `decisions`, `documents`, `notifications`, `ai`, `curated_sources`, `billing`, `admin`, `audit`, `shared`.
+Subpaquetes autocontenidos bajo `service/procurawise/`, mapeados a las entidades y módulos de API de la especificación (§17): `identity`, `evaluations`, `vendors`, `proposals`, `qna`, `scoring`, `tco`, `decisions`, `documents`, `notifications`, `ai`, `curated_sources`, `agreements`, `billing`, `admin`, `audit`, `shared`.
 
 `curated_sources` (Fase 14) es una excepción deliberada a la tabla de forma interna de abajo: no tiene `router.py` propio — sus endpoints viven en `admin/router.py` (CLAUDE.md §4: rutas `platform_admin` en un router físicamente separado), y `curated_sources.service.CuratedSourceService` no usa `audit.service.AuditEventService` porque `AuditEvent` es intrínsecamente tenant-scoped (`AuditEventRepository` siempre escribe vía `TenantCollection`) y `CuratedSource` es contenido de plataforma sin `tenant_id`.
+
+`agreements` (Fase 15) es otra excepción deliberada: no tiene `router.py` propio — sus dos endpoints (`GET/POST /vendor-portal/agreements/status|accept`) viven en `vendor_portal/agreements_router.py` (solo un proveedor autenticado los consume, mismo router físicamente separado que ya exige CLAUDE.md §4); tampoco tiene `exceptions.py` (no hay condición de error propia más allá de lo que Pydantic ya valida). El resto de la lógica de auth/invitación de proveedor (`VendorInvitation`, `VendorAuthService`) vive dentro de `identity/` en vez de un módulo `vendors/` separado — `VendorOrganization` ya vivía ahí desde antes de Fase 15 y no se extrajo (recomendación no bloqueante de la sesión de planeación de Fase 15, no comprometida para ninguna fase futura concreta).
 
 Cada bounded context sigue la misma forma interna:
 
@@ -64,7 +66,8 @@ Ver detalle de amenazas y controles en [`docs/security/threat-model.md`](../secu
 - Dependencia FastAPI `get_current_context()` adjunta `tenant_id/user_id/roles` a `request.state`.
 - Capa de repositorio reforzada estructuralmente vía `TenantCollection(db, "evaluations", tenant_id)`, que **inyecta automáticamente** `{"tenant_id": tenant_id}` en cada `find/find_one/update_one/delete_one` — estructuralmente imposible omitir el filtro.
 - Todo índice compuesto de colección de negocio empieza con `tenant_id` (ej. `{tenant_id:1, evaluation_id:1}`).
-- Usuarios proveedor no reciben `tenant_id` de comprador en su JWT — reciben `vendor_org_id` + lista de `evaluation_id`s a los que fueron invitados. Se sirven desde router disjunto `/api/v1/vendor-portal/*` con su propia dependencia `get_vendor_context()`. La garantía no es "chequear permisos" sino que **no existe código de ruta que enumere vendors ni evaluaciones ajenas**.
+- Usuarios proveedor (`vendor_contact`) se sirven desde router disjunto `/api/v1/vendor-portal/*` con su propia dependencia `get_current_vendor_context()` (`identity/jwt_provider.py`, `token_use="vendor_access"`, Fase 15). La garantía no es "chequear permisos" sino que **no existe código de ruta que enumere vendors ni evaluaciones ajenas**.
+  > **Aclaración fechada (Fase 15, 2026-08-02, decisión de planeación D2):** el JWT de proveedor sí lleva `tenant_id` (`VendorOrganization` ya es tenant-owned — ver §6 abajo) pero **no** lleva una lista de `evaluation_id`s. La frase original de este párrafo ("reciben vendor_org_id + lista de evaluation_ids") se interpreta como descripción conceptual de alcance, no como mandato literal de claim: el alcance real (qué evaluaciones ve un proveedor) se resuelve en cada request vía `vendor_org_id`+`tenant_id` contra `TenantCollection`, por organización completa — no por evaluación individual. Un proveedor vinculado a una evaluación nueva después de emitido el JWT la ve de inmediato, sin necesitar un login nuevo. Esta aclaración no reabre la arquitectura (no cambia monolito/BD/hosting/patrón de comunicación, CLAUDE.md §3) — no ameritó ADR nuevo.
 - Rol `platform_admin` sin `tenant_id` en el claim, rutas bajo `/api/v1/admin/*`, método explícito `find_across_tenants()` (no existe en el path normal), decorado con `@requires_audit_reason`.
 
 Ver [ADR 0002](decisions/0002-multi-tenant-mongodb.md).
@@ -73,7 +76,7 @@ Ver [ADR 0002](decisions/0002-multi-tenant-mongodb.md).
 
 MongoDB Atlas, tier M0 en el MVP (ver [ADR 0015](decisions/0015-tier-mongodb-atlas-m0.md) y [ADR 0018](decisions/0018-mongodb-atlas-datastore.md)). Entidades principales por bounded context según §17 de la especificación; mecanismos compartidos relevantes:
 
-- **`Agreement`**: registro tipado de aceptación (`type: nda | conflict_of_interest`, `user_id`, `ip`, `timestamp`, `version`), reutilizado para NDA y conflicto de interés. `VendorOrganization` incluye `country`/`region` para el flag de GDPR.
+- **`Agreement`** (`agreements/`, Fase 15): registro append-only de aceptación (`type: nda | conflict_of_interest`, `user_id`, `ip`, `timestamp`, `version`), reutilizado para NDA y conflicto de interés — grano `user_id`, nunca `vendor_org_id` (cada colaborador acepta individualmente, ADR 0014). `VendorInvitation` (mismo módulo `identity/`) modela el token de invitación de un solo uso que crea la `Membership` `vendor_contact` antes de que exista ninguna aceptación. `VendorOrganization` **no** incluye todavía `country`/`region` para el flag de GDPR (pendiente, ver `docs/security/threat-model.md`, sección "Bandera GDPR" — corrección de una referencia previa incorrecta de este mismo documento).
 - **`FXRate`**: colección compartida, no tenant-scoped, gestionada solo por `platform_admin` (`{from_currency, to_currency, rate, effective_date, updated_by, source: "manual"}`). Cada snapshot de TCO congela la tasa vigente al publicar/enviar. Ver [ADR 0008](decisions/0008-fuente-fx-tco.md).
 - **Versionado de propuestas**: cada `ProposalAnswer` de una nueva versión registra `status: inherited | modified | removed` + `source_proposal_version`; un `Score` pertenece a una versión específica. Ver [ADR 0013](decisions/0013-versionado-propuestas-negociacion.md).
 - **Migraciones**: carpeta `migrations/` numerada + colección `_migrations` de control + `indexes.py` por módulo como fuente de verdad, aplicado idempotentemente al arrancar.
@@ -108,7 +111,7 @@ UI construida con shadcn/ui + Tailwind + TanStack Table (ver [ADR 0006](decision
   /procurawise
     /identity /evaluations /vendors /proposals /qna
     /scoring /tco /decisions /documents /notifications
-    /ai /curated_sources /billing /admin /audit /shared
+    /ai /curated_sources /agreements /billing /admin /audit /shared
     /api                       # FastAPI: main.py, router aggregation, middleware, deps.py
     /worker                    # main.py, dispatch table de jobs (real desde Fase 13 — ai-requirement-generation)
   /tests/{unit,integration,security,e2e_support}

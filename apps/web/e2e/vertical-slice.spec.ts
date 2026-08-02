@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test'
 const wait = { waitUntil: 'commit' as const }
 
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
+const DEV_VENDOR_PASSWORD = 'dev-vendor-password-2026'
 
 /**
  * Buyer identity (evaluation_owner/evaluator_functional) is real auth after AUTH-PROD -
@@ -21,15 +22,17 @@ async function loginAsBuyer(page: Page, email: string) {
 }
 
 /**
- * vendor_contact stays on the interim dev-header mechanism until Fase 15
- * (AUTH-PROD scope decision #1) - a completely separate mechanism from the
- * buyer login above, persisted via sessionStorage (survives the `page.goto`
- * below, unlike the buyer's in-memory access token).
+ * Fase 15: vendor_contact now authenticates via a real login too
+ * (token_use=vendor_access), same in-memory-only, no-persistence discipline
+ * as the buyer login above - a completely separate mechanism/credential,
+ * not just a different role on the same session.
  */
-async function selectVendorActor(page: Page, namePattern: RegExp) {
-  await page.goto('/dev/select-actor')
-  await page.getByRole('button', { name: namePattern }).click()
-  await page.waitForURL((url) => !url.pathname.includes('/dev/select-actor'), wait)
+async function loginAsVendor(page: Page, email: string) {
+  await page.goto('/vendor/login')
+  await page.getByLabel('Correo').fill(email)
+  await page.getByLabel('Contraseña').fill(DEV_VENDOR_PASSWORD)
+  await page.getByRole('button', { name: 'Entrar' }).click()
+  await page.waitForURL((url) => !url.pathname.includes('/vendor/login'), wait)
 }
 
 /**
@@ -87,8 +90,11 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await page.getByRole('button', { name: 'Iniciar recepción' }).click()
   await expect(page.getByText('Recibiendo propuestas')).toBeVisible()
 
-  // 2. Vendor: answer both required requirements and submit.
-  await selectVendorActor(page, /Vendor Contact A/)
+  // 2. Vendor: answer both required requirements and submit. Agreements
+  // (NDA + conflict of interest) are already accepted for this seeded
+  // contact (dev_seed.py) - the fresh-invitation acceptance flow is covered
+  // separately by e2e/vendor-onboarding.spec.ts.
+  await loginAsVendor(page, 'vendor.a@dev.procurawise.local')
   await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
   await page.waitForURL(/\/vendor\/proposals\/[a-f0-9]+$/, wait)
 
@@ -109,7 +115,7 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await expect(page.getByText('Esta propuesta ya fue enviada y no puede editarse.')).toBeVisible()
 
   // 3. Owner: start evaluation. Fresh login - the previous owner session (if
-  // any survived step 1) was already wiped by selectVendorActor's `page.goto`.
+  // any survived step 1) was already wiped by loginAsVendor's `page.goto`.
   await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
   await page.waitForURL('**/evaluations', wait)
   await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
