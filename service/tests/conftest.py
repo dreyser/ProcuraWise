@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from procurawise.api.main import app
 from procurawise.dev_seed import SEEDED_COLLECTIONS, seed
-from procurawise.identity.jwt_provider import create_access_token
+from procurawise.identity.jwt_provider import create_access_token, create_vendor_access_token
 from procurawise.identity.repository import MembershipRepository, TenantRepository, UserRepository
 from procurawise.identity.service import IdentityService
 from procurawise.shared.config import Settings, get_settings
@@ -32,9 +32,18 @@ def seeded_actors(mongo_test_settings: Settings, mongo_test_db):
     """Membership id keyed by (tenant_id, role) - shared across every
     docker-marked test that needs a seeded identity fixture plus (as of
     VS-2B) one seeded draft Evaluation+Proposal under tenant_a (see
-    dev_seed.py)."""
+    dev_seed.py). Keeps the *first* Membership per key, not the last
+    (`setdefault`, not a dict comprehension) - Fase 15 added a second
+    vendor_contact Membership on the same (tenant_id, "vendor_contact") key
+    (a second collaborator on the same vendor org, seeded right after the
+    first), and every existing test resolving "the" vendor actor via
+    `unique_actor_by_role` must keep landing on the first one. Tests that
+    need the second collaborator specifically use
+    `second_vendor_collaborator_membership_id` below instead."""
     memberships = seed(mongo_test_settings)
-    by_key = {(m.tenant_id, m.role): m.id for m in memberships}
+    by_key: dict[tuple[str, str], str] = {}
+    for m in memberships:
+        by_key.setdefault((m.tenant_id, m.role), m.id)
     yield by_key
     for name in SEEDED_COLLECTIONS:
         mongo_test_db[name].drop()
@@ -66,10 +75,7 @@ def bearer_headers_for(membership_id: str, mongo_test_settings: Settings) -> dic
     exercise the login flow itself (see tests/api/test_auth_router.py for
     that). AUTH-PROD replaced the dev-header mechanism for every route that
     goes through shared.context.require_role (evaluations/proposals/scoring/
-    vendor-organizations), so those tests' owner/evaluator headers now come
-    from here. vendor_contact actors keep using DEV_ACTOR_HEADER unchanged
-    (AUTH-PROD scope decision #1 - vendor_portal still depends on
-    identity.dev_provider directly)."""
+    vendor-organizations)."""
     db = get_database(mongo_test_settings)
     identity_service = IdentityService(
         tenants=TenantRepository(db), users=UserRepository(db), memberships=MembershipRepository(db)
@@ -77,6 +83,37 @@ def bearer_headers_for(membership_id: str, mongo_test_settings: Settings) -> dic
     context = identity_service.resolve_actor_context(membership_id)
     token, _ = create_access_token(context, mongo_test_settings)
     return {"Authorization": f"Bearer {token}"}
+
+
+def vendor_bearer_headers_for(membership_id: str, mongo_test_settings: Settings) -> dict[str, str]:
+    """Fase 15: the vendor-side mirror of bearer_headers_for above - mints a
+    real vendor access token (token_use=vendor_access), in-process, for a
+    seeded vendor_contact Membership. vendor_portal now requires this same
+    real-JWT mechanism buyer routes have required since AUTH-PROD; the
+    interim DEV_ACTOR_HEADER mechanism is no longer accepted there (still
+    used only for /dev/actors and /me, unchanged)."""
+    db = get_database(mongo_test_settings)
+    identity_service = IdentityService(
+        tenants=TenantRepository(db), users=UserRepository(db), memberships=MembershipRepository(db)
+    )
+    context = identity_service.resolve_actor_context(membership_id)
+    token, _ = create_vendor_access_token(context, mongo_test_settings)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def second_vendor_collaborator_membership_id(mongo_test_db, tenant_id: str) -> str:
+    """Fase 15: dev_seed.py seeds a second vendor_contact Membership
+    (vendor.a2@dev.procurawise.local) on the same vendor_org_id as the
+    primary seeded vendor actor, deliberately kept out of the
+    `seeded_actors` fixture (see dev_seed.py's comment - two Membership rows
+    sharing the same (tenant_id, "vendor_contact") key would silently
+    collide there). Tests that need "the other collaborator on the same
+    org" resolve it here instead."""
+    user_doc = mongo_test_db["users"].find_one({"email": "vendor.a2@dev.procurawise.local"})
+    membership_doc = mongo_test_db["memberships"].find_one(
+        {"tenant_id": tenant_id, "user_id": user_doc["_id"], "role": "vendor_contact"}
+    )
+    return str(membership_doc["_id"])
 
 
 def approve_and_publish(

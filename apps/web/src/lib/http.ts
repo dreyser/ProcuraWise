@@ -2,14 +2,22 @@
 // override.mutator). This is the single place that attaches identity
 // headers - no component or feature hook may set them directly.
 //
-// Two independent mechanisms coexist here (AUTH-PROD scope decision #1):
-// `activeMembershipId` is the interim dev-header mechanism vendor_contact
-// still uses (actor/ActorContext.tsx); `activeAccessToken` is the real JWT
-// buyer routes require (auth/AuthContext.tsx). They never apply to the same
-// request in practice - buyer and vendor routers are physically disjoint -
-// so both can be attached unconditionally without conflict.
+// Three mechanisms coexist here:
+// `activeMembershipId` is the interim dev-header mechanism, kept only for
+// /dev/actors + /me + local devtools exploration (actor/ActorContext.tsx) -
+// no production route accepts it anymore (vendor_portal stopped accepting
+// it in Fase 15, mirroring what AUTH-PROD already did to buyer routes).
+// `activeAccessToken` is the buyer's real JWT (auth/AuthContext.tsx);
+// `activeVendorAccessToken` is the vendor's real JWT (Fase 15,
+// vendor-auth/VendorAuthContext.tsx). The two real tokens are kept in
+// separate variables (not one shared slot) so a buyer login and a vendor
+// login can never silently clobber each other's token if both happened to
+// be exercised in the same browser tab/session - each login path clears the
+// other's slot defensively (see setActiveAccessToken/
+// setActiveVendorAccessToken call sites).
 let activeMembershipId: string | null = null
 let activeAccessToken: string | null = null
+let activeVendorAccessToken: string | null = null
 
 export function setActiveMembershipId(membershipId: string | null): void {
   activeMembershipId = membershipId
@@ -19,6 +27,12 @@ export function setActiveMembershipId(membershipId: string | null): void {
  * always loses it, forcing a real relogin (AUTH-PROD scope decision #2). */
 export function setActiveAccessToken(token: string | null): void {
   activeAccessToken = token
+}
+
+/** Fase 15: the vendor-side mirror of setActiveAccessToken above - same
+ * in-memory-only, no-persistence discipline (short TTL, no refresh token). */
+export function setActiveVendorAccessToken(token: string | null): void {
+  activeVendorAccessToken = token
 }
 
 export class ApiError extends Error {
@@ -68,9 +82,12 @@ export async function apiFetch<T>(url: string, options: RequestInit = {}): Promi
   // pre-session-token calls in auth/AuthContext.tsx (GET /auth/memberships,
   // POST /auth/switch-tenant) pass their own Authorization header via
   // `options`, which must win over whatever access token (if any) is
-  // already active from a previous session.
-  if (activeAccessToken && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${activeAccessToken}`)
+  // already active from a previous session. Buyer and vendor tokens are
+  // mutually exclusive in practice (each login path clears the other), so
+  // whichever one is set is the request's real identity.
+  const bearerToken = activeAccessToken ?? activeVendorAccessToken
+  if (bearerToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${bearerToken}`)
   }
 
   const response = await fetch(url, { ...options, headers })

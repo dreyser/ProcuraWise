@@ -1,5 +1,5 @@
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -201,4 +201,88 @@ class VendorOrganization:
             tenant_id=doc["tenant_id"],
             name=doc["name"],
             created_at=doc["created_at"],
+        )
+
+
+VendorInvitationStatus = Literal["pending", "accepted", "revoked"]
+
+
+@dataclass(frozen=True)
+class VendorInvitation:
+    """A single-use invitation binding one email address to one pre-created
+    `vendor_contact` Membership (Fase 15). `token_hash` is a deterministic
+    SHA-256 digest, not a slow password hash - the raw token itself already
+    carries enough entropy (secrets.token_urlsafe(32)), and a deterministic
+    digest is what allows the redemption lookup to be a single indexed exact
+    match instead of iterating every pending invitation. The raw token is
+    never persisted, logged in audit metadata, or returned again after
+    issuance."""
+
+    id: str
+    tenant_id: str
+    vendor_org_id: str
+    membership_id: str
+    email: str
+    token_hash: str
+    status: VendorInvitationStatus
+    invited_by_membership_id: str
+    created_at: datetime
+    expires_at: datetime
+    accepted_at: datetime | None
+
+    @staticmethod
+    def create(
+        *,
+        tenant_id: str,
+        vendor_org_id: str,
+        membership_id: str,
+        email: str,
+        token_hash: str,
+        invited_by_membership_id: str,
+        ttl_days: int,
+    ) -> "VendorInvitation":
+        now = datetime.now(UTC)
+        return VendorInvitation(
+            id=new_id(),
+            tenant_id=tenant_id,
+            vendor_org_id=vendor_org_id,
+            membership_id=membership_id,
+            email=email,
+            token_hash=token_hash,
+            status="pending",
+            invited_by_membership_id=invited_by_membership_id,
+            created_at=now,
+            expires_at=now + timedelta(days=ttl_days),
+            accepted_at=None,
+        )
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "_id": self.id,
+            "tenant_id": self.tenant_id,
+            "vendor_org_id": self.vendor_org_id,
+            "membership_id": self.membership_id,
+            "email": self.email,
+            "token_hash": self.token_hash,
+            "status": self.status,
+            "invited_by_membership_id": self.invited_by_membership_id,
+            "created_at": self.created_at,
+            "expires_at": self.expires_at,
+            "accepted_at": self.accepted_at,
+        }
+
+    @staticmethod
+    def from_document(doc: dict[str, Any]) -> "VendorInvitation":
+        return VendorInvitation(
+            id=doc["_id"],
+            tenant_id=doc["tenant_id"],
+            vendor_org_id=doc["vendor_org_id"],
+            membership_id=doc["membership_id"],
+            email=doc["email"],
+            token_hash=doc["token_hash"],
+            status=doc["status"],
+            invited_by_membership_id=doc["invited_by_membership_id"],
+            created_at=doc["created_at"],
+            expires_at=doc["expires_at"],
+            accepted_at=doc.get("accepted_at"),
         )

@@ -7,7 +7,7 @@ import {
   type ActorContextResponse,
   type MembershipOption,
 } from '@/api/client'
-import { setActiveAccessToken, ApiError } from '@/lib/http'
+import { setActiveAccessToken, setActiveVendorAccessToken, ApiError } from '@/lib/http'
 
 export type AuthStatus = 'anonymous' | 'awaiting_workspace' | 'ready'
 
@@ -99,6 +99,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.status !== 200) return { ok: false, message: GENERIC_ERROR }
 
       setActiveAccessToken(response.data.access_token)
+      // Fase 15: defensive - a buyer login always wins over any vendor
+      // session that might still be active in this same tab.
+      setActiveVendorAccessToken(null)
       setActor(response.data.actor)
       setPreSessionToken(null)
       setMemberships([])

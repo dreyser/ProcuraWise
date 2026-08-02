@@ -15,6 +15,7 @@ AuditResourceType = Literal[
     "assignment",
     "knowledge_template",
     "ai_execution",
+    "vendor_organization",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -67,6 +68,17 @@ AuditAction = Literal[
     "ai_generation_succeeded",
     "ai_generation_failed",
     "ai_requirements_accepted",
+    # Fase 15 (NDA/COI reales + auth productiva de proveedor +
+    # colaboradores multiples) - resource_type "vendor_organization" for the
+    # whole family, including "agreement_accepted" (the acceptance itself
+    # lives in its own append-only agreements collection, but the event that
+    # a given user cleared the gate is still audit-trail-worthy the same way
+    # every other business mutation is).
+    "vendor_organization_created",
+    "vendor_collaborator_invited",
+    "vendor_invitation_revoked",
+    "vendor_invitation_accepted",
+    "agreement_accepted",
 ]
 
 

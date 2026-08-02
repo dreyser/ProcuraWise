@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from typing import Any
 
 from pymongo.database import Database
@@ -49,6 +50,12 @@ class UserRepository:
         self._collection.update_one(
             {"_id": user_id}, {"$set": {"oidc_identities": oidc_identities}}
         )
+
+    def update_password(self, user_id: str, password_hash: str) -> None:
+        """Fase 15: sets/replaces the password a vendor_contact chooses while
+        redeeming their invitation - same shape as the OIDC linking above,
+        a single authoritative field, never appended to piecemeal."""
+        self._collection.update_one({"_id": user_id}, {"$set": {"password_hash": password_hash}})
 
 
 class MembershipRepository:
@@ -149,3 +156,53 @@ class VendorOrganizationRepository:
         scoped = TenantCollection(self._collection, tenant_id)
         results = scoped.find(filter_).sort([("name", 1), ("_id", 1)]).limit(limit + 1)
         return list(results)
+
+
+class VendorInvitationRepository:
+    """`find_by_token_hash_unscoped` is a deliberate, documented bypass of
+    TenantCollection - redeeming an invitation link is exactly the moment
+    the caller does not yet know which tenant it belongs to (there is no
+    membership/JWT to derive it from yet). This mirrors the same rationale
+    MembershipRepository.find_by_id/list_all_for_dev and
+    admin.find_across_tenants() already document: the escape hatch is
+    reachable only from code that has no tenant to scope by yet, never from
+    an authenticated buyer/vendor request. Every other method here is
+    tenant-scoped once tenant_id is already known (from the found
+    invitation's own document, or from an authenticated buyer's context)."""
+
+    def __init__(self, db: Database) -> None:
+        self._collection = db["vendor_invitations"]
+
+    def _scoped(self, tenant_id: str) -> TenantCollection:
+        return TenantCollection(self._collection, tenant_id)
+
+    def insert(self, tenant_id: str, document: dict[str, Any]) -> None:
+        self._scoped(tenant_id).insert_one(document)
+
+    def find_by_token_hash_unscoped(self, token_hash: str) -> dict[str, Any] | None:
+        return self._collection.find_one({"token_hash": token_hash})
+
+    def find_by_id(self, tenant_id: str, invitation_id: str) -> dict[str, Any] | None:
+        return self._scoped(tenant_id).find_one({"_id": invitation_id})
+
+    def find_by_vendor_org(self, tenant_id: str, vendor_org_id: str) -> list[dict[str, Any]]:
+        return list(self._scoped(tenant_id).find({"vendor_org_id": vendor_org_id}))
+
+    def try_accept(self, tenant_id: str, invitation_id: str, now: datetime) -> bool:
+        """Atomic conditional transition: pending -> accepted, only if not
+        already expired. Returns whether *this* call won the transition -
+        the caller must treat False (already accepted/revoked/expired, or
+        raced by a concurrent redemption of the same token) identically to
+        "token not found", never distinguishing the reason to the client."""
+        result = self._scoped(tenant_id).update_one(
+            {"_id": invitation_id, "status": "pending", "expires_at": {"$gt": now}},
+            {"$set": {"status": "accepted", "accepted_at": now}},
+        )
+        return result.modified_count == 1
+
+    def try_revoke(self, tenant_id: str, invitation_id: str) -> bool:
+        result = self._scoped(tenant_id).update_one(
+            {"_id": invitation_id, "status": "pending"},
+            {"$set": {"status": "revoked"}},
+        )
+        return result.modified_count == 1

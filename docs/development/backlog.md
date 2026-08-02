@@ -53,7 +53,7 @@ Estado por fase se actualiza en [`docs/development/current-phase.md`](current-ph
 
 | Fase | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
 |---|---|---|---|---|---|
-| 15 | NDA real + conflicto de interés real, ambos vía `Agreement` (tipo `nda`/`conflict_of_interest`, usuario/IP/fecha/versión) + colaboradores múltiples por proveedor | P0 | 14 | Proveedor no accede al formulario de respuesta sin aceptar ambos `Agreement` | Not Started |
+| 15 | NDA real + conflicto de interés real, ambos vía `Agreement` (tipo `nda`/`conflict_of_interest`, usuario/IP/fecha/versión) + colaboradores múltiples por proveedor | P0 | 14 | Proveedor no accede al formulario de respuesta sin aceptar ambos `Agreement` | ✅ Completed (2026-08-02) — implementado y verificado con Docker real: `make lint`/`make typecheck` en verde; backend 156 unit + 228 integración/API/seguridad Docker; frontend 116 unit; `make test-e2e` 9/9 specs (incl. 1 nuevo: `vendor-onboarding.spec.ts` end-to-end de alta+invitación+Agreements, más `vertical-slice.spec.ts`/`isolation.spec.ts` reescritos para login real de proveedor); `make contracts` sin diff. Ver detalle completo en `current-phase.md` |
 | 16 | `documents`: subida vía Azurite, escaneo AV stub, versionado, URLs temporales | P0 | 15 | Archivo subido, versionado, URL expira tras tiempo configurado | Not Started |
 
 ### E7 — Q&A y evaluación asistida por IA (Bloque 4)

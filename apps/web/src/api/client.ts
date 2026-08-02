@@ -90,6 +90,11 @@ export interface AIRequirementCandidate {
   sources: string[]
 }
 
+export interface AcceptInvitationRequest {
+  token: string
+  password: string
+}
+
 export interface AcceptSuggestionsRequest {
   candidate_indices: number[]
 }
@@ -135,6 +140,34 @@ export interface AdminTokenResponse {
   expires_in: number
   admin_id: string
   display_name: string
+}
+
+export type AgreementAcceptRequestType =
+  (typeof AgreementAcceptRequestType)[keyof typeof AgreementAcceptRequestType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AgreementAcceptRequestType = {
+  nda: 'nda',
+  conflict_of_interest: 'conflict_of_interest',
+} as const
+
+export interface AgreementAcceptRequest {
+  type: AgreementAcceptRequestType
+}
+
+/**
+ * Includes the legal text itself so the frontend can render the
+acceptance screen from a single call, without a second endpoint for
+static content (Fase 15 planning D4: single platform-wide static text,
+versioned as code constants, no admin-editable content this phase).
+ */
+export interface AgreementStatusResponse {
+  nda_accepted: boolean
+  conflict_of_interest_accepted: boolean
+  current_nda_version: string
+  current_conflict_of_interest_version: string
+  nda_text: string
+  conflict_of_interest_text: string
 }
 
 export type AnswerResponseVendorComment = string | null
@@ -279,6 +312,36 @@ export interface AuditEventResponse {
   outcome: string
   correlation_id?: AuditEventResponseCorrelationId
   metadata: AuditEventResponseMetadata
+}
+
+export interface CollaboratorInviteRequest {
+  contact_email: string
+  contact_display_name: string
+}
+
+export interface CollaboratorListResponse {
+  items: CollaboratorSummaryResponse[]
+}
+
+export type CollaboratorSummaryResponseStatus =
+  (typeof CollaboratorSummaryResponseStatus)[keyof typeof CollaboratorSummaryResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CollaboratorSummaryResponseStatus = {
+  pending: 'pending',
+  accepted: 'accepted',
+  revoked: 'revoked',
+} as const
+
+export type CollaboratorSummaryResponseAcceptedAt = string | null
+
+export interface CollaboratorSummaryResponse {
+  invitation_id: string
+  membership_id: string
+  email: string
+  status: CollaboratorSummaryResponseStatus
+  invited_at: string
+  accepted_at: CollaboratorSummaryResponseAcceptedAt
 }
 
 export interface CreateCuratedSourceRequest {
@@ -1121,8 +1184,44 @@ export interface VendorAnswerResponse {
   updated_at: string
 }
 
+/**
+ * `invite_token`/`invite_url` are shown exactly once, in this response -
+never logged, never persisted in plaintext anywhere (only its SHA-256
+digest is kept, see identity.models.VendorInvitation.token_hash), and
+never re-derivable after this call returns. The authenticated
+evaluation_owner who made this request is responsible for relaying the
+link to the vendor contact through whatever channel they choose - there
+is no automated email sending yet (that is Fase 24's explicit scope, not
+this one's).
+ */
+export interface VendorInvitationResponse {
+  invitation_id: string
+  membership_id: string
+  email: string
+  invite_token: string
+  invite_url: string
+  expires_at: string
+}
+
 export interface VendorLinkRequest {
   vendor_org_id: string
+}
+
+export interface VendorLoginRequest {
+  email: string
+  password: string
+}
+
+export interface VendorOrganizationCreateRequest {
+  name: string
+  contact_email: string
+  contact_display_name: string
+}
+
+export interface VendorOrganizationCreatedResponse {
+  id: string
+  name: string
+  invitation: VendorInvitationResponse
 }
 
 export type VendorOrganizationListResponseNextCursor = string | null
@@ -1245,6 +1344,12 @@ export interface VendorRequirementResponse {
   buyer_guidance: VendorRequirementResponseBuyerGuidance
   display_order: number
   options: VendorRequirementResponseOptions
+}
+
+export interface VendorTokenResponse {
+  access_token: string
+  expires_in: number
+  actor: ActorContextResponse
 }
 
 export type LiveHealthLiveGet200 = { [key: string]: string }
@@ -2767,6 +2872,121 @@ export function useListVendorOrganizationsApiV1VendorOrganizationsGet<
 }
 
 /**
+ * @summary Create Vendor Organization
+ */
+export type createVendorOrganizationApiV1VendorOrganizationsPostResponse201 = {
+  data: VendorOrganizationCreatedResponse
+  status: 201
+}
+
+export type createVendorOrganizationApiV1VendorOrganizationsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createVendorOrganizationApiV1VendorOrganizationsPostResponseSuccess =
+  createVendorOrganizationApiV1VendorOrganizationsPostResponse201 & {
+    headers: Headers
+  }
+export type createVendorOrganizationApiV1VendorOrganizationsPostResponseError =
+  createVendorOrganizationApiV1VendorOrganizationsPostResponse422 & {
+    headers: Headers
+  }
+
+export type createVendorOrganizationApiV1VendorOrganizationsPostResponse =
+  | createVendorOrganizationApiV1VendorOrganizationsPostResponseSuccess
+  | createVendorOrganizationApiV1VendorOrganizationsPostResponseError
+
+export const getCreateVendorOrganizationApiV1VendorOrganizationsPostUrl = () => {
+  return `/api/v1/vendor-organizations`
+}
+
+export const createVendorOrganizationApiV1VendorOrganizationsPost = async (
+  vendorOrganizationCreateRequest: VendorOrganizationCreateRequest,
+  options?: RequestInit,
+): Promise<createVendorOrganizationApiV1VendorOrganizationsPostResponse> => {
+  return apiFetch<createVendorOrganizationApiV1VendorOrganizationsPostResponse>(
+    getCreateVendorOrganizationApiV1VendorOrganizationsPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(vendorOrganizationCreateRequest),
+    },
+  )
+}
+
+export const getCreateVendorOrganizationApiV1VendorOrganizationsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createVendorOrganizationApiV1VendorOrganizationsPost>>,
+    TError,
+    { data: VendorOrganizationCreateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createVendorOrganizationApiV1VendorOrganizationsPost>>,
+  TError,
+  { data: VendorOrganizationCreateRequest },
+  TContext
+> => {
+  const mutationKey = ['createVendorOrganizationApiV1VendorOrganizationsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createVendorOrganizationApiV1VendorOrganizationsPost>>,
+    { data: VendorOrganizationCreateRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return createVendorOrganizationApiV1VendorOrganizationsPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateVendorOrganizationApiV1VendorOrganizationsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createVendorOrganizationApiV1VendorOrganizationsPost>>
+>
+export type CreateVendorOrganizationApiV1VendorOrganizationsPostMutationBody =
+  VendorOrganizationCreateRequest
+export type CreateVendorOrganizationApiV1VendorOrganizationsPostMutationError = HTTPValidationError
+
+/**
+ * @summary Create Vendor Organization
+ */
+export const useCreateVendorOrganizationApiV1VendorOrganizationsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createVendorOrganizationApiV1VendorOrganizationsPost>>,
+      TError,
+      { data: VendorOrganizationCreateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createVendorOrganizationApiV1VendorOrganizationsPost>>,
+  TError,
+  { data: VendorOrganizationCreateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getCreateVendorOrganizationApiV1VendorOrganizationsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
  * @summary List Org Members
  */
 export type listOrgMembersApiV1OrgMembersGetResponse200 = {
@@ -2911,6 +3131,737 @@ export function useListOrgMembersApiV1OrgMembersGet<
   query.queryKey = queryOptions.queryKey
 
   return query
+}
+
+/**
+ * @summary Invite Collaborator
+ */
+export type inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponse201 = {
+  data: VendorInvitationResponse
+  status: 201
+}
+
+export type inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponseSuccess =
+  inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponse201 & {
+    headers: Headers
+  }
+export type inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponseError =
+  inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponse422 & {
+    headers: Headers
+  }
+
+export type inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponse =
+  | inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponseSuccess
+  | inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponseError
+
+export const getInviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostUrl = (
+  vendorOrgId: string,
+) => {
+  return `/api/v1/vendor-organizations/${vendorOrgId}/collaborators`
+}
+
+export const inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost = async (
+  vendorOrgId: string,
+  collaboratorInviteRequest: CollaboratorInviteRequest,
+  options?: RequestInit,
+): Promise<inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponse> => {
+  return apiFetch<inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostResponse>(
+    getInviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostUrl(vendorOrgId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(collaboratorInviteRequest),
+    },
+  )
+}
+
+export const getInviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost>
+      >,
+      TError,
+      { vendorOrgId: string; data: CollaboratorInviteRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost>
+    >,
+    TError,
+    { vendorOrgId: string; data: CollaboratorInviteRequest },
+    TContext
+  > => {
+    const mutationKey = ['inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost>
+      >,
+      { vendorOrgId: string; data: CollaboratorInviteRequest }
+    > = (props) => {
+      const { vendorOrgId, data } = props ?? {}
+
+      return inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost(
+        vendorOrgId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type InviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost>
+    >
+  >
+export type InviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostMutationBody =
+  CollaboratorInviteRequest
+export type InviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Invite Collaborator
+ */
+export const useInviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost>
+      >,
+      TError,
+      { vendorOrgId: string; data: CollaboratorInviteRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof inviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPost>
+  >,
+  TError,
+  { vendorOrgId: string; data: CollaboratorInviteRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getInviteCollaboratorApiV1VendorOrganizationsVendorOrgIdCollaboratorsPostMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Collaborators
+ */
+export type listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponse200 = {
+  data: CollaboratorListResponse
+  status: 200
+}
+
+export type listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponseSuccess =
+  listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponse200 & {
+    headers: Headers
+  }
+export type listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponseError =
+  listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponse =
+  | listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponseSuccess
+  | listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponseError
+
+export const getListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetUrl = (
+  vendorOrgId: string,
+) => {
+  return `/api/v1/vendor-organizations/${vendorOrgId}/collaborators`
+}
+
+export const listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet = async (
+  vendorOrgId: string,
+  options?: RequestInit,
+): Promise<listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponse> => {
+  return apiFetch<listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetResponse>(
+    getListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetUrl(vendorOrgId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetQueryKey = (
+  vendorOrgId?: string,
+) => {
+  return [`/api/v1/vendor-organizations/${vendorOrgId}/collaborators`] as const
+}
+
+export const getListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  vendorOrgId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetQueryKey(vendorOrgId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>>
+  > = () => listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet(vendorOrgId)
+
+  return { queryKey, queryFn, enabled: !!vendorOrgId, ...queryOptions } as UseQueryOptions<
+    Awaited<
+      ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+    >,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>>
+  >
+export type ListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetQueryError =
+  HTTPValidationError
+
+export function useListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet<
+  TData = Awaited<
+    ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  vendorOrgId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet<
+  TData = Awaited<
+    ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  vendorOrgId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet<
+  TData = Awaited<
+    ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  vendorOrgId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Collaborators
+ */
+
+export function useListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet<
+  TData = Awaited<
+    ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  vendorOrgId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof listCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getListCollaboratorsApiV1VendorOrganizationsVendorOrgIdCollaboratorsGetQueryOptions(
+      vendorOrgId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Revoke Collaborator Invitation
+ */
+export type revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponse204 =
+  {
+    data: void
+    status: 204
+  }
+
+export type revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponseSuccess =
+  revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponse204 & {
+    headers: Headers
+  }
+export type revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponseError =
+  revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponse422 & {
+    headers: Headers
+  }
+
+export type revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponse =
+  | revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponseSuccess
+  | revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponseError
+
+export const getRevokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostUrl =
+  (vendorOrgId: string, invitationId: string) => {
+    return `/api/v1/vendor-organizations/${vendorOrgId}/collaborators/${invitationId}/revoke`
+  }
+
+export const revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost =
+  async (
+    vendorOrgId: string,
+    invitationId: string,
+    options?: RequestInit,
+  ): Promise<revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponse> => {
+    return apiFetch<revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostResponse>(
+      getRevokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostUrl(
+        vendorOrgId,
+        invitationId,
+      ),
+      {
+        ...options,
+        method: 'POST',
+      },
+    )
+  }
+
+export const getRevokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost
+        >
+      >,
+      TError,
+      { vendorOrgId: string; invitationId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost
+      >
+    >,
+    TError,
+    { vendorOrgId: string; invitationId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      'revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost
+        >
+      >,
+      { vendorOrgId: string; invitationId: string }
+    > = (props) => {
+      const { vendorOrgId, invitationId } = props ?? {}
+
+      return revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost(
+        vendorOrgId,
+        invitationId,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type RevokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost
+      >
+    >
+  >
+
+export type RevokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Revoke Collaborator Invitation
+ */
+export const useRevokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost
+          >
+        >,
+        TError,
+        { vendorOrgId: string; invitationId: string },
+        TContext
+      >
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof revokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePost
+      >
+    >,
+    TError,
+    { vendorOrgId: string; invitationId: string },
+    TContext
+  > => {
+    const mutationOptions =
+      getRevokeCollaboratorInvitationApiV1VendorOrganizationsVendorOrgIdCollaboratorsInvitationIdRevokePostMutationOptions(
+        options,
+      )
+
+    return useMutation(mutationOptions, queryClient)
+  }
+
+/**
+ * @summary Accept Invitation
+ */
+export type acceptInvitationApiV1VendorAuthAcceptInvitationPostResponse200 = {
+  data: VendorTokenResponse
+  status: 200
+}
+
+export type acceptInvitationApiV1VendorAuthAcceptInvitationPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type acceptInvitationApiV1VendorAuthAcceptInvitationPostResponseSuccess =
+  acceptInvitationApiV1VendorAuthAcceptInvitationPostResponse200 & {
+    headers: Headers
+  }
+export type acceptInvitationApiV1VendorAuthAcceptInvitationPostResponseError =
+  acceptInvitationApiV1VendorAuthAcceptInvitationPostResponse422 & {
+    headers: Headers
+  }
+
+export type acceptInvitationApiV1VendorAuthAcceptInvitationPostResponse =
+  | acceptInvitationApiV1VendorAuthAcceptInvitationPostResponseSuccess
+  | acceptInvitationApiV1VendorAuthAcceptInvitationPostResponseError
+
+export const getAcceptInvitationApiV1VendorAuthAcceptInvitationPostUrl = () => {
+  return `/api/v1/vendor-auth/accept-invitation`
+}
+
+export const acceptInvitationApiV1VendorAuthAcceptInvitationPost = async (
+  acceptInvitationRequest: AcceptInvitationRequest,
+  options?: RequestInit,
+): Promise<acceptInvitationApiV1VendorAuthAcceptInvitationPostResponse> => {
+  return apiFetch<acceptInvitationApiV1VendorAuthAcceptInvitationPostResponse>(
+    getAcceptInvitationApiV1VendorAuthAcceptInvitationPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(acceptInvitationRequest),
+    },
+  )
+}
+
+export const getAcceptInvitationApiV1VendorAuthAcceptInvitationPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptInvitationApiV1VendorAuthAcceptInvitationPost>>,
+    TError,
+    { data: AcceptInvitationRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptInvitationApiV1VendorAuthAcceptInvitationPost>>,
+  TError,
+  { data: AcceptInvitationRequest },
+  TContext
+> => {
+  const mutationKey = ['acceptInvitationApiV1VendorAuthAcceptInvitationPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptInvitationApiV1VendorAuthAcceptInvitationPost>>,
+    { data: AcceptInvitationRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return acceptInvitationApiV1VendorAuthAcceptInvitationPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AcceptInvitationApiV1VendorAuthAcceptInvitationPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptInvitationApiV1VendorAuthAcceptInvitationPost>>
+>
+export type AcceptInvitationApiV1VendorAuthAcceptInvitationPostMutationBody =
+  AcceptInvitationRequest
+export type AcceptInvitationApiV1VendorAuthAcceptInvitationPostMutationError = HTTPValidationError
+
+/**
+ * @summary Accept Invitation
+ */
+export const useAcceptInvitationApiV1VendorAuthAcceptInvitationPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof acceptInvitationApiV1VendorAuthAcceptInvitationPost>>,
+      TError,
+      { data: AcceptInvitationRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof acceptInvitationApiV1VendorAuthAcceptInvitationPost>>,
+  TError,
+  { data: AcceptInvitationRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getAcceptInvitationApiV1VendorAuthAcceptInvitationPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Vendor Login
+ */
+export type vendorLoginApiV1VendorAuthLoginPostResponse200 = {
+  data: VendorTokenResponse
+  status: 200
+}
+
+export type vendorLoginApiV1VendorAuthLoginPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type vendorLoginApiV1VendorAuthLoginPostResponseSuccess =
+  vendorLoginApiV1VendorAuthLoginPostResponse200 & {
+    headers: Headers
+  }
+export type vendorLoginApiV1VendorAuthLoginPostResponseError =
+  vendorLoginApiV1VendorAuthLoginPostResponse422 & {
+    headers: Headers
+  }
+
+export type vendorLoginApiV1VendorAuthLoginPostResponse =
+  | vendorLoginApiV1VendorAuthLoginPostResponseSuccess
+  | vendorLoginApiV1VendorAuthLoginPostResponseError
+
+export const getVendorLoginApiV1VendorAuthLoginPostUrl = () => {
+  return `/api/v1/vendor-auth/login`
+}
+
+export const vendorLoginApiV1VendorAuthLoginPost = async (
+  vendorLoginRequest: VendorLoginRequest,
+  options?: RequestInit,
+): Promise<vendorLoginApiV1VendorAuthLoginPostResponse> => {
+  return apiFetch<vendorLoginApiV1VendorAuthLoginPostResponse>(
+    getVendorLoginApiV1VendorAuthLoginPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(vendorLoginRequest),
+    },
+  )
+}
+
+export const getVendorLoginApiV1VendorAuthLoginPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof vendorLoginApiV1VendorAuthLoginPost>>,
+    TError,
+    { data: VendorLoginRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof vendorLoginApiV1VendorAuthLoginPost>>,
+  TError,
+  { data: VendorLoginRequest },
+  TContext
+> => {
+  const mutationKey = ['vendorLoginApiV1VendorAuthLoginPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof vendorLoginApiV1VendorAuthLoginPost>>,
+    { data: VendorLoginRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return vendorLoginApiV1VendorAuthLoginPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type VendorLoginApiV1VendorAuthLoginPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof vendorLoginApiV1VendorAuthLoginPost>>
+>
+export type VendorLoginApiV1VendorAuthLoginPostMutationBody = VendorLoginRequest
+export type VendorLoginApiV1VendorAuthLoginPostMutationError = HTTPValidationError
+
+/**
+ * @summary Vendor Login
+ */
+export const useVendorLoginApiV1VendorAuthLoginPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof vendorLoginApiV1VendorAuthLoginPost>>,
+      TError,
+      { data: VendorLoginRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof vendorLoginApiV1VendorAuthLoginPost>>,
+  TError,
+  { data: VendorLoginRequest },
+  TContext
+> => {
+  const mutationOptions = getVendorLoginApiV1VendorAuthLoginPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**
@@ -8812,6 +9763,292 @@ export const useApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledge
     getApplyKnowledgeTemplateApiV1EvaluationsEvaluationIdApplyKnowledgeTemplatePostMutationOptions(
       options,
     )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Get Agreement Status
+ */
+export type getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponse200 = {
+  data: AgreementStatusResponse
+  status: 200
+}
+
+export type getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponseSuccess =
+  getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponse200 & {
+    headers: Headers
+  }
+export type getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponseError =
+  getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponse422 & {
+    headers: Headers
+  }
+
+export type getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponse =
+  | getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponseSuccess
+  | getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponseError
+
+export const getGetAgreementStatusApiV1VendorPortalAgreementsStatusGetUrl = () => {
+  return `/api/v1/vendor-portal/agreements/status`
+}
+
+export const getAgreementStatusApiV1VendorPortalAgreementsStatusGet = async (
+  options?: RequestInit,
+): Promise<getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponse> => {
+  return apiFetch<getAgreementStatusApiV1VendorPortalAgreementsStatusGetResponse>(
+    getGetAgreementStatusApiV1VendorPortalAgreementsStatusGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetAgreementStatusApiV1VendorPortalAgreementsStatusGetQueryKey = () => {
+  return [`/api/v1/vendor-portal/agreements/status`] as const
+}
+
+export const getGetAgreementStatusApiV1VendorPortalAgreementsStatusGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAgreementStatusApiV1VendorPortalAgreementsStatusGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>
+  > = () => getAgreementStatusApiV1VendorPortalAgreementsStatusGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAgreementStatusApiV1VendorPortalAgreementsStatusGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>
+>
+export type GetAgreementStatusApiV1VendorPortalAgreementsStatusGetQueryError = HTTPValidationError
+
+export function useGetAgreementStatusApiV1VendorPortalAgreementsStatusGet<
+  TData = Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+          TError,
+          Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAgreementStatusApiV1VendorPortalAgreementsStatusGet<
+  TData = Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+          TError,
+          Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAgreementStatusApiV1VendorPortalAgreementsStatusGet<
+  TData = Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Agreement Status
+ */
+
+export function useGetAgreementStatusApiV1VendorPortalAgreementsStatusGet<
+  TData = Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getAgreementStatusApiV1VendorPortalAgreementsStatusGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetAgreementStatusApiV1VendorPortalAgreementsStatusGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Accept Agreement
+ */
+export type acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponse200 = {
+  data: AgreementStatusResponse
+  status: 200
+}
+
+export type acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponseSuccess =
+  acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponse200 & {
+    headers: Headers
+  }
+export type acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponseError =
+  acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponse422 & {
+    headers: Headers
+  }
+
+export type acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponse =
+  | acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponseSuccess
+  | acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponseError
+
+export const getAcceptAgreementApiV1VendorPortalAgreementsAcceptPostUrl = () => {
+  return `/api/v1/vendor-portal/agreements/accept`
+}
+
+export const acceptAgreementApiV1VendorPortalAgreementsAcceptPost = async (
+  agreementAcceptRequest: AgreementAcceptRequest,
+  options?: RequestInit,
+): Promise<acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponse> => {
+  return apiFetch<acceptAgreementApiV1VendorPortalAgreementsAcceptPostResponse>(
+    getAcceptAgreementApiV1VendorPortalAgreementsAcceptPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(agreementAcceptRequest),
+    },
+  )
+}
+
+export const getAcceptAgreementApiV1VendorPortalAgreementsAcceptPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptAgreementApiV1VendorPortalAgreementsAcceptPost>>,
+    TError,
+    { data: AgreementAcceptRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptAgreementApiV1VendorPortalAgreementsAcceptPost>>,
+  TError,
+  { data: AgreementAcceptRequest },
+  TContext
+> => {
+  const mutationKey = ['acceptAgreementApiV1VendorPortalAgreementsAcceptPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptAgreementApiV1VendorPortalAgreementsAcceptPost>>,
+    { data: AgreementAcceptRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return acceptAgreementApiV1VendorPortalAgreementsAcceptPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AcceptAgreementApiV1VendorPortalAgreementsAcceptPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptAgreementApiV1VendorPortalAgreementsAcceptPost>>
+>
+export type AcceptAgreementApiV1VendorPortalAgreementsAcceptPostMutationBody =
+  AgreementAcceptRequest
+export type AcceptAgreementApiV1VendorPortalAgreementsAcceptPostMutationError = HTTPValidationError
+
+/**
+ * @summary Accept Agreement
+ */
+export const useAcceptAgreementApiV1VendorPortalAgreementsAcceptPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof acceptAgreementApiV1VendorPortalAgreementsAcceptPost>>,
+      TError,
+      { data: AgreementAcceptRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof acceptAgreementApiV1VendorPortalAgreementsAcceptPost>>,
+  TError,
+  { data: AgreementAcceptRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getAcceptAgreementApiV1VendorPortalAgreementsAcceptPostMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
 }

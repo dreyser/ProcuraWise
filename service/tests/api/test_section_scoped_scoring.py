@@ -1,7 +1,12 @@
 import pytest
 
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from tests.conftest import approve_and_publish, bearer_headers_for, unique_actor_by_role
+from tests.conftest import (
+    approve_and_publish,
+    bearer_headers_for,
+    unique_actor_by_role,
+    vendor_bearer_headers_for,
+)
 
 pytestmark = pytest.mark.docker
 
@@ -9,7 +14,7 @@ pytestmark = pytest.mark.docker
 def _create_scoreable_proposal(
     client,
     owner_headers: dict,
-    vendor_headers: dict,
+    vendor_membership_id: str,
     *,
     tenant_id: str,
     seeded_actors: dict,
@@ -20,7 +25,9 @@ def _create_scoreable_proposal(
     answering anything, and the owner starts evaluation - leaving a
     proposal that's ready to be scored. Returns
     (evaluation_id, proposal_id, requirement_id)."""
-    vendor_org_id = client.get("/api/v1/me", headers=vendor_headers).json()["vendor_org_id"]
+    vendor_dev_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
+    vendor_org_id = client.get("/api/v1/me", headers=vendor_dev_headers).json()["vendor_org_id"]
+    vendor_headers = vendor_bearer_headers_for(vendor_membership_id, mongo_test_settings)
 
     evaluation_id = client.post(
         "/api/v1/evaluations",
@@ -86,11 +93,10 @@ def test_assigned_evaluator_can_score_own_section_others_are_rejected(
     owner_headers = bearer_headers_for(
         seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
     )
-    vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     evaluation_id, proposal_id, requirement_id = _create_scoreable_proposal(
         client,
         owner_headers,
-        vendor_headers,
+        vendor_membership_id,
         tenant_id=tenant_a,
         seeded_actors=seeded_actors,
         mongo_test_settings=mongo_test_settings,
@@ -135,11 +141,10 @@ def test_unassigned_section_still_scoreable_by_any_evaluator(
     owner_headers = bearer_headers_for(
         seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
     )
-    vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     evaluation_id, proposal_id, requirement_id = _create_scoreable_proposal(
         client,
         owner_headers,
-        vendor_headers,
+        vendor_membership_id,
         tenant_id=tenant_a,
         seeded_actors=seeded_actors,
         mongo_test_settings=mongo_test_settings,
@@ -166,11 +171,10 @@ def test_internal_collaborator_cannot_write_scores(
     owner_headers = bearer_headers_for(
         seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
     )
-    vendor_headers = {DEV_ACTOR_HEADER: vendor_membership_id}
     evaluation_id, proposal_id, requirement_id = _create_scoreable_proposal(
         client,
         owner_headers,
-        vendor_headers,
+        vendor_membership_id,
         tenant_id=tenant_a,
         seeded_actors=seeded_actors,
         mongo_test_settings=mongo_test_settings,

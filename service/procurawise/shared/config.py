@@ -127,6 +127,26 @@ class Settings(BaseSettings):
     # the required, auditable pointer to where that approval lives.
     foundry_legal_approval_reference: str | None = None
 
+    # Fase 15 (NDA/COI reales + auth productiva de proveedor): how long a
+    # vendor invitation link stays redeemable. Single-use regardless (the
+    # atomic pending->accepted transition in
+    # identity.repository.VendorInvitationRepository.try_accept makes a
+    # second redemption of the same token impossible even before it
+    # expires) - this only bounds how long an *unredeemed* link works.
+    vendor_invitation_ttl_days: int = 7
+
+    # Fase 15 (Agreement.ip capture, R3 of the planning session): Azure
+    # Container Apps sits in front of the API as a single reverse-proxy hop
+    # once real infra exists (Fase 27, not provisioned yet) - `X-Forwarded-
+    # For` is only trusted up to this many hops from the end of the header's
+    # comma-separated chain, and only when > 0. Default 0 means "trust
+    # nothing, always use the direct connection's IP" - correct for
+    # local/test/CI, where there is no real reverse proxy in front of
+    # uvicorn. Re-verify this value against Azure Container Apps' actual
+    # proxy behavior when infra is provisioned in Fase 27, before relying on
+    # it in production.
+    trusted_proxy_hops: int = 0
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":

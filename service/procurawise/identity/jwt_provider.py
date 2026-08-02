@@ -9,12 +9,13 @@ from fastapi import Depends, Header, HTTPException
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext
 
-TokenUse = Literal["access", "pre_session", "oidc_state", "admin_access"]
+TokenUse = Literal["access", "pre_session", "oidc_state", "admin_access", "vendor_access"]
 
 ACCESS_TOKEN_USE: TokenUse = "access"
 PRE_SESSION_TOKEN_USE: TokenUse = "pre_session"
 OIDC_STATE_TOKEN_USE: TokenUse = "oidc_state"
 ADMIN_ACCESS_TOKEN_USE: TokenUse = "admin_access"
+VENDOR_ACCESS_TOKEN_USE: TokenUse = "vendor_access"
 OIDC_STATE_TTL_MINUTES = 2
 
 
@@ -71,6 +72,33 @@ def create_admin_access_token(
         "display_name": display_name,
         "token_use": ADMIN_ACCESS_TOKEN_USE,
     }
+    return _issue(payload, settings.access_token_ttl_minutes, settings)
+
+
+def create_vendor_access_token(context: ActorContext, settings: Settings) -> tuple[str, int]:
+    """Fase 15: the vendor-side equivalent of create_access_token, same "fat
+    JWT" shape (no Mongo round-trip to verify a request) and same no-refresh,
+    short-TTL design as the buyer token it mirrors. `token_use=vendor_access`
+    is a distinct value (not ACCESS_TOKEN_USE) so a vendor token can never be
+    mistaken for, or accidentally accepted as, a buyer ActorContext by
+    shared.context.require_role - same structural separation Fase 9 already
+    established between buyer and platform_admin tokens.
+
+    Deliberately still carries `tenant_id`/`tenant_name` (unlike
+    create_admin_access_token, which omits tenant_id entirely because
+    platform_admin truly has none): a VendorOrganization is itself
+    tenant-owned data (identity.models.VendorOrganization docstring), so
+    there is always exactly one tenant to embed, and vendor_portal's
+    TenantCollection-scoped queries already rely on ActorContext.tenant_id
+    being present, same as buyer routes. This does not widen vendor access -
+    the router is still physically separate and gated by token_use, and
+    access within that tenant is scoped by vendor_org_id, not tenant_id
+    alone. Deliberately does NOT embed a list of evaluation_ids (Fase 15
+    planning decision D2): scope is resolved per-request from
+    vendor_org_id + tenant_id via TenantCollection, so a vendor linked to a
+    new evaluation after token issuance is visible immediately, without a
+    fresh login."""
+    payload = {**asdict(context), "sub": context.user_id, "token_use": VENDOR_ACCESS_TOKEN_USE}
     return _issue(payload, settings.access_token_ttl_minutes, settings)
 
 
@@ -136,6 +164,34 @@ def get_current_context(
     token = extract_bearer_token(authorization)
     try:
         claims = decode_token(token, settings, expected_use=ACCESS_TOKEN_USE)
+    except TokenError:
+        raise HTTPException(status_code=401, detail="invalid or expired token") from None
+    return ActorContext(
+        membership_id=claims["membership_id"],
+        user_id=claims["user_id"],
+        tenant_id=claims["tenant_id"],
+        tenant_name=claims["tenant_name"],
+        role=claims["role"],
+        vendor_org_id=claims.get("vendor_org_id"),
+        display_name=claims["display_name"],
+    )
+
+
+def get_current_vendor_context(
+    authorization: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+) -> ActorContext:
+    """Fase 15: production identity dependency for vendor_portal routes,
+    the vendor-side mirror of get_current_context above. Replaces
+    identity.dev_provider.get_current_context as vendor_portal's identity
+    mechanism, same as AUTH-PROD replaced it for buyer routes - the dev
+    header mechanism itself is not deleted (still used by /dev/actors, /me,
+    and local/test tooling), it is simply no longer accepted by
+    vendor_portal routes, mirroring exactly what already happened to buyer
+    routes."""
+    token = extract_bearer_token(authorization)
+    try:
+        claims = decode_token(token, settings, expected_use=VENDOR_ACCESS_TOKEN_USE)
     except TokenError:
         raise HTTPException(status_code=401, detail="invalid or expired token") from None
     return ActorContext(

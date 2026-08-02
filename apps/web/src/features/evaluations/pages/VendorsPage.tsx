@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -12,6 +12,7 @@ import {
   useUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete,
   type EvaluationDetailResponse,
   type ProposalSummaryResponse,
+  type VendorOrganizationCreatedResponse,
   type VendorOrganizationListResponse,
 } from '@/api/client'
 import { ApiError, unwrapData } from '@/lib/http'
@@ -35,6 +36,9 @@ import { translateEvaluationStatus, translateProposalStatus } from '@/lib/enumLa
 import { normalizeApiError } from '@/lib/errors'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
 import { VendorCatalogPicker } from '@/features/evaluations/components/VendorCatalogPicker'
+import { CreateVendorOrganizationForm } from '@/features/evaluations/components/CreateVendorOrganizationForm'
+import { InviteLinkNotice } from '@/features/evaluations/components/InviteLinkNotice'
+import { VendorCollaboratorsPanel } from '@/features/evaluations/components/VendorCollaboratorsPanel'
 import { startCollectionPreconditionReasons } from '@/features/evaluations/lib/evaluationReadiness'
 import {
   APPROVAL_INVALIDATED_MESSAGE,
@@ -66,6 +70,10 @@ export function VendorsPage() {
   )
   const [linkingId, setLinkingId] = useState<string | null>(null)
   const [confirmStart, setConfirmStart] = useState(false)
+  const [newVendorInvite, setNewVendorInvite] = useState<VendorOrganizationCreatedResponse | null>(
+    null,
+  )
+  const [expandedVendorOrgId, setExpandedVendorOrgId] = useState<string | null>(null)
 
   const invalidateLinks = () => {
     queryClient.invalidateQueries({
@@ -156,27 +164,49 @@ export function VendorsPage() {
               <TableBody>
                 {proposals.map((proposal) => {
                   const name = nameById.get(proposal.vendor_org_id) ?? 'Proveedor'
+                  const isExpanded = expandedVendorOrgId === proposal.vendor_org_id
                   return (
-                    <TableRow key={proposal.id}>
-                      <TableCell>{name}</TableCell>
-                      <TableCell>
-                        <StatusBadge label={translateProposalStatus(proposal.status)} />
-                      </TableCell>
-                      {canEdit && (
+                    <Fragment key={proposal.id}>
+                      <TableRow>
+                        <TableCell>{name}</TableCell>
                         <TableCell>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              setPendingUnlink({ vendorOrgId: proposal.vendor_org_id, name })
-                            }
-                          >
-                            Desvincular
-                          </Button>
+                          <StatusBadge label={translateProposalStatus(proposal.status)} />
                         </TableCell>
+                        {canEdit && (
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setExpandedVendorOrgId(isExpanded ? null : proposal.vendor_org_id)
+                                }
+                              >
+                                {isExpanded ? 'Ocultar colaboradores' : 'Colaboradores'}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setPendingUnlink({ vendorOrgId: proposal.vendor_org_id, name })
+                                }
+                              >
+                                Desvincular
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow>
+                          <TableCell colSpan={canEdit ? 3 : 2}>
+                            <VendorCollaboratorsPanel vendorOrgId={proposal.vendor_org_id} />
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableRow>
+                    </Fragment>
                   )
                 })}
               </TableBody>
@@ -214,6 +244,36 @@ export function VendorsPage() {
               />
             </div>
           )}
+        </section>
+      )}
+
+      {canEdit && !atCapacity && (
+        <section className="mt-6 max-w-lg">
+          <h2 className="text-sm font-semibold text-foreground">Dar de alta un proveedor nuevo</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Si el proveedor no aparece en el catálogo, créalo aquí e invita a su contacto principal
+            en un solo paso.
+          </p>
+          {newVendorInvite && (
+            <div className="mt-2">
+              <InviteLinkNotice
+                email={newVendorInvite.invitation.email}
+                inviteUrl={newVendorInvite.invitation.invite_url}
+                onDismiss={() => setNewVendorInvite(null)}
+              />
+            </div>
+          )}
+          <div className="mt-2">
+            <CreateVendorOrganizationForm
+              onCreated={(result) => {
+                setNewVendorInvite(result)
+                linkVendor.mutate({
+                  evaluationId: evaluation.id,
+                  data: { vendor_org_id: result.id },
+                })
+              }}
+            />
+          </div>
         </section>
       )}
 

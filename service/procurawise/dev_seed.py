@@ -7,6 +7,8 @@ from pymongo.database import Database
 
 from procurawise.admin.models import PlatformAdminAccount
 from procurawise.admin.repository import PlatformAdminAccountRepository
+from procurawise.agreements.repository import AgreementRepository
+from procurawise.agreements.service import AgreementService
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.models import Evaluation, Requirement
@@ -42,6 +44,14 @@ DEV_BUYER_PASSWORD = "dev-password-2026"
 DEV_ADMIN_PASSWORD = "dev-admin-password-2026"
 DEV_ADMIN_EMAIL = "platform-admin@dev.procurawise.local"
 
+# Fase 15: vendor_contact now authenticates via a real password too (POST
+# /api/v1/vendor-auth/login), same idea as DEV_BUYER_PASSWORD above - lets a
+# developer exercise the real vendor login form without hand-crafting an
+# invitation-acceptance flow every time. The seeded users are still also
+# reachable via the interim dev-header mechanism (unchanged - that mechanism
+# is not deleted, only no longer accepted by vendor_portal routes).
+DEV_VENDOR_PASSWORD = "dev-vendor-password-2026"
+
 # Collections this script owns. `make seed-reset` drops exactly these, nothing
 # from a future bounded context - keep this list in sync as seed-dev grows.
 SEEDED_COLLECTIONS = [
@@ -54,6 +64,8 @@ SEEDED_COLLECTIONS = [
     "scores",
     "platform_admins",
     "evaluation_snapshots",
+    "vendor_invitations",
+    "agreements",
 ]
 
 
@@ -315,9 +327,9 @@ def seed(settings: Settings) -> list[Membership]:
     tenant_b = _get_or_create_tenant(tenants, "dev-tenant-b", "Globex Compradora (dev)")
 
     # Buyer users get a known local-dev password (DEV_BUYER_PASSWORD) so
-    # POST /auth/login is exercisable without real OIDC apps. vendor_user_a
-    # stays without one - the vendor portal keeps using the interim dev-header
-    # mechanism (X-Dev-Membership-Id) until Fase 15, not real login.
+    # POST /auth/login is exercisable without real OIDC apps. vendor_user_a/
+    # vendor_user_a2 get DEV_VENDOR_PASSWORD (Fase 15) so POST
+    # /vendor-auth/login is exercisable the same way.
     owner_a = _get_or_create_user(
         users, "owner.a@dev.procurawise.local", "Owner A", DEV_BUYER_PASSWORD
     )
@@ -351,7 +363,21 @@ def seed(settings: Settings) -> list[Membership]:
         "Administrador Cliente A",
         DEV_BUYER_PASSWORD,
     )
-    vendor_user_a = _get_or_create_user(users, "vendor.a@dev.procurawise.local", "Vendor Contact A")
+    vendor_user_a = _get_or_create_user(
+        users, "vendor.a@dev.procurawise.local", "Vendor Contact A", DEV_VENDOR_PASSWORD
+    )
+    # Fase 15: a second vendor_contact Membership on the *same* vendor_org_a
+    # (unlike test_vendor_isolation.py's _create_second_vendor_contact, which
+    # deliberately creates a *different* vendor org to test cross-vendor
+    # isolation) - this one demonstrates/exercises "multiple collaborators
+    # per vendor organization" itself: both see the same proposals, each
+    # accepts Agreements individually (ADR 0014's per-user_id grain).
+    vendor_user_a2 = _get_or_create_user(
+        users,
+        "vendor.a2@dev.procurawise.local",
+        "Vendor Collaborator A2",
+        DEV_VENDOR_PASSWORD,
+    )
     owner_b = _get_or_create_user(
         users, "owner.b@dev.procurawise.local", "Owner B", DEV_BUYER_PASSWORD
     )
@@ -390,12 +416,46 @@ def seed(settings: Settings) -> list[Membership]:
         _get_or_create_membership(
             memberships, tenant_a, vendor_user_a, "vendor_contact", vendor_org_a.id
         ),
+        # A second vendor_contact Membership on the *same* vendor_org_id as
+        # the one above (Fase 15: exercises "multiple collaborators per
+        # vendor organization"). Listed here, after vendor_user_a, on
+        # purpose: tests/conftest.py's `seeded_actors` fixture keys a dict
+        # by (tenant_id, role) and keeps the *first* occurrence per key (see
+        # that fixture's comment) precisely so this second row never shadows
+        # vendor_user_a there - it stays reachable only by email lookup
+        # (tests/conftest.py::second_vendor_collaborator_membership_id).
+        _get_or_create_membership(
+            memberships, tenant_a, vendor_user_a2, "vendor_contact", vendor_org_a.id
+        ),
         _get_or_create_membership(memberships, tenant_b, owner_b, "evaluation_owner"),
         _get_or_create_membership(
             memberships, tenant_b, evaluator_technical_b, "evaluator_technical"
         ),
         _get_or_create_membership(memberships, tenant_b, owner_b, "approver"),
     ]
+
+    # Fase 15: pre-accept both Agreements for vendor_user_a (the primary
+    # seeded contact everything else in this script, and the E2E vertical
+    # slice, already assumes can submit a proposal immediately) so existing
+    # demo flows are not newly blocked by a gate they never used to have to
+    # clear. Deliberately NOT pre-accepted for vendor_user_a2 (the second
+    # collaborator seeded above) - logging in as that actor is exactly how a
+    # developer exercises the "each collaborator accepts individually"
+    # behavior (ADR 0014) without writing a dedicated script for it.
+    agreement_service = AgreementService(AgreementRepository(db))
+    vendor_a_membership = next(m for m in created if m.user_id == vendor_user_a.id)
+    for agreement_type in ("nda", "conflict_of_interest"):
+        if not agreement_service.has_current_acceptance(
+            tenant_a.id, vendor_user_a.id, agreement_type
+        ):
+            agreement_service.accept(
+                tenant_a.id,
+                vendor_user_a.id,
+                vendor_a_membership.id,
+                agreement_type,
+                ip="127.0.0.1",
+                user_agent="seed-dev",
+            )
 
     evaluations = EvaluationRepository(db)
     proposals = ProposalRepository(db)
