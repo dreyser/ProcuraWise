@@ -60,7 +60,7 @@ Estado por fase se actualiza en [`docs/development/current-phase.md`](current-ph
 
 | Fase | Historia | P | Depende de | Criterio de aceptación (resumen) | Estado |
 |---|---|---|---|---|---|
-| 17 | `qna` preguntas ligadas/generales, publicación anonimizada/privada, notificaciones | P0 | 16 | Pregunta de proveedor visible a comprador; respuesta publicada según visibilidad configurada | Not Started |
+| 17 | `qna` preguntas ligadas/generales, publicación anonimizada/privada, notificaciones | P0 | 16 | Pregunta de proveedor visible a comprador; respuesta publicada según visibilidad configurada | ✅ Completed (2026-08-03) — implementado y verificado con Docker real: `make lint`/`make typecheck` en verde; backend 168 unit + 279 integración/API/seguridad Docker; frontend 150 unit; `make test-e2e` 11/11 specs (incl. 1 nuevo: `qna.spec.ts` — proveedor pregunta, dueño responde con visibilidad privada/publicada-anonimizada, segundo proveedor solo ve lo publicado sin fuga de identidad); `make contracts` sin diff. Módulo nuevo `qna/` (modelo+repo+servicio+router proveedor y comprador); visibilidad binaria (`private`/`published_anonymized`, sin tercer estado); notificaciones = in-app únicamente (reutiliza `AuditEvent` + `PollingController`/ADR 0012, sin canal de entrega real ni entidad `Notification` nueva). "Aclaraciones" sobre `ProposalAnswer` y "asignación" delegable diferidas (Fase 21/no planificado). Ver detalle completo en `current-phase.md` |
 | 18 | Evaluación asistida por IA (riesgos/score sugerido) con "aceptar o modificar" obligatorio | P0 | 13, 17 | Score sugerido nunca se guarda sin acción explícita del evaluador humano | Not Started |
 
 ### E8 — TCO y scoring económico (Bloque 5, parte 1)

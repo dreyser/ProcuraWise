@@ -17,6 +17,7 @@ AuditResourceType = Literal[
     "ai_execution",
     "vendor_organization",
     "document",
+    "qna_question",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -89,6 +90,14 @@ AuditAction = Literal[
     "document_deleted",
     "document_upload_rejected",
     "document_download_url_issued",
+    # Fase 17 (qna: preguntas ligadas/generales, publicación anonimizada/
+    # privada) - resource_type "qna_question". qna_answer_published covers
+    # both the first answer and any later republication/visibility change
+    # to the same Question - metadata.version/metadata.visibility
+    # distinguish the case, no need to multiply actions per combination.
+    "qna_question_created",
+    "qna_question_withdrawn",
+    "qna_answer_published",
 ]
 
 

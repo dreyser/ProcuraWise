@@ -7,6 +7,7 @@ const TABS = [
   { suffix: '/assignments', label: 'Asignaciones' },
   { suffix: '/approval', label: 'Aprobación' },
   { suffix: '/proposals', label: 'Propuestas' },
+  { suffix: '/qna', label: 'Q&A' },
   { suffix: '/results', label: 'Resultados' },
 ]
 

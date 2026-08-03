@@ -32,6 +32,38 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-03 — Fase 17 (E7): `qna` — preguntas ligadas/generales, publicación anonimizada/privada, notificaciones
+
+**Resumen:** Sesión de planeación exclusiva en Plan Mode (verificación independiente del cierre de Fase 16 vía API de GitHub — no solo el reporte de la sesión anterior —, confirmación documental de que la siguiente fase es Fase 17/E7 sin asumirlo por el título sugerido, y resolución de ~160 preguntas de planeación agrupadas por tema) que concluyó **sin ninguna pregunta bloqueante** tras evidencia documental triple-consistente sobre los puntos más ambiguos (visibilidad binaria vs. ternaria; alcance real de "notificaciones"; alcance de "aclaraciones"/"asignación"). El founder aprobó el plan y autorizó avanzar a la implementación directamente, sin necesitar `AskUserQuestion` para ninguna decisión de esta fase. Ejecución completa en 8 bloques incrementales (modelo+repositorio+migración, servicio de dominio, endpoints de proveedor+auditoría, endpoints de comprador+visibilidad/anonimización, contratos, frontend proveedor, frontend comprador+polling, E2E+documentación), cada uno verificado contra Mongo real antes de avanzar.
+
+**Decisiones de diseño resueltas por evidencia documental (ninguna bloqueante, ver `current-phase.md` para el detalle completo):**
+1. Visibilidad binaria (`private`/`published_anonymized`), no ternaria — sin un tercer estado "público con identidad".
+2. Notificaciones = in-app únicamente, reutilizando `AuditEvent`+`PollingController` (ADR 0012) — sin email/push real, sin entidad `Notification`, sin bounded context nuevo (precedente directo: Fase 15 ya reservó "notificaciones reales" para Fase 24).
+3. "Aclaraciones" sobre `ProposalAnswer` diferidas a Fase 21 (ADR 0013); "asignación" delegable de la respuesta sin fecha — `evaluation_owner` es la única autoridad en esta fase.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo módulo `service/procurawise/qna/` (`models`, `repository`, `service`, `schemas`, `router` — dos `APIRouter`, proveedor y comprador —, `exceptions`); `migrations/0014_qna_indexes.py`; `audit/models.py` (+`qna_question` resource_type +3 acciones); `api/main.py` (+2 routers); frontend: `features/vendor-portal/hooks/useQuestionActions.ts` (nuevo), `features/vendor-portal/components/ProposalQnaPanel.tsx`/`RequirementQuestionThread.tsx` (nuevos, montados en `VendorProposalDetailPage.tsx`), `features/evaluations/pages/QnaPage.tsx` (nueva, ruta `/evaluations/:evaluationId/qna`), `features/evaluations/hooks/useQnaPolling.ts` (nuevo, segundo consumidor real de `PollingController`/ADR 0012), `app/router.tsx`/`EvaluationTabNav.tsx` (+ruta y pestaña "Q&A"); `e2e/qna.spec.ts` (nuevo); 4 archivos de test backend nuevos, 3 de test frontend nuevos.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker and not docker_servicebus"`) → 168 passed.
+- Backend integración/API/seguridad Docker (`make test-integration`) → 279 passed (incl. test dedicado de fuga de identidad sobre `PublicQuestionResponse`).
+- Frontend (`pnpm test`) → 150 passed.
+- `pnpm build` → build de producción exitoso.
+- `make test-e2e` → 11/11 specs passed (1 nuevo — `qna.spec.ts` — journey con dos organizaciones proveedoras reales, visibilidad privada y publicada-anonimizada, sin fuga de identidad).
+- `make contracts` corrido tres veces seguidas → checksum idéntico, sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere un ADR nuevo — visibilidad binaria es una regla de negocio de proyección de schema (no un patrón arquitectónico nuevo); notificaciones in-app reutilizan polling ya aprobado por ADR 0012, sin canal de entrega nuevo.
+- `PollingController` (ADR 0012) usado deliberadamente solo como disparador de refresco (`refetch()` de React Query), nunca como dueño de los datos — evita doble dueño del caché entre el controller y React Query; documentado en el código de `useQnaPolling.ts`, no requiere ADR (no cambia el contrato de ADR 0012, solo cómo se consume desde un segundo caller).
+
+**Deuda técnica introducida:**
+- Ninguna material — módulo `qna/` completamente nuevo y aditivo, sin FKs entrantes desde otras colecciones, sin infraestructura nueva que operar.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: **Fase 18 (E7) — Evaluación asistida por IA (riesgos/score sugerido) con "aceptar o modificar" obligatorio**, depende de Fases 13 y 17 (ambas ya cerradas).
+- No tocar todavía: entrega real de notificaciones por correo/push, preferencias de usuario, bounded context `notifications/` dedicado (todo Fase 24); "aclaraciones" del comprador sobre una `ProposalAnswer` ya enviada (Fase 21/ADR 0013); adjuntos nuevos en preguntas/respuestas de Q&A (si se necesitaran, referencia `document_id` al módulo `documents/` ya existente).
+- Housekeeping pendiente heredado, sin cambios: rama `phase-14/research-provider-curated-foundry` sigue sin borrarse (requiere confirmación explícita del founder); ramas `phase-15`/`phase-16`/`phase-17` tampoco se han borrado.
+
 ### Sesión — 2026-08-03 — Fase 16 (E6): `documents` — subida vía Azurite, escaneo AV stub, versionado, URLs temporales
 
 **Resumen:** Sesión de planeación en Plan Mode (verificación no destructiva de git sobre el cierre de Fase 15, inventario de reutilización sobre `shared/storage.py`/`proposals`/`vendor_portal`/`audit`) que identificó una pregunta bloqueante (grano de `Document`), resuelta explícitamente por el founder vía `AskUserQuestion`. Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación, ejecución completa en 8 bloques incrementales (modelo+storage+config+migración, antivirus stub+servicio de dominio, endpoints de proveedor+auditoría, endpoints de comprador+integración con snapshot, contratos, frontend proveedor, frontend comprador, E2E+documentación), cada uno verificado contra servicios reales (Mongo, Azurite) antes de avanzar.
@@ -59,7 +91,7 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 - Azurite 3.33.0 no hace cumplir el alcance de permiso `sp=r` de una SAS en escrituras (gap de fidelidad Azurite/Azure real, no un bug de la implementación) — documentado en el docstring del test de integración correspondiente y en `threat-model.md`.
 
 **Instrucciones para la siguiente sesión:**
-- Próxima fase según `backlog.md`: **Fase 17 (E?) — `qna`: preguntas ligadas/generales, publicación anonimizada/privada, notificaciones**, depende de Fase 16 (ya cerrada).
+- Próxima fase según `backlog.md`: **Fase 17 (E7) — `qna`: preguntas ligadas/generales, publicación anonimizada/privada, notificaciones**, depende de Fase 16 (ya cerrada). [Corrección factual añadida en la sesión de Fase 17: la épica es E7, no un placeholder — ver `roadmap.md`.]
 - No tocar todavía: subida de documentos por el comprador (backend genérico ya lo soporta, UI diferida — R7 del plan); OCR/clasificación/resumen/firma electrónica de documentos (fuera de alcance del MVP); cuarentena física como pipeline asíncrono real (el stub síncrono basta para el criterio de aceptación).
 - Housekeeping pendiente heredado, sin cambios: rama `phase-14/research-provider-curated-foundry` sigue sin borrarse (requiere confirmación explícita del founder).
 

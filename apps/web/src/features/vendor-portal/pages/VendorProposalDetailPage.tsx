@@ -21,6 +21,8 @@ import { useAnswerAutosave } from '@/features/vendor-portal/hooks/useAnswerAutos
 import { AnswerField } from '@/features/vendor-portal/components/AnswerField'
 import { ProposalDocumentsPanel } from '@/features/vendor-portal/components/ProposalDocumentsPanel'
 import { RequirementEvidenceUpload } from '@/features/vendor-portal/components/RequirementEvidenceUpload'
+import { ProposalQnaPanel } from '@/features/vendor-portal/components/ProposalQnaPanel'
+import { RequirementQuestionThread } from '@/features/vendor-portal/components/RequirementQuestionThread'
 
 export function VendorProposalDetailPage() {
   const { proposalId } = useParams<{ proposalId: string }>()
@@ -135,6 +137,11 @@ export function VendorProposalDetailPage() {
                 requirementId={requirement.id}
                 disabled={isSubmitted}
               />
+              <RequirementQuestionThread
+                proposalId={proposalId!}
+                requirementId={requirement.id}
+                disabled={isSubmitted}
+              />
             </div>
           )
         })}
@@ -143,6 +150,8 @@ export function VendorProposalDetailPage() {
       <div className="mt-6">
         <ProposalDocumentsPanel proposalId={proposalId!} disabled={isSubmitted} />
       </div>
+
+      <ProposalQnaPanel proposalId={proposalId!} disabled={isSubmitted} />
 
       {!isSubmitted && (
         <div className="mt-6">
