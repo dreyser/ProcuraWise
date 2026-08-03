@@ -129,6 +129,17 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 - **Fallo parcial (Blob subido, inserción en Mongo falla)**: el blob queda huérfano pero inaccesible (ningún id apunta a él, no aparece en ningún listado) — riesgo aceptado de bajo impacto, housekeeping futuro no bloqueante (ver tabla de riesgos aceptados abajo).
 - **Gap de fidelidad Azurite vs. Azure real (hallazgo, no una vulnerabilidad de la implementación)**: Azurite 3.33.0 no hace cumplir el alcance de permiso `sp=r` (solo lectura) de una SAS en escrituras — un `PUT` a través de una SAS de solo lectura generada por `AzureBlobStorage.generate_download_url()` tiene éxito contra Azurite, mientras que Azure Blob Storage real lo rechazaría. Confirmado que el token generado sí incluye `sp=r` correctamente (verificado parseando la URL directamente, no confiando en que Azurite lo rechace) — el enforcement real ocurre en Azure Blob Storage en producción, no en el emulador de desarrollo. Documentado en `tests/integration/test_documents_storage.py::test_generate_download_url_signs_read_only_permission`.
 
+## Q&A: preguntas ligadas/generales, publicación anonimizada/privada (Fase 17)
+
+**Estado: implementado y verificado con Docker real (2026-08-03).**
+
+- **Fuga de identidad en modo anonimizado**: el control principal es estructural, no un `if` que se pueda olvidar — `PublicQuestionResponse` (el schema que ve un proveedor distinto del autor) simplemente **no declara** los campos `vendor_org_id`/`vendor_org_name`/`created_by_membership_id` en absoluto; no existe una ruta de código que pueda filtrarlos por accidente en ese schema. Verificado con un test de integración dedicado que serializa la respuesta completa a JSON y confirma la ausencia de esas tres cadenas, y con un E2E de dos organizaciones proveedoras reales (`e2e/qna.spec.ts`) donde el segundo proveedor solo ve la pregunta+respuesta publicada, nunca ningún dato que identifique a la primera.
+- **IDOR sobre `question_id`**: mismo patrón ya establecido (UUID hex no adivinable vía `new_id()`); toda ruta revalida pertenencia a la `Proposal`/`vendor_org_id`/`tenant_id`/`evaluation_id` antes de responder — 404 tanto para una pregunta ajena como para una inexistente, nunca 403 (no confirmar existencia cross-vendor/cross-tenant).
+- **Escritura de respuesta fuera de `evaluation_owner`**: `PUT .../answer` gateado por `OWNER_ONLY`; cualquier otro rol de `BUYER_READ_ROLES` puede leer el tablero completo pero un intento de escritura responde 403 — verificado con un test negativo explícito, no solo por ausencia de botón en la UI.
+- **Concurrencia/doble publicación**: mismo patrón de concurrencia optimista que `Proposal.submit` (`expected_version` sobre el documento completo de `Question`) — una segunda escritura con una versión ya superada responde 409, nunca sobrescribe silenciosamente ni duplica una versión de respuesta.
+- **Escritura fuera de ventana**: crear/retirar una pregunta o publicar una respuesta solo es posible mientras `Evaluation.status == "collecting_responses"` — cualquier intento fuera de esa ventana (evaluación todavía `draft`, o ya `evaluating`/`completed`) responde 409, mismo principio ya aplicado a Documents/Proposals.
+- **Nada nuevo que operar**: sin Blob/SAS/TTL/worker involucrado — Q&A es 100% Mongo, mismo modelo operativo y de amenazas que Proposals/Evaluations, sin superficie de ataque nueva más allá de las rutas HTTP propias.
+
 ## Riesgos aceptados temporalmente
 
 | Riesgo | Dueño | Fecha de revisión | Referencia |

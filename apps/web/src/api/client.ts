@@ -179,6 +179,23 @@ export interface AnswerResponse {
   updated_at: string
 }
 
+export type AnswerVersionResponseVisibility =
+  (typeof AnswerVersionResponseVisibility)[keyof typeof AnswerVersionResponseVisibility]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AnswerVersionResponseVisibility = {
+  private: 'private',
+  published_anonymized: 'published_anonymized',
+} as const
+
+export interface AnswerVersionResponse {
+  version: number
+  body: string
+  visibility: AnswerVersionResponseVisibility
+  answered_by_membership_id: string
+  answered_at: string
+}
+
 export type AnswerWriteRequestVendorComment = string | null
 
 /**
@@ -320,6 +337,48 @@ export type BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostR
 export interface BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost {
   file: string
   requirement_id?: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostRequirementId
+}
+
+export interface BuyerQuestionListResponse {
+  items: BuyerQuestionResponse[]
+}
+
+export type BuyerQuestionResponseRequirementId = string | null
+
+export type BuyerQuestionResponseScope =
+  (typeof BuyerQuestionResponseScope)[keyof typeof BuyerQuestionResponseScope]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BuyerQuestionResponseScope = {
+  requirement: 'requirement',
+  general: 'general',
+} as const
+
+export type BuyerQuestionResponseStatus =
+  (typeof BuyerQuestionResponseStatus)[keyof typeof BuyerQuestionResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const BuyerQuestionResponseStatus = {
+  open: 'open',
+  answered: 'answered',
+  withdrawn: 'withdrawn',
+} as const
+
+export type BuyerQuestionResponseCurrentAnswer = AnswerVersionResponse | null
+
+export interface BuyerQuestionResponse {
+  id: string
+  proposal_id: string
+  vendor_org_id: string
+  requirement_id: BuyerQuestionResponseRequirementId
+  scope: BuyerQuestionResponseScope
+  body: string
+  status: BuyerQuestionResponseStatus
+  version: number
+  created_by_membership_id: string
+  created_at: string
+  current_answer: BuyerQuestionResponseCurrentAnswer
+  answer_history: AnswerVersionResponse[]
 }
 
 export interface CollaboratorInviteRequest {
@@ -748,6 +807,31 @@ export interface ProposalSummaryResponse {
   submitted_at: ProposalSummaryResponseSubmittedAt
 }
 
+export interface PublicQuestionListResponse {
+  items: PublicQuestionResponse[]
+}
+
+export type PublicQuestionResponseRequirementId = string | null
+
+export type PublicQuestionResponseScope =
+  (typeof PublicQuestionResponseScope)[keyof typeof PublicQuestionResponseScope]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PublicQuestionResponseScope = {
+  requirement: 'requirement',
+  general: 'general',
+} as const
+
+export type PublicQuestionResponseCurrentAnswer = AnswerVersionResponse | null
+
+export interface PublicQuestionResponse {
+  id: string
+  requirement_id: PublicQuestionResponseRequirementId
+  scope: PublicQuestionResponseScope
+  body: string
+  current_answer: PublicQuestionResponseCurrentAnswer
+}
+
 export type PublicationReadinessResponseApprovalStatus =
   (typeof PublicationReadinessResponseApprovalStatus)[keyof typeof PublicationReadinessResponseApprovalStatus]
 
@@ -771,6 +855,38 @@ export interface PublicationReadinessResponse {
   approval_status: PublicationReadinessResponseApprovalStatus
   approver_membership_id: PublicationReadinessResponseApproverMembershipId
   response_deadline: PublicationReadinessResponseResponseDeadline
+}
+
+export type PublishAnswerRequestVisibility =
+  (typeof PublishAnswerRequestVisibility)[keyof typeof PublishAnswerRequestVisibility]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PublishAnswerRequestVisibility = {
+  private: 'private',
+  published_anonymized: 'published_anonymized',
+} as const
+
+export interface PublishAnswerRequest {
+  body: string
+  visibility: PublishAnswerRequestVisibility
+  expected_version: number
+}
+
+export type QuestionCreateRequestScope =
+  (typeof QuestionCreateRequestScope)[keyof typeof QuestionCreateRequestScope]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const QuestionCreateRequestScope = {
+  requirement: 'requirement',
+  general: 'general',
+} as const
+
+export type QuestionCreateRequestRequirementId = string | null
+
+export interface QuestionCreateRequest {
+  scope: QuestionCreateRequestScope
+  requirement_id?: QuestionCreateRequestRequirementId
+  body: string
 }
 
 export interface RejectionRequest {
@@ -1326,6 +1442,46 @@ export interface VendorProposalSummaryResponse {
   created_at: string
   updated_at: string
   submitted_at: VendorProposalSummaryResponseSubmittedAt
+}
+
+export interface VendorQuestionListResponse {
+  items: VendorQuestionResponse[]
+}
+
+export type VendorQuestionResponseRequirementId = string | null
+
+export type VendorQuestionResponseScope =
+  (typeof VendorQuestionResponseScope)[keyof typeof VendorQuestionResponseScope]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorQuestionResponseScope = {
+  requirement: 'requirement',
+  general: 'general',
+} as const
+
+export type VendorQuestionResponseStatus =
+  (typeof VendorQuestionResponseStatus)[keyof typeof VendorQuestionResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorQuestionResponseStatus = {
+  open: 'open',
+  answered: 'answered',
+  withdrawn: 'withdrawn',
+} as const
+
+export type VendorQuestionResponseCurrentAnswer = AnswerVersionResponse | null
+
+export interface VendorQuestionResponse {
+  id: string
+  proposal_id: string
+  requirement_id: VendorQuestionResponseRequirementId
+  scope: VendorQuestionResponseScope
+  body: string
+  status: VendorQuestionResponseStatus
+  version: number
+  created_at: string
+  current_answer: VendorQuestionResponseCurrentAnswer
+  answer_history: AnswerVersionResponse[]
 }
 
 export type VendorRequirementResponseDimension =
@@ -8132,6 +8288,330 @@ export function useGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsPro
 }
 
 /**
+ * @summary List Questions As Buyer
+ */
+export type listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponse200 = {
+  data: BuyerQuestionListResponse
+  status: 200
+}
+
+export type listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponseSuccess =
+  listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponse200 & {
+    headers: Headers
+  }
+export type listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponseError =
+  listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponse =
+  | listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponseSuccess
+  | listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponseError
+
+export const getListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/questions`
+}
+
+export const listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponse> => {
+  return apiFetch<listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetResponse>(
+    getListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetUrl(evaluationId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetQueryKey = (
+  evaluationId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/questions`] as const
+}
+
+export const getListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetQueryKey(evaluationId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>
+  > = () => listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet(evaluationId)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>
+>
+export type ListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetQueryError =
+  HTTPValidationError
+
+export function useListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Questions As Buyer
+ */
+
+export function useListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetQueryOptions(
+    evaluationId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Publish Answer
+ */
+export type publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponse200 = {
+  data: BuyerQuestionResponse
+  status: 200
+}
+
+export type publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponseSuccess =
+  publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponse200 & {
+    headers: Headers
+  }
+export type publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponseError =
+  publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponse422 & {
+    headers: Headers
+  }
+
+export type publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponse =
+  | publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponseSuccess
+  | publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponseError
+
+export const getPublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutUrl = (
+  evaluationId: string,
+  questionId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/questions/${questionId}/answer`
+}
+
+export const publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut = async (
+  evaluationId: string,
+  questionId: string,
+  publishAnswerRequest: PublishAnswerRequest,
+  options?: RequestInit,
+): Promise<publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponse> => {
+  return apiFetch<publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutResponse>(
+    getPublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutUrl(
+      evaluationId,
+      questionId,
+    ),
+    {
+      ...options,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(publishAnswerRequest),
+    },
+  )
+}
+
+export const getPublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut>
+      >,
+      TError,
+      { evaluationId: string; questionId: string; data: PublishAnswerRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut>
+    >,
+    TError,
+    { evaluationId: string; questionId: string; data: PublishAnswerRequest },
+    TContext
+  > => {
+    const mutationKey = ['publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut>
+      >,
+      { evaluationId: string; questionId: string; data: PublishAnswerRequest }
+    > = (props) => {
+      const { evaluationId, questionId, data } = props ?? {}
+
+      return publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut(
+        evaluationId,
+        questionId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type PublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut>
+    >
+  >
+export type PublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutMutationBody =
+  PublishAnswerRequest
+export type PublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Publish Answer
+ */
+export const usePublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut>
+      >,
+      TError,
+      { evaluationId: string; questionId: string; data: PublishAnswerRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof publishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut>>,
+  TError,
+  { evaluationId: string; questionId: string; data: PublishAnswerRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getPublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPutMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
  * @summary Upsert Score
  */
 export type upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse200 =
@@ -12033,6 +12513,727 @@ export const useDeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocum
 > => {
   const mutationOptions =
     getDeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Create Question
+ */
+export type createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponse201 = {
+  data: VendorQuestionResponse
+  status: 201
+}
+
+export type createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponseSuccess =
+  createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponse201 & {
+    headers: Headers
+  }
+export type createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponseError =
+  createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponse422 & {
+    headers: Headers
+  }
+
+export type createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponse =
+  | createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponseSuccess
+  | createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponseError
+
+export const getCreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostUrl = (
+  proposalId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/questions`
+}
+
+export const createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost = async (
+  proposalId: string,
+  questionCreateRequest: QuestionCreateRequest,
+  options?: RequestInit,
+): Promise<createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponse> => {
+  return apiFetch<createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostResponse>(
+    getCreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostUrl(proposalId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(questionCreateRequest),
+    },
+  )
+}
+
+export const getCreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost>>,
+    TError,
+    { proposalId: string; data: QuestionCreateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost>>,
+  TError,
+  { proposalId: string; data: QuestionCreateRequest },
+  TContext
+> => {
+  const mutationKey = ['createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost>>,
+    { proposalId: string; data: QuestionCreateRequest }
+  > = (props) => {
+    const { proposalId, data } = props ?? {}
+
+    return createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost(proposalId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost>>
+  >
+export type CreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostMutationBody =
+  QuestionCreateRequest
+export type CreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Create Question
+ */
+export const useCreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost>>,
+      TError,
+      { proposalId: string; data: QuestionCreateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createQuestionApiV1VendorPortalProposalsProposalIdQuestionsPost>>,
+  TError,
+  { proposalId: string; data: QuestionCreateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getCreateQuestionApiV1VendorPortalProposalsProposalIdQuestionsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Questions
+ */
+export type listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponse200 = {
+  data: VendorQuestionListResponse
+  status: 200
+}
+
+export type listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponseSuccess =
+  listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponse200 & {
+    headers: Headers
+  }
+export type listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponseError =
+  listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponse =
+  | listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponseSuccess
+  | listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponseError
+
+export const getListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetUrl = (
+  proposalId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/questions`
+}
+
+export const listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponse> => {
+  return apiFetch<listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetResponse>(
+    getListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetUrl(proposalId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetQueryKey = (
+  proposalId?: string,
+) => {
+  return [`/api/v1/vendor-portal/proposals/${proposalId}/questions`] as const
+}
+
+export const getListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetQueryKey(proposalId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>
+  > = () => listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet(proposalId)
+
+  return { queryKey, queryFn, enabled: !!proposalId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>
+>
+export type ListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetQueryError =
+  HTTPValidationError
+
+export function useListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Questions
+ */
+
+export function useListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet<
+  TData = Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListQuestionsApiV1VendorPortalProposalsProposalIdQuestionsGetQueryOptions(
+    proposalId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary List Published Questions
+ */
+export type listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponse200 =
+  {
+    data: PublicQuestionListResponse
+    status: 200
+  }
+
+export type listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponseSuccess =
+  listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponse200 & {
+    headers: Headers
+  }
+export type listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponseError =
+  listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponse422 & {
+    headers: Headers
+  }
+
+export type listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponse =
+  | listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponseSuccess
+  | listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponseError
+
+export const getListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetUrl =
+  (proposalId: string) => {
+    return `/api/v1/vendor-portal/proposals/${proposalId}/questions/published`
+  }
+
+export const listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet =
+  async (
+    proposalId: string,
+    options?: RequestInit,
+  ): Promise<listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponse> => {
+    return apiFetch<listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetResponse>(
+      getListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetUrl(
+        proposalId,
+      ),
+      {
+        ...options,
+        method: 'GET',
+      },
+    )
+  }
+
+export const getListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetQueryKey =
+  (proposalId?: string) => {
+    return [`/api/v1/vendor-portal/proposals/${proposalId}/questions/published`] as const
+  }
+
+export const getListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    proposalId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {}
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetQueryKey(
+        proposalId,
+      )
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+        >
+      >
+    > = () =>
+      listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet(proposalId)
+
+    return { queryKey, queryFn, enabled: !!proposalId, ...queryOptions } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> }
+  }
+
+export type ListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+      >
+    >
+  >
+export type ListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetQueryError =
+  HTTPValidationError
+
+export function useListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Published Questions
+ */
+
+export function useListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getListPublishedQuestionsApiV1VendorPortalProposalsProposalIdQuestionsPublishedGetQueryOptions(
+      proposalId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Withdraw Question
+ */
+export type withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponse204 =
+  {
+    data: void
+    status: 204
+  }
+
+export type withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponseSuccess =
+  withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponse204 & {
+    headers: Headers
+  }
+export type withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponseError =
+  withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponse =
+  | withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponseSuccess
+  | withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponseError
+
+export const getWithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteUrl = (
+  proposalId: string,
+  questionId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/questions/${questionId}`
+}
+
+export const withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete = async (
+  proposalId: string,
+  questionId: string,
+  options?: RequestInit,
+): Promise<withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponse> => {
+  return apiFetch<withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteResponse>(
+    getWithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteUrl(
+      proposalId,
+      questionId,
+    ),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+}
+
+export const getWithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete
+        >
+      >,
+      TError,
+      { proposalId: string; questionId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete
+      >
+    >,
+    TError,
+    { proposalId: string; questionId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      'withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete
+        >
+      >,
+      { proposalId: string; questionId: string }
+    > = (props) => {
+      const { proposalId, questionId } = props ?? {}
+
+      return withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete(
+        proposalId,
+        questionId,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type WithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete
+      >
+    >
+  >
+
+export type WithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Withdraw Question
+ */
+export const useWithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete
+        >
+      >,
+      TError,
+      { proposalId: string; questionId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof withdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDelete>
+  >,
+  TError,
+  { proposalId: string; questionId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getWithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteMutationOptions(
       options,
     )
 

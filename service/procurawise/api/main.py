@@ -15,6 +15,7 @@ from procurawise.identity.vendor_auth_router import vendor_auth_router, vendor_o
 from procurawise.knowledge_templates.router import apply_router as knowledge_template_apply_router
 from procurawise.knowledge_templates.router import router as knowledge_templates_router
 from procurawise.proposals.router import router as proposals_router
+from procurawise.qna.router import buyer_qna_router, vendor_qna_router
 from procurawise.scoring.router import router as scoring_router
 from procurawise.shared.config import get_settings
 from procurawise.shared.logging import configure_logging
@@ -52,6 +53,7 @@ app.include_router(ai_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(proposals_router, prefix="/api/v1")
 app.include_router(buyer_documents_router, prefix="/api/v1")
+app.include_router(buyer_qna_router, prefix="/api/v1")
 app.include_router(scoring_router, prefix="/api/v1")
 app.include_router(assignments_router, prefix="/api/v1")
 app.include_router(knowledge_templates_router, prefix="/api/v1")
@@ -59,4 +61,5 @@ app.include_router(knowledge_template_apply_router, prefix="/api/v1")
 app.include_router(vendor_portal_agreements_router, prefix="/api/v1")
 app.include_router(vendor_portal_router, prefix="/api/v1")
 app.include_router(vendor_documents_router, prefix="/api/v1")
+app.include_router(vendor_qna_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")

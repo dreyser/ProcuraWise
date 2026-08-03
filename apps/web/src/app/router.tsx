@@ -28,6 +28,7 @@ import { AssignmentsPage } from '@/features/evaluations/pages/AssignmentsPage'
 import { EvaluationApprovalPage } from '@/features/evaluations/pages/EvaluationApprovalPage'
 import { KnowledgeTemplatesPage } from '@/features/evaluations/pages/KnowledgeTemplatesPage'
 import { KnowledgeTemplateDetailPage } from '@/features/evaluations/pages/KnowledgeTemplateDetailPage'
+import { QnaPage } from '@/features/evaluations/pages/QnaPage'
 
 // Fase 9 (RBAC completo, spec §4): tenant_admin/platform_admin are real,
 // backend-enforced roles that can authenticate, but have no dedicated UI
@@ -222,6 +223,14 @@ export function AppRouter() {
           element={
             <BuyerLayout>
               <ScoringPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/evaluations/:evaluationId/qna"
+          element={
+            <BuyerLayout>
+              <QnaPage />
             </BuyerLayout>
           }
         />
