@@ -90,6 +90,39 @@ export interface AIRequirementCandidate {
   sources: string[]
 }
 
+export type AIScoreSuggestionCandidateRiskFlagsItem =
+  (typeof AIScoreSuggestionCandidateRiskFlagsItem)[keyof typeof AIScoreSuggestionCandidateRiskFlagsItem]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AIScoreSuggestionCandidateRiskFlagsItem = {
+  incomplete_answer: 'incomplete_answer',
+  evasive_answer: 'evasive_answer',
+  contradictory_answer: 'contradictory_answer',
+  missing_evidence: 'missing_evidence',
+  contractual_risk: 'contractual_risk',
+} as const
+
+/**
+ * The AI-facing candidate shape for Fase 18 (ADR 0022) - one per
+requirement already answered in a submitted Proposal's frozen snapshot.
+Every field required/non-nullable for the same reason as
+AIRequirementCandidate: Azure OpenAI's structured-output "strict" mode
+rejects optional/nullable properties. `requirement_id` is re-validated
+against the target snapshot before ever being shown to a user (never
+trusted as-is from the model) - see ai.service._sanitize_requirement_id.
+
+This candidate is never written to the `scores` collection by `ai/`
+itself - accepting or modifying it is just a normal call to the already-
+existing ScoringService.upsert_score (ScoreWriteRequest.
+source_ai_execution_id), never a new write path (plan §1/§11).
+ */
+export interface AIScoreSuggestionCandidate {
+  requirement_id: string
+  suggested_score: number
+  risk_flags: AIScoreSuggestionCandidateRiskFlagsItem[]
+  rationale: string
+}
+
 export interface AcceptInvitationRequest {
   token: string
   password: string
@@ -1167,6 +1200,8 @@ export const ScoreResponseDimension = {
 
 export type ScoreResponseComment = string | null
 
+export type ScoreResponseSourceAiExecutionId = string | null
+
 export interface ScoreResponse {
   id: string
   requirement_id: string
@@ -1182,22 +1217,76 @@ export interface ScoreResponse {
   updated_by_membership_id: string
   created_at: string
   updated_at: string
+  source_ai_execution_id: ScoreResponseSourceAiExecutionId
+}
+
+export type ScoreSuggestionJobStatusResponseStatus =
+  (typeof ScoreSuggestionJobStatusResponseStatus)[keyof typeof ScoreSuggestionJobStatusResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ScoreSuggestionJobStatusResponseStatus = {
+  queued: 'queued',
+  running: 'running',
+  succeeded: 'succeeded',
+  failed: 'failed',
+} as const
+
+export type ScoreSuggestionJobStatusResponseCandidates = AIScoreSuggestionCandidate[] | null
+
+export type ScoreSuggestionJobStatusResponseError = string | null
+
+export type ScoreSuggestionJobStatusResponseModel = string | null
+
+export type ScoreSuggestionJobStatusResponseTokenUsage = TokenUsageResponse | null
+
+export type ScoreSuggestionJobStatusResponseCostEstimate = number | null
+
+export type ScoreSuggestionJobStatusResponseLatencyMs = number | null
+
+/**
+ * Same ADR 0012 job-status shape as SuggestionJobStatusResponse, minus
+the requirement-generation-only fields (`accepted_requirement_ids`,
+`source_catalog`, `warnings`) that don't apply here - this use case
+reads the proposal's own already-validated content, it doesn't run
+ResearchProvider discovery and it has no accept endpoint of its own.
+ */
+export interface ScoreSuggestionJobStatusResponse {
+  job_id: string
+  status: ScoreSuggestionJobStatusResponseStatus
+  candidates: ScoreSuggestionJobStatusResponseCandidates
+  error: ScoreSuggestionJobStatusResponseError
+  model: ScoreSuggestionJobStatusResponseModel
+  prompt_version: string
+  token_usage: ScoreSuggestionJobStatusResponseTokenUsage
+  cost_estimate: ScoreSuggestionJobStatusResponseCostEstimate
+  latency_ms: ScoreSuggestionJobStatusResponseLatencyMs
 }
 
 export type ScoreWriteRequestComment = string | null
 
 export type ScoreWriteRequestVersion = number | null
 
+export type ScoreWriteRequestSourceAiExecutionId = string | null
+
 /**
  * `version` is intentionally part of the write contract (optimistic
 concurrency), not a server-managed field being smuggled in - omit/None
 on first create for a given requirement, echo the current Score.version
 on every subsequent update.
+
+`source_ai_execution_id` (Fase 18, ADR 0022) is how "aceptar o modificar"
+a score suggestion is expressed - there is no separate accept endpoint.
+The evaluator's client fills `score`/`comment` from the AI suggestion
+(unchanged = "accepted", edited = "modified") and echoes the job's id
+here; ScoringService compares the submitted values against that job's
+candidate to record which one happened, in the audit trail only. Omit
+entirely for a purely manual score, exactly as before this fase.
  */
 export interface ScoreWriteRequest {
   score: number
   comment?: ScoreWriteRequestComment
   version?: ScoreWriteRequestVersion
+  source_ai_execution_id?: ScoreWriteRequestSourceAiExecutionId
 }
 
 export interface SetApproverRequest {
@@ -1285,6 +1374,17 @@ export interface TokenUsageResponse {
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
+}
+
+/**
+ * Empty `requirement_ids` (the default) means "every requirement in the
+requesting evaluator's assignable section(s) that already has a vendor
+answer in the snapshot and no Score yet" - the common case of reviewing
+a whole proposal in one click. A non-empty list scopes the job to just
+those requirements instead.
+ */
+export interface TriggerScoreSuggestionRequest {
+  requirement_ids?: string[]
 }
 
 export type TriggerSuggestionRequestDimension =
@@ -7114,6 +7214,457 @@ export const useAcceptRequirementSuggestionsApiV1EvaluationsEvaluationIdAiRequir
 
     return useMutation(mutationOptions, queryClient)
   }
+
+/**
+ * Fase 18 (ADR 0022): returns 202 immediately, same async contract as
+trigger_requirement_suggestions - the worker's dispatch loop processes
+the job, never this request. Never writes to `scores` - "aceptar o
+modificar" happens entirely through scoring.router.upsert_score.
+ * @summary Trigger Score Suggestion
+ */
+export type triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponse202 =
+  {
+    data: TriggerSuggestionResponse
+    status: 202
+  }
+
+export type triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponseSuccess =
+  triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponse202 & {
+    headers: Headers
+  }
+export type triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponseError =
+  triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponse422 & {
+    headers: Headers
+  }
+
+export type triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponse =
+  | triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponseSuccess
+  | triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponseError
+
+export const getTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostUrl =
+  (evaluationId: string, proposalId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/ai/score-suggestions`
+  }
+
+export const triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost =
+  async (
+    evaluationId: string,
+    proposalId: string,
+    triggerScoreSuggestionRequest: TriggerScoreSuggestionRequest,
+    options?: RequestInit,
+  ): Promise<triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponse> => {
+    return apiFetch<triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostResponse>(
+      getTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostUrl(
+        evaluationId,
+        proposalId,
+      ),
+      {
+        ...options,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(triggerScoreSuggestionRequest),
+      },
+    )
+  }
+
+export const getTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost
+        >
+      >,
+      TError,
+      { evaluationId: string; proposalId: string; data: TriggerScoreSuggestionRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost
+      >
+    >,
+    TError,
+    { evaluationId: string; proposalId: string; data: TriggerScoreSuggestionRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost
+        >
+      >,
+      { evaluationId: string; proposalId: string; data: TriggerScoreSuggestionRequest }
+    > = (props) => {
+      const { evaluationId, proposalId, data } = props ?? {}
+
+      return triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost(
+        evaluationId,
+        proposalId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type TriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost
+      >
+    >
+  >
+export type TriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostMutationBody =
+  TriggerScoreSuggestionRequest
+export type TriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Trigger Score Suggestion
+ */
+export const useTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost
+          >
+        >,
+        TError,
+        { evaluationId: string; proposalId: string; data: TriggerScoreSuggestionRequest },
+        TContext
+      >
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof triggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost
+      >
+    >,
+    TError,
+    { evaluationId: string; proposalId: string; data: TriggerScoreSuggestionRequest },
+    TContext
+  > => {
+    const mutationOptions =
+      getTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPostMutationOptions(
+        options,
+      )
+
+    return useMutation(mutationOptions, queryClient)
+  }
+
+/**
+ * @summary Get Score Suggestion Status
+ */
+export type getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponse200 =
+  {
+    data: ScoreSuggestionJobStatusResponse
+    status: 200
+  }
+
+export type getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponseSuccess =
+  getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponse200 & {
+    headers: Headers
+  }
+export type getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponseError =
+  getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponse422 & {
+    headers: Headers
+  }
+
+export type getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponse =
+  | getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponseSuccess
+  | getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponseError
+
+export const getGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetUrl =
+  (evaluationId: string, proposalId: string, jobId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/ai/score-suggestions/${jobId}`
+  }
+
+export const getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet =
+  async (
+    evaluationId: string,
+    proposalId: string,
+    jobId: string,
+    options?: RequestInit,
+  ): Promise<getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponse> => {
+    return apiFetch<getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetResponse>(
+      getGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetUrl(
+        evaluationId,
+        proposalId,
+        jobId,
+      ),
+      {
+        ...options,
+        method: 'GET',
+      },
+    )
+  }
+
+export const getGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetQueryKey =
+  (evaluationId?: string, proposalId?: string, jobId?: string) => {
+    return [
+      `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/ai/score-suggestions/${jobId}`,
+    ] as const
+  }
+
+export const getGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    evaluationId: string,
+    proposalId: string,
+    jobId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {}
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetQueryKey(
+        evaluationId,
+        proposalId,
+        jobId,
+      )
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+        >
+      >
+    > = () =>
+      getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet(
+        evaluationId,
+        proposalId,
+        jobId,
+      )
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!(evaluationId && proposalId && jobId),
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> }
+  }
+
+export type GetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+      >
+    >
+  >
+export type GetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetQueryError =
+  HTTPValidationError
+
+export function useGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  jobId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Score Suggestion Status
+ */
+
+export function useGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  jobId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGetQueryOptions(
+      evaluationId,
+      proposalId,
+      jobId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
 
 /**
  * @summary List Audit Events

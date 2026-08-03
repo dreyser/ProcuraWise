@@ -6,10 +6,13 @@ import {
   useGetEvaluationApiV1EvaluationsEvaluationIdGet,
   useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet,
   useGetResultsApiV1EvaluationsEvaluationIdResultsGet,
+  useTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost,
   useUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut,
+  type AIScoreSuggestionCandidate,
   type EvaluationDetailResponse,
   type ProposalDetailResponse,
   type ResultsResponse,
+  type TriggerSuggestionResponse,
 } from '@/api/client'
 import { ApiError, unwrapData } from '@/lib/http'
 import { useAuth } from '@/auth/AuthContext'
@@ -21,13 +24,20 @@ import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { normalizeApiError } from '@/lib/errors'
-import { translateDimension } from '@/lib/enumLabels'
+import { translateDimension, translateRiskFlag } from '@/lib/enumLabels'
 import { ScoreInput } from '@/features/scoring/components/ScoreInput'
 import { BuyerDocumentsList } from '@/features/scoring/components/BuyerDocumentsList'
+import { useAiScoreSuggestionJobStatus } from '@/features/evaluations/hooks/useAiScoreSuggestionJobStatus'
 
 interface Draft {
   score: number | null
   comment: string
+  // Fase 18 (ADR 0022): set only when "Usar esta sugerencia" prefilled this
+  // draft from an AI candidate - persists through further manual edits
+  // (that's exactly what distinguishes "accepted" from "modified" server-
+  // side, see ScoringService._ai_decision) until the draft is saved or the
+  // page reloads. Never set by hydrating an existing, previously-saved score.
+  sourceAiExecutionId: string | null
 }
 
 // Mirrors procurawise.shared.roles.SCORE_WRITE_ROLES - internal_collaborator
@@ -63,6 +73,8 @@ export function ScoringPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
   const [conflictIds, setConflictIds] = useState<Set<string>>(new Set())
+  const [suggestionJobId, setSuggestionJobId] = useState<string | null>(null)
+  const [suggestionError, setSuggestionError] = useState<string | null>(null)
 
   const proposalResult = results?.proposals.find((p) => p.proposal_id === proposalId)
   const scoresByRequirement = new Map(
@@ -78,6 +90,7 @@ export function ScoringPage() {
       next[requirement.id] = {
         score: existing?.raw_score ?? null,
         comment: existing?.comment ?? '',
+        sourceAiExecutionId: null,
       }
     }
     setDrafts(next)
@@ -87,6 +100,19 @@ export function ScoringPage() {
 
   const upsertScore =
     useUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut()
+  const triggerSuggestion =
+    useTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost()
+  const suggestionStatus = useAiScoreSuggestionJobStatus(
+    evaluationId!,
+    proposalId!,
+    suggestionJobId,
+  )
+  const suggestionsByRequirement = new Map<string, AIScoreSuggestionCandidate>(
+    (suggestionStatus?.result?.status === 'succeeded'
+      ? (suggestionStatus.result.candidates ?? [])
+      : []
+    ).map((candidate) => [candidate.requirement_id, candidate]),
+  )
 
   if (evaluationQuery.isLoading || proposalQuery.isLoading || resultsQuery.isLoading) {
     return <LoadingState label="Cargando calificación…" />
@@ -125,6 +151,7 @@ export function ScoringPage() {
           score: draft.score,
           comment: draft.comment.trim() || undefined,
           version: existing?.version,
+          source_ai_execution_id: draft.sourceAiExecutionId ?? undefined,
         },
       })
       await queryClient.invalidateQueries({
@@ -155,13 +182,44 @@ export function ScoringPage() {
       ?.scores.find((s) => s.requirement_id === requirementId)
     setDrafts((prev) => ({
       ...prev,
-      [requirementId]: { score: freshScore?.raw_score ?? null, comment: freshScore?.comment ?? '' },
+      [requirementId]: {
+        score: freshScore?.raw_score ?? null,
+        comment: freshScore?.comment ?? '',
+        sourceAiExecutionId: null,
+      },
     }))
     setConflictIds((prev) => {
       const next = new Set(prev)
       next.delete(requirementId)
       return next
     })
+  }
+
+  const handleTriggerSuggestion = async () => {
+    setSuggestionError(null)
+    try {
+      const response = await triggerSuggestion.mutateAsync({
+        evaluationId: evaluationId!,
+        proposalId: proposalId!,
+        data: {},
+      })
+      const body = unwrapData<TriggerSuggestionResponse>(response)
+      setSuggestionJobId(body?.job_id ?? null)
+    } catch (error) {
+      setSuggestionError(normalizeApiError(error).message)
+    }
+  }
+
+  const handleUseSuggestion = (requirementId: string, candidate: AIScoreSuggestionCandidate) => {
+    if (!suggestionJobId) return
+    setDrafts((prev) => ({
+      ...prev,
+      [requirementId]: {
+        score: candidate.suggested_score,
+        comment: candidate.rationale,
+        sourceAiExecutionId: suggestionJobId,
+      },
+    }))
   }
 
   const renderDimension = (dimension: 'functional' | 'technical') => {
@@ -175,13 +233,18 @@ export function ScoringPage() {
         <h2 className="text-sm font-semibold text-foreground">{translateDimension(dimension)}</h2>
         <div className="mt-2 flex flex-col gap-4">
           {dimensionRequirements.map((requirement) => {
-            const draft = drafts[requirement.id] ?? { score: null, comment: '' }
+            const draft = drafts[requirement.id] ?? {
+              score: null,
+              comment: '',
+              sourceAiExecutionId: null,
+            }
             const existing = scoresByRequirement.get(requirement.id)
             const previewPoints =
               draft.score !== null
                 ? Math.round((draft.score / 5) * requirement.weight * 100) / 100
                 : null
             const hasConflict = conflictIds.has(requirement.id)
+            const suggestion = suggestionsByRequirement.get(requirement.id)
 
             return (
               <div key={requirement.id} className="rounded-md border border-border p-4">
@@ -197,6 +260,32 @@ export function ScoringPage() {
                   )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{requirement.description}</p>
+
+                {suggestion && (
+                  <div className="mt-3 rounded-md border border-dashed border-border bg-muted p-3 text-sm">
+                    <p className="text-xs font-medium text-muted-foreground">Sugerencia de IA</p>
+                    <p className="mt-1 text-foreground">
+                      Score sugerido: <strong>{suggestion.suggested_score}</strong>
+                    </p>
+                    {suggestion.risk_flags.length > 0 && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Riesgos: {suggestion.risk_flags.map(translateRiskFlag).join(', ')}
+                      </p>
+                    )}
+                    <p className="mt-1 text-muted-foreground">{suggestion.rationale}</p>
+                    {isEditable && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        onClick={() => handleUseSuggestion(requirement.id, suggestion)}
+                      >
+                        Usar esta sugerencia
+                      </Button>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-3">
                   <ScoreInput
@@ -281,6 +370,39 @@ export function ScoringPage() {
       <div className="mt-2 text-sm text-muted-foreground" role="status">
         Calificados: {scoredCount} / {requirements.length}
       </div>
+
+      {isEditable && (
+        <div className="mt-3">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={triggerSuggestion.isPending || suggestionStatus?.status === 'polling'}
+            onClick={handleTriggerSuggestion}
+          >
+            {suggestionStatus?.status === 'polling' || triggerSuggestion.isPending
+              ? 'Generando sugerencias…'
+              : 'Sugerir con IA'}
+          </Button>
+          {suggestionError && (
+            <div className="mt-2">
+              <ErrorBanner message={suggestionError} />
+            </div>
+          )}
+          {suggestionStatus?.result?.status === 'failed' && (
+            <div className="mt-2">
+              <ErrorBanner
+                message={suggestionStatus.result.error ?? 'La sugerencia de IA falló.'}
+              />
+            </div>
+          )}
+          {suggestionStatus?.error && (
+            <div className="mt-2">
+              <ErrorBanner message={suggestionStatus.error.message} />
+            </div>
+          )}
+        </div>
+      )}
 
       {!isEditable && evaluation.status !== 'evaluating' && (
         <p className="mt-2 text-sm text-muted-foreground">

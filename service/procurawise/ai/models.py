@@ -5,10 +5,11 @@ from uuid import uuid4
 
 AIExecutionStatus = Literal["queued", "running", "succeeded", "failed"]
 
-# Fase 13 (ADR 0021) only implements requirement generation. A second use
-# case (e.g. a future "improve requirement" call) adds its own literal value
-# here and its own prompt directory (ai/prompts/) - never a free-form string.
-AIUseCase = Literal["requirement_generation"]
+# Fase 13 (ADR 0021) only implemented requirement generation. Fase 18 (ADR
+# 0022) adds "score_suggestion" as the second use case anticipated by this
+# Literal's original comment - each has its own prompt directory
+# (ai/prompts/<use_case>/) - never a free-form string.
+AIUseCase = Literal["requirement_generation", "score_suggestion"]
 
 
 def new_id() -> str:
@@ -67,13 +68,24 @@ class AIExecution:
     """The AIProvider analog of AuditEvent (ADR 0021): one record per job,
     tracking cost/model/prompt-version per the Fase 13 acceptance criterion.
     `candidates` is deliberately ephemeral business data, not a source of
-    truth - nothing here becomes a real Requirement until a human calls the
-    accept endpoint (Block 4), which writes through the existing
-    EvaluationRepository.add_requirements_bulk atomic path."""
+    truth - nothing here becomes a real Requirement (requirement_generation)
+    or a real Score (score_suggestion, Fase 18/ADR 0022) until a human acts
+    explicitly. requirement_generation writes through
+    EvaluationRepository.add_requirements_bulk; score_suggestion is never
+    written by `ai/` at all - accepting/modifying a suggestion is just a
+    normal call to the existing ScoringService.upsert_score, which optionally
+    references this execution's id for provenance."""
 
     id: str
     tenant_id: str
     evaluation_id: str
+    # Fase 18 (ADR 0022): populated only for use_case=="score_suggestion" -
+    # a requirement_generation job (Fase 13) has no proposal/snapshot of its
+    # own, it edits Evaluation.requirements directly. None on every job that
+    # predates this field, and on every requirement_generation job going
+    # forward too - never backfilled.
+    proposal_id: str | None
+    snapshot_id: str | None
     requested_by_membership_id: str
     use_case: AIUseCase
     status: AIExecutionStatus
@@ -115,12 +127,16 @@ class AIExecution:
         prompt_template: str,
         prompt_version: str,
         retention_days: int,
+        proposal_id: str | None = None,
+        snapshot_id: str | None = None,
     ) -> "AIExecution":
         now = datetime.now(UTC)
         return AIExecution(
             id=new_id(),
             tenant_id=tenant_id,
             evaluation_id=evaluation_id,
+            proposal_id=proposal_id,
+            snapshot_id=snapshot_id,
             requested_by_membership_id=requested_by_membership_id,
             use_case=use_case,
             status="queued",
@@ -146,6 +162,8 @@ class AIExecution:
             "_id": self.id,
             "tenant_id": self.tenant_id,
             "evaluation_id": self.evaluation_id,
+            "proposal_id": self.proposal_id,
+            "snapshot_id": self.snapshot_id,
             "requested_by_membership_id": self.requested_by_membership_id,
             "use_case": self.use_case,
             "status": self.status,
@@ -173,6 +191,8 @@ class AIExecution:
             id=doc["_id"],
             tenant_id=doc["tenant_id"],
             evaluation_id=doc["evaluation_id"],
+            proposal_id=doc.get("proposal_id"),
+            snapshot_id=doc.get("snapshot_id"),
             requested_by_membership_id=doc["requested_by_membership_id"],
             use_case=doc["use_case"],
             status=doc["status"],

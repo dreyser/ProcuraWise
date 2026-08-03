@@ -11,12 +11,14 @@ logger = logging.getLogger("procurawise.worker")
 
 
 def main() -> None:
-    """Fase 13 (ADR 0021): the first real dispatch table. `queue_backend`
+    """Fase 13 (ADR 0021): the first real dispatch table (generalized to an
+    actual `{topic: handler}` mapping in Fase 18/ADR 0022, once a second job
+    type existed - see ai.worker.build_dispatch_table). `queue_backend`
     (memory/service_bus) picks the `MessageBus` implementation via
     `get_message_bus` - in local dev with the default `memory` backend, this
     process's InMemoryMessageBus is process-local and will never see
     anything the API process published (ADR 0020); use `queue_backend=
-    service_bus` + `make dev-up-servicebus` to exercise the AI feature
+    service_bus` + `make dev-up-servicebus` to exercise the AI features
     end-to-end locally."""
     settings = get_settings()
     configure_logging(settings)
@@ -25,7 +27,7 @@ def main() -> None:
     ai_service = build_ai_service(settings, resolve_ai_provider(settings))
     logger.info(
         "worker ready (environment=%s, queue_backend=%s) - dispatching "
-        "ai-requirement-generation jobs",
+        "ai-requirement-generation and ai-score-suggestion jobs",
         settings.environment,
         settings.queue_backend,
     )

@@ -31,7 +31,7 @@ class UnconfiguredAIProvider:
     def generate(self, request: AIRequest) -> AIResponse:
         raise RuntimeError(
             "Azure OpenAI is not configured (azure_openai_endpoint/api_key/deployment) - "
-            "cannot process ai-requirement-generation jobs"
+            "cannot process AI jobs (requirement-generation, score-suggestion)"
         )
 
     def ping(self) -> bool:

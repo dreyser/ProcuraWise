@@ -73,6 +73,16 @@ export const approvalStatusLabels = {
   rejected: 'Rechazada',
 } as const satisfies Record<string, string>
 
+// Fase 18 (evaluación asistida por IA, ADR 0022) - matches
+// ai.schemas.RiskFlag exactly.
+export const riskFlagLabels = {
+  incomplete_answer: 'Respuesta incompleta',
+  evasive_answer: 'Respuesta evasiva',
+  contradictory_answer: 'Respuesta contradictoria',
+  missing_evidence: 'Sin evidencia suficiente',
+  contractual_risk: 'Riesgo contractual',
+} as const satisfies Record<string, string>
+
 function translate<T extends Record<string, string>>(map: T, key: string): string {
   return key in map ? map[key as keyof T] : key
 }
@@ -93,3 +103,4 @@ export const translateAssignmentStatus = (value: string): string =>
   translate(assignmentStatusLabels, value)
 export const translateApprovalStatus = (value: string): string =>
   translate(approvalStatusLabels, value)
+export const translateRiskFlag = (value: string): string => translate(riskFlagLabels, value)

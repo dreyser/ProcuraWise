@@ -98,6 +98,16 @@ AuditAction = Literal[
     "qna_question_created",
     "qna_question_withdrawn",
     "qna_answer_published",
+    # Fase 18 (evaluacion asistida por IA, ADR 0022) - resource_type
+    # "ai_execution", same as the Fase 13 ai_generation_* family. Accepting
+    # or modifying a suggestion is NOT a new action: it's an ordinary
+    # score_created/score_updated (above), with metadata.ai_decision
+    # ("accepted"|"modified") added when the write references a
+    # source_ai_execution_id - never a separate audited action, since it's
+    # never a separate write path either (plan §1/§11).
+    "ai_score_suggestion_requested",
+    "ai_score_suggestion_succeeded",
+    "ai_score_suggestion_failed",
 ]
 
 

@@ -9,11 +9,20 @@ class ScoreWriteRequest(APIModel):
     """`version` is intentionally part of the write contract (optimistic
     concurrency), not a server-managed field being smuggled in - omit/None
     on first create for a given requirement, echo the current Score.version
-    on every subsequent update."""
+    on every subsequent update.
+
+    `source_ai_execution_id` (Fase 18, ADR 0022) is how "aceptar o modificar"
+    a score suggestion is expressed - there is no separate accept endpoint.
+    The evaluator's client fills `score`/`comment` from the AI suggestion
+    (unchanged = "accepted", edited = "modified") and echoes the job's id
+    here; ScoringService compares the submitted values against that job's
+    candidate to record which one happened, in the audit trail only. Omit
+    entirely for a purely manual score, exactly as before this fase."""
 
     score: int
     comment: str | None = None
     version: int | None = None
+    source_ai_execution_id: str | None = None
 
 
 class ScoreResponse(APIModel):
@@ -31,6 +40,7 @@ class ScoreResponse(APIModel):
     updated_by_membership_id: str
     created_at: datetime
     updated_at: datetime
+    source_ai_execution_id: str | None
 
 
 class DimensionSubtotal(APIModel):
