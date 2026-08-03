@@ -147,6 +147,25 @@ class Settings(BaseSettings):
     # it in production.
     trusted_proxy_hops: int = 0
 
+    # Fase 16 (documents): a dedicated container, separate from
+    # storage_container_name (generic, health-check-only today) - least-
+    # privilege SAS scoping (a documents-scoped SAS token can never reach
+    # unrelated blobs some future feature might store in the generic
+    # container) and a clean namespace as the app's first real Blob
+    # consumer beyond the health probe.
+    documents_container_name: str = "procurawise-documents"
+    # No size limit is specified anywhere in the approved spec - 25 MB
+    # comfortably covers typical RFP evidence (PDF/Office/images) while
+    # staying well under any practical Azure Container Apps ingress limit.
+    # Deliberately a plain Settings field, not a business constant, so it
+    # can be tuned without a code change.
+    documents_max_file_size_mb: int = 25
+    # How long a download URL (Service SAS, shared/storage.py::
+    # AzureBlobStorage.generate_download_url) stays valid. Short by design -
+    # the caller re-authorizes and gets a fresh URL on every request, this
+    # only bounds how long a given URL keeps working if intercepted/shared.
+    documents_download_url_ttl_minutes: int = 15
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":

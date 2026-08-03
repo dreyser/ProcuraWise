@@ -16,6 +16,7 @@ AuditResourceType = Literal[
     "knowledge_template",
     "ai_execution",
     "vendor_organization",
+    "document",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -79,6 +80,15 @@ AuditAction = Literal[
     "vendor_invitation_revoked",
     "vendor_invitation_accepted",
     "agreement_accepted",
+    # Fase 16 (documents: carga, escaneo AV stub, versionado, URLs
+    # temporales) - resource_type "document". document_upload_rejected is
+    # emitted for a scan/validation rejection without ever creating the
+    # Document row it would have described.
+    "document_uploaded",
+    "document_replaced",
+    "document_deleted",
+    "document_upload_rejected",
+    "document_download_url_issued",
 ]
 
 

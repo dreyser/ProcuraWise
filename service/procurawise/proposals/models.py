@@ -59,6 +59,15 @@ class ProposalSnapshot:
     answers: list[ProposalAnswer]
     submitted_by_membership_id: str
     submitted_at: datetime
+    # Fase 16 (documents): ids of every Document with status="current" for
+    # this proposal at the moment of submission - the Document rows
+    # themselves (not a copy of their metadata) remain the source of truth,
+    # same reasoning as `requirements`/`answers` already living as full
+    # copies here rather than as bare ids: this list is the copy needed to
+    # answer "what was submitted", the rows behind each id are still fetched
+    # live. Absent (`doc.get`) on any snapshot taken before this field
+    # existed - an empty list is the correct, honest answer for those.
+    document_ids: list[str]
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -72,6 +81,7 @@ class ProposalSnapshot:
             "answers": [a.to_document() for a in self.answers],
             "submitted_by_membership_id": self.submitted_by_membership_id,
             "submitted_at": self.submitted_at,
+            "document_ids": self.document_ids,
         }
 
     @staticmethod
@@ -87,6 +97,7 @@ class ProposalSnapshot:
             answers=[ProposalAnswer.from_document(a) for a in doc.get("answers", [])],
             submitted_by_membership_id=doc["submitted_by_membership_id"],
             submitted_at=doc["submitted_at"],
+            document_ids=doc.get("document_ids", []),
         )
 
 

@@ -36,7 +36,13 @@ export function createFetchRouter() {
     const url = new URL(rawUrl, 'http://localhost')
     const method = (init?.method ?? 'GET').toUpperCase()
     const headers = new Headers(init?.headers)
-    const body = init?.body ? JSON.parse(init.body as string) : undefined
+    // Fase 16 (documents upload): multipart requests send a FormData body,
+    // not a JSON string - JSON.parse would throw on it. ctx.body stays
+    // undefined for those (no test so far needs to inspect an uploaded
+    // file's fields); every JSON-body request keeps getting parsed exactly
+    // as before.
+    const body =
+      typeof init?.body === 'string' && init.body.length > 0 ? JSON.parse(init.body) : undefined
 
     const match = routes.find(
       (route) => route.method === method && route.pattern.test(url.pathname),

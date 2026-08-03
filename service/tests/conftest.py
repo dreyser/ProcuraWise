@@ -12,6 +12,7 @@ from procurawise.shared.storage import AzureBlobStorage
 
 TEST_MONGO_DB_NAME = "procurawise_test"
 TEST_STORAGE_CONTAINER_NAME = "procurawise-test"
+TEST_DOCUMENTS_CONTAINER_NAME = "procurawise-test-documents"
 
 
 @pytest.fixture
@@ -185,5 +186,23 @@ def blob_test_settings() -> Settings:
 @pytest.fixture
 def blob_test_storage(blob_test_settings: Settings):
     storage = AzureBlobStorage.from_settings(blob_test_settings)
+    storage.ensure_container()
+    yield storage
+
+
+@pytest.fixture
+def documents_test_settings() -> Settings:
+    return Settings(
+        _env_file=None,
+        mongodb_db_name=TEST_MONGO_DB_NAME,
+        documents_container_name=TEST_DOCUMENTS_CONTAINER_NAME,
+    )
+
+
+@pytest.fixture
+def documents_test_storage(documents_test_settings: Settings):
+    storage = AzureBlobStorage.from_settings(
+        documents_test_settings, container_name=documents_test_settings.documents_container_name
+    )
     storage.ensure_container()
     yield storage

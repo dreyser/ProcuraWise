@@ -24,6 +24,7 @@ class SnapshotResponse(APIModel):
     answers: list[AnswerResponse]
     submitted_by_membership_id: str
     submitted_at: datetime
+    document_ids: list[str]
 
 
 class ProposalSummaryResponse(APIModel):
