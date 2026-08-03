@@ -314,6 +314,14 @@ export interface AuditEventResponse {
   metadata: AuditEventResponseMetadata
 }
 
+export type BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostRequirementId =
+  string | null
+
+export interface BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost {
+  file: string
+  requirement_id?: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostRequirementId
+}
+
 export interface CollaboratorInviteRequest {
   contact_email: string
   contact_display_name: string
@@ -384,6 +392,39 @@ export interface DevActorSummary {
 export interface DimensionSubtotal {
   earned_points: number
   maximum_points: number
+}
+
+export interface DocumentDownloadUrlResponse {
+  url: string
+  expires_at: string
+}
+
+export interface DocumentListResponse {
+  items: DocumentResponse[]
+}
+
+export type DocumentResponseRequirementId = string | null
+
+export type DocumentResponseStatus =
+  (typeof DocumentResponseStatus)[keyof typeof DocumentResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const DocumentResponseStatus = {
+  current: 'current',
+  superseded: 'superseded',
+} as const
+
+export interface DocumentResponse {
+  id: string
+  proposal_id: string
+  requirement_id: DocumentResponseRequirementId
+  version: number
+  status: DocumentResponseStatus
+  filename: string
+  content_type: string
+  size_bytes: number
+  uploaded_by_membership_id: string
+  created_at: string
 }
 
 export interface DraftProposalSummary {
@@ -1058,6 +1099,7 @@ export interface SnapshotResponse {
   answers: AnswerResponse[]
   submitted_by_membership_id: string
   submitted_at: string
+  document_ids: string[]
 }
 
 export interface SubmitRequest {
@@ -7516,6 +7558,580 @@ export function useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet
 }
 
 /**
+ * @summary List Documents As Buyer
+ */
+export type listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponse200 =
+  {
+    data: DocumentListResponse
+    status: 200
+  }
+
+export type listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponseSuccess =
+  listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponse200 & {
+    headers: Headers
+  }
+export type listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponseError =
+  listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponse =
+  | listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponseSuccess
+  | listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponseError
+
+export const getListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetUrl =
+  (evaluationId: string, proposalId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/documents`
+  }
+
+export const listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet =
+  async (
+    evaluationId: string,
+    proposalId: string,
+    options?: RequestInit,
+  ): Promise<listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponse> => {
+    return apiFetch<listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetResponse>(
+      getListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetUrl(
+        evaluationId,
+        proposalId,
+      ),
+      {
+        ...options,
+        method: 'GET',
+      },
+    )
+  }
+
+export const getListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetQueryKey =
+  (evaluationId?: string, proposalId?: string) => {
+    return [`/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/documents`] as const
+  }
+
+export const getListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    evaluationId: string,
+    proposalId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {}
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetQueryKey(
+        evaluationId,
+        proposalId,
+      )
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+        >
+      >
+    > = () =>
+      listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet(
+        evaluationId,
+        proposalId,
+      )
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!(evaluationId && proposalId),
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> }
+  }
+
+export type ListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+      >
+    >
+  >
+export type ListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetQueryError =
+  HTTPValidationError
+
+export function useListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Documents As Buyer
+ */
+
+export function useListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet<
+  TData = Awaited<
+    ReturnType<
+      typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof listDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getListDocumentsAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsGetQueryOptions(
+      evaluationId,
+      proposalId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Get Download Url As Buyer
+ */
+export type getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse200 =
+  {
+    data: DocumentDownloadUrlResponse
+    status: 200
+  }
+
+export type getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseSuccess =
+  getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse200 & {
+    headers: Headers
+  }
+export type getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseError =
+  getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse422 & {
+    headers: Headers
+  }
+
+export type getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse =
+  | getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseSuccess
+  | getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseError
+
+export const getGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetUrl =
+  (evaluationId: string, proposalId: string, documentId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/documents/${documentId}/download-url`
+  }
+
+export const getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet =
+  async (
+    evaluationId: string,
+    proposalId: string,
+    documentId: string,
+    options?: RequestInit,
+  ): Promise<getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse> => {
+    return apiFetch<getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse>(
+      getGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetUrl(
+        evaluationId,
+        proposalId,
+        documentId,
+      ),
+      {
+        ...options,
+        method: 'GET',
+      },
+    )
+  }
+
+export const getGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryKey =
+  (evaluationId?: string, proposalId?: string, documentId?: string) => {
+    return [
+      `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/documents/${documentId}/download-url`,
+    ] as const
+  }
+
+export const getGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    evaluationId: string,
+    proposalId: string,
+    documentId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {}
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryKey(
+        evaluationId,
+        proposalId,
+        documentId,
+      )
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+        >
+      >
+    > = () =>
+      getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet(
+        evaluationId,
+        proposalId,
+        documentId,
+      )
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!(evaluationId && proposalId && documentId),
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> }
+  }
+
+export type GetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+      >
+    >
+  >
+export type GetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryError =
+  HTTPValidationError
+
+export function useGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Download Url As Buyer
+ */
+
+export function useGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetDownloadUrlAsBuyerApiV1EvaluationsEvaluationIdProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryOptions(
+      evaluationId,
+      proposalId,
+      documentId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
  * @summary Upsert Score
  */
 export type upsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPutResponse200 =
@@ -10662,6 +11278,763 @@ export const useSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPost = <
 > => {
   const mutationOptions =
     getSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Upload Document
+ */
+export type uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse201 = {
+  data: DocumentResponse
+  status: 201
+}
+
+export type uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponseSuccess =
+  uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse201 & {
+    headers: Headers
+  }
+export type uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponseError =
+  uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse422 & {
+    headers: Headers
+  }
+
+export type uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse =
+  | uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponseSuccess
+  | uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponseError
+
+export const getUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostUrl = (
+  proposalId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/documents`
+}
+
+export const uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost = async (
+  proposalId: string,
+  bodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost,
+  options?: RequestInit,
+): Promise<uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse> => {
+  const formData = new FormData()
+  formData.append(`file`, bodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost.file)
+  if (
+    bodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost.requirement_id !==
+      undefined &&
+    bodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost.requirement_id !== null
+  ) {
+    formData.append(
+      `requirement_id`,
+      bodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost.requirement_id,
+    )
+  }
+
+  return apiFetch<uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse>(
+    getUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostUrl(proposalId),
+    {
+      ...options,
+      method: 'POST',
+      body: formData,
+    },
+  )
+}
+
+export const getUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost>>,
+    TError,
+    {
+      proposalId: string
+      data: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost
+    },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost>>,
+  TError,
+  { proposalId: string; data: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost },
+  TContext
+> => {
+  const mutationKey = ['uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost>>,
+    {
+      proposalId: string
+      data: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost
+    }
+  > = (props) => {
+    const { proposalId, data } = props ?? {}
+
+    return uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost(proposalId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost>>
+  >
+export type UploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostMutationBody =
+  BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost
+export type UploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Upload Document
+ */
+export const useUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost>>,
+      TError,
+      {
+        proposalId: string
+        data: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost
+      },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost>>,
+  TError,
+  { proposalId: string; data: BodyUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPost },
+  TContext
+> => {
+  const mutationOptions =
+    getUploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Documents
+ */
+export type listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponse200 = {
+  data: DocumentListResponse
+  status: 200
+}
+
+export type listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponseSuccess =
+  listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponse200 & {
+    headers: Headers
+  }
+export type listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponseError =
+  listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponse =
+  | listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponseSuccess
+  | listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponseError
+
+export const getListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetUrl = (
+  proposalId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/documents`
+}
+
+export const listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponse> => {
+  return apiFetch<listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetResponse>(
+    getListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetUrl(proposalId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetQueryKey = (
+  proposalId?: string,
+) => {
+  return [`/api/v1/vendor-portal/proposals/${proposalId}/documents`] as const
+}
+
+export const getListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetQueryKey(proposalId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>
+  > = () => listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet(proposalId)
+
+  return { queryKey, queryFn, enabled: !!proposalId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>
+>
+export type ListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetQueryError =
+  HTTPValidationError
+
+export function useListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet<
+  TData = Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet<
+  TData = Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet<
+  TData = Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Documents
+ */
+
+export function useListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet<
+  TData = Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListDocumentsApiV1VendorPortalProposalsProposalIdDocumentsGetQueryOptions(
+    proposalId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Get Download Url
+ */
+export type getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse200 =
+  {
+    data: DocumentDownloadUrlResponse
+    status: 200
+  }
+
+export type getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseSuccess =
+  getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse200 & {
+    headers: Headers
+  }
+export type getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseError =
+  getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse422 & {
+    headers: Headers
+  }
+
+export type getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse =
+  | getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseSuccess
+  | getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponseError
+
+export const getGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetUrl =
+  (proposalId: string, documentId: string) => {
+    return `/api/v1/vendor-portal/proposals/${proposalId}/documents/${documentId}/download-url`
+  }
+
+export const getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet =
+  async (
+    proposalId: string,
+    documentId: string,
+    options?: RequestInit,
+  ): Promise<getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse> => {
+    return apiFetch<getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetResponse>(
+      getGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetUrl(
+        proposalId,
+        documentId,
+      ),
+      {
+        ...options,
+        method: 'GET',
+      },
+    )
+  }
+
+export const getGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryKey =
+  (proposalId?: string, documentId?: string) => {
+    return [
+      `/api/v1/vendor-portal/proposals/${proposalId}/documents/${documentId}/download-url`,
+    ] as const
+  }
+
+export const getGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    proposalId: string,
+    documentId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {}
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryKey(
+        proposalId,
+        documentId,
+      )
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+        >
+      >
+    > = () =>
+      getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet(
+        proposalId,
+        documentId,
+      )
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!(proposalId && documentId),
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> }
+  }
+
+export type GetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+      >
+    >
+  >
+export type GetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryError =
+  HTTPValidationError
+
+export function useGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  documentId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Download Url
+ */
+
+export function useGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  documentId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetDownloadUrlApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDownloadUrlGetQueryOptions(
+      proposalId,
+      documentId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Delete Document
+ */
+export type deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponse204 =
+  {
+    data: void
+    status: 204
+  }
+
+export type deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponseSuccess =
+  deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponse204 & {
+    headers: Headers
+  }
+export type deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponseError =
+  deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponse =
+  | deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponseSuccess
+  | deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponseError
+
+export const getDeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteUrl = (
+  proposalId: string,
+  documentId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/documents/${documentId}`
+}
+
+export const deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete = async (
+  proposalId: string,
+  documentId: string,
+  options?: RequestInit,
+): Promise<deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponse> => {
+  return apiFetch<deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteResponse>(
+    getDeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteUrl(
+      proposalId,
+      documentId,
+    ),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+}
+
+export const getDeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete
+        >
+      >,
+      TError,
+      { proposalId: string; documentId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete>
+    >,
+    TError,
+    { proposalId: string; documentId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      'deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete
+        >
+      >,
+      { proposalId: string; documentId: string }
+    > = (props) => {
+      const { proposalId, documentId } = props ?? {}
+
+      return deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete(
+        proposalId,
+        documentId,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type DeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete>
+    >
+  >
+
+export type DeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Delete Document
+ */
+export const useDeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete
+        >
+      >,
+      TError,
+      { proposalId: string; documentId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof deleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDelete>
+  >,
+  TError,
+  { proposalId: string; documentId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getDeleteDocumentApiV1VendorPortalProposalsProposalIdDocumentsDocumentIdDeleteMutationOptions(
+      options,
+    )
 
   return useMutation(mutationOptions, queryClient)
 }

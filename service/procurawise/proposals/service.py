@@ -3,6 +3,7 @@ from typing import Any
 from uuid import uuid4
 
 from procurawise.audit.service import AuditEventService
+from procurawise.documents.repository import DocumentRepository
 from procurawise.evaluations.exceptions import RequirementNotFoundError
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
@@ -85,11 +86,13 @@ class ProposalService:
         evaluations: EvaluationRepository,
         vendor_orgs: VendorOrganizationRepository,
         audit: AuditEventService,
+        documents: DocumentRepository,
     ) -> None:
         self._proposals = proposals
         self._evaluations = evaluations
         self._vendor_orgs = vendor_orgs
         self._audit = audit
+        self._documents = documents
 
     def get_proposal(self, tenant_id: str, proposal_id: str) -> Proposal:
         doc = self._proposals.find_by_id(tenant_id, proposal_id)
@@ -204,6 +207,9 @@ class ProposalService:
 
         vendor_org_doc = self._vendor_orgs.find_by_id(tenant_id, vendor_org_id)
         vendor_org_name = vendor_org_doc["name"] if vendor_org_doc else vendor_org_id
+        document_ids = [
+            doc["_id"] for doc in self._documents.list_current_for_proposal(tenant_id, proposal_id)
+        ]
 
         now = datetime.now(UTC)
         snapshot = ProposalSnapshot(
@@ -217,6 +223,7 @@ class ProposalService:
             answers=list(proposal.answers),
             submitted_by_membership_id=membership_id,
             submitted_at=now,
+            document_ids=document_ids,
         )
         matched = self._proposals.submit(
             tenant_id, proposal_id, expected_version, snapshot.to_document(), now

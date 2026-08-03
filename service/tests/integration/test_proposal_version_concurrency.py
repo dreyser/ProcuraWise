@@ -4,6 +4,7 @@ import pytest
 
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
+from procurawise.documents.repository import DocumentRepository
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.models import Tenant, VendorOrganization
@@ -24,7 +25,11 @@ def _setup(mongo_test_db, mongo_test_settings):
     proposals = ProposalRepository(mongo_test_db)
     audit = AuditEventService(AuditEventRepository(mongo_test_db), mongo_test_settings)
     service = ProposalService(
-        proposals=proposals, evaluations=evaluations, vendor_orgs=vendor_orgs, audit=audit
+        proposals=proposals,
+        evaluations=evaluations,
+        vendor_orgs=vendor_orgs,
+        audit=audit,
+        documents=DocumentRepository(mongo_test_db),
     )
 
     tenant = Tenant.create(slug="vs2b-proposal-concurrency", name="Proposal Concurrency Tenant")

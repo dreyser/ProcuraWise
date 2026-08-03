@@ -23,6 +23,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { normalizeApiError } from '@/lib/errors'
 import { translateDimension } from '@/lib/enumLabels'
 import { ScoreInput } from '@/features/scoring/components/ScoreInput'
+import { BuyerDocumentsList } from '@/features/scoring/components/BuyerDocumentsList'
 
 interface Draft {
   score: number | null
@@ -294,6 +295,8 @@ export function ScoringPage() {
 
       {renderDimension('functional')}
       {renderDimension('technical')}
+
+      <BuyerDocumentsList evaluationId={evaluationId!} proposalId={proposalId!} />
     </div>
   )
 }

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
+from procurawise.documents.repository import DocumentRepository
 from procurawise.evaluations.exceptions import RequirementNotFoundError
 from procurawise.evaluations.models import Requirement
 from procurawise.evaluations.repository import EvaluationRepository
@@ -40,6 +41,7 @@ def get_vendor_portal_service(settings: Settings = Depends(get_settings)) -> Ven
         evaluations=EvaluationRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
+        documents=DocumentRepository(db),
     )
     return VendorPortalService(proposals=proposals_service, evaluations=EvaluationRepository(db))
 

@@ -1,8 +1,14 @@
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError
-from azure.storage.blob import BlobServiceClient, ContentSettings
+from azure.storage.blob import (
+    BlobSasPermissions,
+    BlobServiceClient,
+    ContentSettings,
+    generate_blob_sas,
+)
 
 from procurawise.shared.config import Settings
 
@@ -19,6 +25,15 @@ class BlobStorage(Protocol):
     def delete(self, blob_name: str) -> None: ...
 
     def exists(self, blob_name: str) -> bool: ...
+
+    def generate_download_url(
+        self,
+        blob_name: str,
+        *,
+        expires_in_minutes: int,
+        filename: str,
+        content_type: str,
+    ) -> str: ...
 
 
 class AzureBlobStorage:
@@ -44,10 +59,16 @@ class AzureBlobStorage:
         self._container_client = self._service_client.get_container_client(container_name)
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> "AzureBlobStorage":
+    def from_settings(
+        cls, settings: Settings, *, container_name: str | None = None
+    ) -> "AzureBlobStorage":
+        """`container_name` defaults to `settings.storage_container_name` (the
+        generic container health checks use) - pass an override (e.g.
+        `settings.documents_container_name`, Fase 16) to point this same
+        adapter at a different, dedicated container without a second class."""
         return cls(
             connection_string=settings.storage_connection_string,
-            container_name=settings.storage_container_name,
+            container_name=container_name or settings.storage_container_name,
             timeout_seconds=settings.storage_timeout_seconds,
             api_version=settings.storage_api_version,
         )
@@ -81,6 +102,44 @@ class AzureBlobStorage:
     def exists(self, blob_name: str) -> bool:
         blob_client = self._container_client.get_blob_client(blob_name)
         return blob_client.exists(timeout=self._timeout_seconds)
+
+    def generate_download_url(
+        self,
+        blob_name: str,
+        *,
+        expires_in_minutes: int,
+        filename: str,
+        content_type: str,
+    ) -> str:
+        """Fase 16: read-only Service SAS, signed with the storage account key
+        extracted from the connection string - never a User Delegation SAS
+        (that requires Azure AD/managed identity and does not work against
+        Azurite, breaking dev/prod parity). `content_disposition`/
+        `content_type` are response-header overrides baked into the SAS
+        itself, so the blob never needs to carry a permanent Content-
+        Disposition - the caller always re-authorizes before calling this
+        (see documents/service.py), so a freshly generated URL is the only
+        one that ever exists for a given request."""
+        credential = self._service_client.credential
+        account_key = getattr(credential, "account_key", None)
+        account_name = self._service_client.account_name
+        if not account_key or not account_name:
+            raise RuntimeError(
+                "generate_download_url requires a shared-key connection string "
+                "(account_name/account_key not found on the service client)"
+            )
+        sas_token = generate_blob_sas(
+            account_name=account_name,
+            container_name=self._container_name,
+            blob_name=blob_name,
+            account_key=account_key,
+            permission=BlobSasPermissions(read=True),
+            expiry=datetime.now(UTC) + timedelta(minutes=expires_in_minutes),
+            content_disposition=f'attachment; filename="{filename}"',
+            content_type=content_type,
+        )
+        blob_client = self._container_client.get_blob_client(blob_name)
+        return f"{blob_client.url}?{sas_token}"
 
     def ping(self) -> bool:
         """Cheap connectivity check for readiness probes - no side effects,

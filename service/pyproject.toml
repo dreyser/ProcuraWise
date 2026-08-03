@@ -40,6 +40,11 @@ dependencies = [
     # just reinvent what this small, official, single-purpose credential
     # library already does. It is not itself an AI/agent SDK.
     "azure-identity>=1.19",
+    # Fase 16 (documents: carga vía multipart/form-data) - FastAPI's own
+    # required, pure-Python dependency for UploadFile/Form parsing (no
+    # native/system dependency, unlike the python-magic/libmagic option
+    # deliberately rejected for magic-byte sniffing, see documents/service.py).
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]

@@ -32,6 +32,37 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-03 — Fase 16 (E6): `documents` — subida vía Azurite, escaneo AV stub, versionado, URLs temporales
+
+**Resumen:** Sesión de planeación en Plan Mode (verificación no destructiva de git sobre el cierre de Fase 15, inventario de reutilización sobre `shared/storage.py`/`proposals`/`vendor_portal`/`audit`) que identificó una pregunta bloqueante (grano de `Document`), resuelta explícitamente por el founder vía `AskUserQuestion`. Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación, ejecución completa en 8 bloques incrementales (modelo+storage+config+migración, antivirus stub+servicio de dominio, endpoints de proveedor+auditoría, endpoints de comprador+integración con snapshot, contratos, frontend proveedor, frontend comprador, E2E+documentación), cada uno verificado contra servicios reales (Mongo, Azurite) antes de avanzar.
+
+**Decisión bloqueante resuelta por el founder (2026-08-02):**
+1. Grano de `Document`: `requirement_id` opcional — soporta evidencia puntual por requerimiento y adjuntos generales de propuesta simultáneamente, sin agregar `evidence_required` a `Requirement` en esta fase.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo módulo `service/procurawise/documents/` (`models`, `repository`, `service`, `antivirus`, `schemas`, `router` — dos `APIRouter`, proveedor y comprador); `shared/storage.py` (+`generate_download_url` vía Service SAS, `from_settings` gana `container_name` opcional); `shared/config.py` (+3 settings de `documents_*`); `proposals/models.py` (+`ProposalSnapshot.document_ids`), `proposals/service.py` (`submit` los captura), `proposals/schemas.py`/`router.py` (+`document_ids`), `proposals/router.py`/`vendor_portal/router.py` (+dependencia `DocumentRepository` en `ProposalService`); `audit/models.py` (+`document` resource_type +5 acciones); `api/main.py` (+2 routers); `migrations/0013_documents_indexes.py`; `pyproject.toml` (+`python-multipart`); frontend: `features/vendor-portal/hooks/useDocumentActions.ts` (nuevo), `features/vendor-portal/components/ProposalDocumentsPanel.tsx`/`RequirementEvidenceUpload.tsx` (nuevos, montados en `VendorProposalDetailPage.tsx`), `features/scoring/components/BuyerDocumentsList.tsx` (nuevo, montado en `ScoringPage.tsx`), `lib/formatFileSize.ts` (nuevo), `testUtils/mockFetchRouter.ts` (fix: ya no asume que todo body es JSON); `e2e/documents.spec.ts` (nuevo); ~9 archivos de test backend nuevos, 4 de test frontend nuevos.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker and not docker_servicebus"`) → 163 passed.
+- Backend integración/API/seguridad Docker (`make test-integration`) → 253 passed (incl. SAS real contra Azurite con expiración y permiso de solo-lectura verificados).
+- Frontend (`pnpm test`) → 133 passed.
+- `pnpm build` → build de producción exitoso.
+- `make test-e2e` → 10/10 specs passed (1 nuevo — `documents.spec.ts` — journey completo de subida/reemplazo/rechazo/descarga real/envío/revisión de comprador).
+- `make contracts` corrido dos veces seguidas → sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere un ADR nuevo — el flujo de subida síncrona vía API-proxy (sin worker nuevo) es continuación directa de patrones ya aprobados (ADR 0020), no una decisión de arquitectura nueva.
+- Provisión perezosa cacheada del contenedor de Blob de documentos (`documents/router.py::get_document_service`, primera llamada por proceso) en vez de atarla a `run_migrations()` — `run_migrations()` es solo-índices-Mongo y nunca se invoca automáticamente, así que atar la provisión de Blob ahí no habría resuelto el gap para `make dev`/tests; documentado en el código, no requiere ADR (no cambia arquitectura, solo dónde vive un `ensure_container()` idempotente).
+
+**Deuda técnica introducida:**
+- Blobs huérfanos por fallo parcial (Blob subido, inserción en Mongo falla) — housekeeping futuro no bloqueante, documentado en `current-phase.md`/`threat-model.md`.
+- Azurite 3.33.0 no hace cumplir el alcance de permiso `sp=r` de una SAS en escrituras (gap de fidelidad Azurite/Azure real, no un bug de la implementación) — documentado en el docstring del test de integración correspondiente y en `threat-model.md`.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: **Fase 17 (E?) — `qna`: preguntas ligadas/generales, publicación anonimizada/privada, notificaciones**, depende de Fase 16 (ya cerrada).
+- No tocar todavía: subida de documentos por el comprador (backend genérico ya lo soporta, UI diferida — R7 del plan); OCR/clasificación/resumen/firma electrónica de documentos (fuera de alcance del MVP); cuarentena física como pipeline asíncrono real (el stub síncrono basta para el criterio de aceptación).
+- Housekeeping pendiente heredado, sin cambios: rama `phase-14/research-provider-curated-foundry` sigue sin borrarse (requiere confirmación explícita del founder).
+
 ### Sesión — 2026-08-02 — Fase 15 (E6): NDA/conflicto de interés reales (`Agreement`) + auth productiva de proveedor + colaboradores múltiples
 
 **Resumen:** Sesión de planeación en Plan Mode (verificación no destructiva de git sobre el cierre de Fase 14 — encontró que el reporte citaba el hash pre-squash `afe06c1` en vez del real `f36f471`, y que la rama de Fase 14 no había sido borrada — más 3 agentes Explore en paralelo sobre identity/vendor_portal, proposals/vendor linking, y frontend/e2e) que identificó 4 preguntas bloqueantes, resueltas explícitamente por el founder vía `AskUserQuestion`. Tras la aprobación del plan y una instrucción explícita del founder de proceder con la implementación, ejecución completa en 10 bloques incrementales (módulo `agreements/`, JWT+invitación de proveedor, endpoints de alta/invitación, gates de `vendor_portal`, auditoría+`dev_seed.py`, tests backend, contratos, frontend, e2e, documentación), cada uno verificado contra servicios reales antes de avanzar.

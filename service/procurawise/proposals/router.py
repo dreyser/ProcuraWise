@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
+from procurawise.documents.repository import DocumentRepository
 from procurawise.evaluations.models import Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.schemas import RequirementResponse
@@ -33,6 +34,7 @@ def get_proposal_service(settings: Settings = Depends(get_settings)) -> Proposal
         evaluations=EvaluationRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
+        documents=DocumentRepository(db),
     )
 
 
@@ -94,6 +96,7 @@ def _detail(proposal: Proposal) -> ProposalDetailResponse:
             ],
             submitted_by_membership_id=proposal.snapshot.submitted_by_membership_id,
             submitted_at=proposal.snapshot.submitted_at,
+            document_ids=proposal.snapshot.document_ids,
         )
     return ProposalDetailResponse(
         id=proposal.id,

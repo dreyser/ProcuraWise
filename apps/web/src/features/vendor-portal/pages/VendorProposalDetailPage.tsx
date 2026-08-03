@@ -19,6 +19,8 @@ import { translateProposalStatus } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
 import { useAnswerAutosave } from '@/features/vendor-portal/hooks/useAnswerAutosave'
 import { AnswerField } from '@/features/vendor-portal/components/AnswerField'
+import { ProposalDocumentsPanel } from '@/features/vendor-portal/components/ProposalDocumentsPanel'
+import { RequirementEvidenceUpload } from '@/features/vendor-portal/components/RequirementEvidenceUpload'
 
 export function VendorProposalDetailPage() {
   const { proposalId } = useParams<{ proposalId: string }>()
@@ -127,9 +129,19 @@ export function VendorProposalDetailPage() {
                   }
                 />
               </div>
+
+              <RequirementEvidenceUpload
+                proposalId={proposalId!}
+                requirementId={requirement.id}
+                disabled={isSubmitted}
+              />
             </div>
           )
         })}
+      </div>
+
+      <div className="mt-6">
+        <ProposalDocumentsPanel proposalId={proposalId!} disabled={isSubmitted} />
       </div>
 
       {!isSubmitted && (
