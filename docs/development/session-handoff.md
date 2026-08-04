@@ -32,6 +32,40 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-03 — Fase 18 (E7): Evaluación asistida por IA (riesgos/score sugerido) con "aceptar o modificar" obligatorio
+
+**Resumen:** Sesión de planeación exclusiva en Plan Mode (verificación independiente del cierre de Fase 17 vía API de GitHub — PR #31, merge commit `d3d9266`, 8/8 checks verdes —, 3 agentes de exploración en paralelo sobre `ai/`+worker+messaging, scoring/assignments/proposals, y especificación/compliance) que identificó **una única pregunta genuinamente bloqueante** — política de datos para enviar `ProposalAnswer` (protegido por NDA/Agreement) a Azure OpenAI, dado que ADR 0021 excluyó textualmente ese contenido de su alcance cubierto en Fase 13 — resuelta por el founder en la misma sesión vía `AskUserQuestion` (ADR nuevo, sin gate legal duro tipo Foundry). Tras la aprobación del plan y autorización explícita de avanzar, ejecución completa en 7 bloques incrementales (modelo+candidato+ADR 0022, servicio de dominio, worker con dispatch multi-topic, endpoints+extensión de `ScoringService`, contratos, frontend, E2E+documentación), cada uno verificado contra Docker/Service Bus real antes de avanzar.
+
+**Decisión bloqueante resuelta por el founder (2026-08-03):**
+1. Política de datos de IA (ADR 0022): se autoriza enviar `ProposalAnswer.value`/`vendor_comment` a Azure OpenAI para `score_suggestion`, documentado en un ADR nuevo, sin exigir una referencia de aprobación legal auditable como la de `FoundryWebSearchProvider` — razonamiento aceptado: Azure OpenAI permanece bajo el mismo Data Protection Addendum de Microsoft ya vigente desde Fase 13, a diferencia de Grounding with Bing (el motivo real del gate de ADR 0011).
+
+**Decisión de diseño central (no bloqueante, resuelta por evidencia):** "aceptar o modificar" reutiliza el `PUT .../scores/{requirement_id}` ya existente desde Fase 9 — sin endpoint nuevo que escriba `Score`. La sugerencia de IA solo prellena el formulario ya existente; `ScoreWriteRequest` gana `source_ai_execution_id` opcional para trazabilidad, y `ScoringService` deriva server-side si la escritura fue "accepted"/"modified" comparando contra el candidato original.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: `ai/models.py` (+`score_suggestion` use_case, +`proposal_id`/`snapshot_id`), `ai/schemas.py` (+`AIScoreSuggestionCandidate` y schemas relacionados), `ai/service.py` (+`request_score_suggestion`/`process_score_suggestion_job`), `ai/worker.py`/`worker/main.py` (dispatch real multi-topic), `ai/router.py` (+`score_suggestion_router`), `scoring/models.py`/`schemas.py`/`service.py`/`repository.py` (+`source_ai_execution_id`, +`_ai_decision`), `audit/models.py` (+3 acciones), `migrations/0015_ai_executions_proposal_index.py`, `shared/config.py` (+`ai_score_suggestion_enabled`), `docs/architecture/decisions/0022-politica-datos-evaluacion-asistida-ia.md` (nuevo), `docker/servicebus-emulator/config.json` (+cola `ai-score-suggestion`); frontend: `features/evaluations/hooks/useAiScoreSuggestionJobStatus.ts` (nuevo), `features/scoring/pages/ScoringPage.tsx` (extendido), `lib/enumLabels.ts` (+`riskFlagLabels`); `e2e/ai-score-suggestions.spec.ts` (nuevo); 5 archivos de test backend nuevos/extendidos, 1 de test frontend nuevo.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker and not docker_servicebus"`) → 174 passed.
+- Backend integración/API/seguridad Docker (`make test-integration`) → 299 passed.
+- Backend Service Bus real (`make test-integration-ai`) → 6 passed (dispatch multi-topic probado de punta a punta).
+- Frontend (`pnpm test`) → 154 passed.
+- `pnpm build` → build de producción exitoso.
+- `make test-e2e` → 12/12 specs passed (1 nuevo — `ai-score-suggestions.spec.ts`).
+- `make contracts` corrido dos veces seguidas → sin diff.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- ADR 0022 (política de datos) — ya escrito, ver arriba.
+- `enforce_section_assignment` extraído de `scoring/service.py` a función de módulo (reutilizada por `ai/service.py`) — refactor de bajo riesgo, no requiere ADR (no cambia comportamiento, solo evita duplicar el gate de autorización).
+- `useAiScoreSuggestionJobStatus.ts` diseñado con "suscribir antes de arrancar" (a diferencia del hook de Fase 13) tras encontrar una condición de carrera real en tests: con un fetch que resuelve muy rápido, `controller.start()` puede notificar antes de que el efecto de suscripción (creado en el patrón original) llegue a registrarse, perdiendo la actualización. No se tocó el hook de Fase 13 ya en producción — no requiere ADR (detalle de implementación de un hook nuevo, no un cambio al contrato de ADR 0012).
+
+**Deuda técnica introducida:**
+- Ninguna material — extensión aditiva de `AIExecution`/`Score` (campos opcionales, compatibles con documentos existentes), sin colección nueva.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md`: revisar `roadmap.md` Bloque 5 (Fases 19-23: TCO, scoring económico completo, ronda de negociación, decisión, reportes) — Fase 19 es la siguiente candidata directa (`tco`), depende de Fase 9 (cerrada).
+- No tocar todavía: dimensión económica en evaluación asistida por IA (depende de que exista scoring económico real, Fases 19-20); Q&A/documentos como input de IA (recomendación no bloqueante, no comprometida); cancelación de job (`AIExecutionStatus` sin `cancelled`); rate limiting duro de IA (Fase 26, mismo riesgo aceptado que Fase 13).
+- Housekeeping pendiente heredado, sin cambios: rama `phase-14/research-provider-curated-foundry` sigue sin borrarse (requiere confirmación explícita del founder); ramas `phase-15`/`phase-16`/`phase-17`/`phase-18` tampoco se han borrado.
+
 ### Sesión — 2026-08-03 — Fase 17 (E7): `qna` — preguntas ligadas/generales, publicación anonimizada/privada, notificaciones
 
 **Resumen:** Sesión de planeación exclusiva en Plan Mode (verificación independiente del cierre de Fase 16 vía API de GitHub — no solo el reporte de la sesión anterior —, confirmación documental de que la siguiente fase es Fase 17/E7 sin asumirlo por el título sugerido, y resolución de ~160 preguntas de planeación agrupadas por tema) que concluyó **sin ninguna pregunta bloqueante** tras evidencia documental triple-consistente sobre los puntos más ambiguos (visibilidad binaria vs. ternaria; alcance real de "notificaciones"; alcance de "aclaraciones"/"asignación"). El founder aprobó el plan y autorizó avanzar a la implementación directamente, sin necesitar `AskUserQuestion` para ninguna decisión de esta fase. Ejecución completa en 8 bloques incrementales (modelo+repositorio+migración, servicio de dominio, endpoints de proveedor+auditoría, endpoints de comprador+visibilidad/anonimización, contratos, frontend proveedor, frontend comprador+polling, E2E+documentación), cada uno verificado contra Mongo real antes de avanzar.
@@ -60,7 +94,7 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 - Ninguna material — módulo `qna/` completamente nuevo y aditivo, sin FKs entrantes desde otras colecciones, sin infraestructura nueva que operar.
 
 **Instrucciones para la siguiente sesión:**
-- Próxima fase según `backlog.md`: **Fase 18 (E7) — Evaluación asistida por IA (riesgos/score sugerido) con "aceptar o modificar" obligatorio**, depende de Fases 13 y 17 (ambas ya cerradas).
+- Próxima fase según `backlog.md`: **Fase 18 (E7) — Evaluación asistida por IA (riesgos/score sugerido) con "aceptar o modificar" obligatorio**, depende de Fases 13 y 17 (ambas ya cerradas). [Corrección factual añadida en la sesión de Fase 18: ya cerrada también — ver entrada de sesión arriba.]
 - No tocar todavía: entrega real de notificaciones por correo/push, preferencias de usuario, bounded context `notifications/` dedicado (todo Fase 24); "aclaraciones" del comprador sobre una `ProposalAnswer` ya enviada (Fase 21/ADR 0013); adjuntos nuevos en preguntas/respuestas de Q&A (si se necesitaran, referencia `document_id` al módulo `documents/` ya existente).
 - Housekeeping pendiente heredado, sin cambios: rama `phase-14/research-provider-curated-foundry` sigue sin borrarse (requiere confirmación explícita del founder); ramas `phase-15`/`phase-16`/`phase-17` tampoco se han borrado.
 

@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     # used to enforce a limit.
     ai_prompt_price_per_1k_tokens_usd: float | None = None
     ai_completion_price_per_1k_tokens_usd: float | None = None
+    # Fase 18 (evaluacion asistida por IA, ADR 0022): a plain boolean, not a
+    # fail-closed gate like foundry_web_search_enabled below - the founder
+    # confirmed (Fase 18 planning) that Azure OpenAI chat completions stay
+    # within the same Data Protection Addendum already covering the rest of
+    # the platform since Fase 13, so this doesn't need a legal-approval-
+    # reference precondition the way Bing Grounding does.
+    ai_score_suggestion_enabled: bool = True
 
     # Fase 14 (ResearchProvider completo, ADR 0011): FoundryWebSearchProvider
     # is built but stays off in every environment, including production -

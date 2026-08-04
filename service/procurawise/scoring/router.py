@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from procurawise.ai.repository import AIExecutionRepository
 from procurawise.assignments.repository import AssignmentRepository
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
@@ -43,6 +44,7 @@ def get_scoring_service(settings: Settings = Depends(get_settings)) -> ScoringSe
         vendor_orgs=VendorOrganizationRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
         assignments=AssignmentRepository(db),
+        ai_executions=AIExecutionRepository(db),
     )
 
 
@@ -113,6 +115,7 @@ def upsert_score(
             body.version,
             context.membership_id,
             actor=context,
+            source_ai_execution_id=body.source_ai_execution_id,
         )
     except (_EvaluationNotFoundError, ProposalNotFoundError):
         raise HTTPException(status_code=404) from None
@@ -146,6 +149,7 @@ def upsert_score(
         updated_by_membership_id=score.updated_by_membership_id,
         created_at=score.created_at,
         updated_at=score.updated_at,
+        source_ai_execution_id=score.source_ai_execution_id,
     )
 
 

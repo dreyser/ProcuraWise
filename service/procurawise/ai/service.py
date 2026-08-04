@@ -19,7 +19,13 @@ from procurawise.ai.research_provider import (
     ResearchSnippet,
     ResearchWarning,
 )
-from procurawise.ai.schemas import AIRequirementCandidate, AIRequirementCandidateBatch
+from procurawise.ai.schemas import (
+    AIRequirementCandidate,
+    AIRequirementCandidateBatch,
+    AIScoreSuggestionCandidate,
+    AIScoreSuggestionCandidateBatch,
+)
+from procurawise.assignments.repository import AssignmentRepository
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import EvaluationNotFoundError, InvalidTransitionError
@@ -27,6 +33,15 @@ from procurawise.evaluations.models import Dimension, Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.repository import MembershipRepository, TenantRepository, UserRepository
 from procurawise.identity.service import ActorNotFoundError, IdentityService
+from procurawise.proposals.exceptions import ProposalNotFoundError
+from procurawise.proposals.models import Proposal, ProposalAnswer
+from procurawise.proposals.repository import ProposalRepository
+from procurawise.scoring.exceptions import (
+    RequirementNotInSnapshotError,
+    ScoringPreconditionError,
+    SectionNotAssignedToActorError,
+)
+from procurawise.scoring.service import enforce_section_assignment
 from procurawise.shared.config import Settings
 from procurawise.shared.context import ActorContext
 from procurawise.shared.messaging import MessageBus, get_message_bus
@@ -44,6 +59,16 @@ JOB_TOPIC = "ai-requirement-generation"
 _MAX_TOKENS = 2000
 _TEMPERATURE = 0.3
 _MAX_GENERATION_ATTEMPTS = 2
+
+# Fase 18 (ADR 0022): evaluacion asistida por IA - a second use_case sharing
+# every other piece of this module's machinery (AIProvider, AIExecution,
+# prompt_renderer, the retry-on-invalid-JSON loop) without duplicating it.
+SCORE_SUGGESTION_PROMPT_TEMPLATE = "score_suggestion"
+SCORE_SUGGESTION_PROMPT_VERSION = "v1"
+SCORE_SUGGESTION_JOB_TOPIC = "ai-score-suggestion"
+# Higher than requirement-generation's _MAX_TOKENS - a single job can cover
+# every unscored requirement of a proposal's section, not just one item.
+_SCORE_SUGGESTION_MAX_TOKENS = 3000
 
 
 def _render_context(snippets: list[ResearchSnippet]) -> str:
@@ -108,6 +133,51 @@ def _parse_candidates(parsed_output: dict) -> tuple[list[AIRequirementCandidate]
     return valid, invalid_count
 
 
+class _NoValidScoreCandidatesError(Exception):
+    """Same role as _NoValidCandidatesError, for score-suggestion batches."""
+
+
+def _parse_score_candidates(parsed_output: dict) -> tuple[list[AIScoreSuggestionCandidate], int]:
+    raw_candidates = parsed_output.get("candidates")
+    if not isinstance(raw_candidates, list):
+        AIScoreSuggestionCandidateBatch.model_validate(parsed_output)
+        raise AssertionError("unreachable - model_validate should have raised ValidationError")
+
+    valid: list[AIScoreSuggestionCandidate] = []
+    invalid_count = 0
+    for raw_candidate in raw_candidates:
+        try:
+            valid.append(AIScoreSuggestionCandidate.model_validate(raw_candidate))
+        except ValidationError:
+            invalid_count += 1
+
+    if not valid and raw_candidates:
+        raise _NoValidScoreCandidatesError(
+            f"all {len(raw_candidates)} candidates failed validation"
+        )
+    return valid, invalid_count
+
+
+def _render_requirement_block(requirement: Requirement, answer: ProposalAnswer | None) -> str:
+    value_text = (
+        str(answer.value)
+        if answer is not None and answer.value is not None
+        else ("(sin respuesta)")
+    )
+    comment_text = (
+        answer.vendor_comment
+        if answer is not None and answer.vendor_comment
+        else "(sin comentario)"
+    )
+    return (
+        f"[{requirement.id}] {requirement.title}\n"
+        f"Descripcion: {requirement.description}\n"
+        f"Guia del comprador: {requirement.buyer_guidance or '(ninguna)'}\n"
+        f'Respuesta del proveedor: """{value_text}"""\n'
+        f'Comentario del proveedor: """{comment_text}"""'
+    )
+
+
 class AIService:
     """Orchestrates discover -> render -> generate -> validate -> persist
     (ADR 0021 §12). Request/status/accept are called by the API router;
@@ -129,6 +199,8 @@ class AIService:
         request_timeout_seconds: int,
         prompt_price_per_1k: float | None,
         completion_price_per_1k: float | None,
+        proposals: ProposalRepository | None = None,
+        assignments: AssignmentRepository | None = None,
     ) -> None:
         self._executions = executions
         self._evaluations = evaluations
@@ -141,6 +213,13 @@ class AIService:
         self._request_timeout_seconds = request_timeout_seconds
         self._prompt_price_per_1k = prompt_price_per_1k
         self._completion_price_per_1k = completion_price_per_1k
+        # Fase 18 (ADR 0022): only needed by the score_suggestion use case -
+        # optional so existing callers that only ever trigger
+        # requirement_generation (none left after build_ai_service is
+        # updated, but kept optional for any lighter-weight test wiring)
+        # don't need to construct them.
+        self._proposals = proposals
+        self._assignments = assignments
 
     def request_generation(
         self,
@@ -318,6 +397,327 @@ class AIService:
             },
         )
         return new_requirements
+
+    def request_score_suggestion(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        proposal_id: str,
+        requirement_ids: list[str],
+        *,
+        actor: ActorContext,
+    ) -> AIExecution:
+        """Fase 18 (ADR 0022): triggers an async score-suggestion job for a
+        submitted Proposal. Empty `requirement_ids` means "every requirement
+        in the actor's assignable section(s) that already has a vendor
+        answer and no Score yet" (resolved once, here, and passed through the
+        message payload - never re-derived by the worker, same precedent as
+        requirement_generation's dimension/description). Never writes to the
+        `scores` collection - that stays exclusively ScoringService's job."""
+        assert self._proposals is not None and self._assignments is not None
+        evaluation = self._evaluating_evaluation_or_raise(tenant_id, evaluation_id)
+        proposal = self._submitted_proposal_or_raise(tenant_id, proposal_id, evaluation_id)
+        assert proposal.snapshot is not None
+
+        target_requirements = self._resolve_score_suggestion_requirements(
+            tenant_id, evaluation_id, proposal, requirement_ids, actor
+        )
+        target_requirement_ids = [r.id for r in target_requirements]
+
+        execution = AIExecution.create(
+            tenant_id=tenant_id,
+            evaluation_id=evaluation.id,
+            proposal_id=proposal_id,
+            snapshot_id=proposal.snapshot.snapshot_id,
+            requested_by_membership_id=actor.membership_id,
+            use_case="score_suggestion",
+            provider="azure_openai",
+            prompt_template=SCORE_SUGGESTION_PROMPT_TEMPLATE,
+            prompt_version=SCORE_SUGGESTION_PROMPT_VERSION,
+            retention_days=self._retention_days,
+        )
+        self._executions.insert(tenant_id, execution.to_document())
+        self._message_bus.publish(
+            SCORE_SUGGESTION_JOB_TOPIC,
+            {
+                "tenant_id": tenant_id,
+                "execution_id": execution.id,
+                "requirement_ids": target_requirement_ids,
+            },
+        )
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="ai_score_suggestion_requested",
+            resource_type="ai_execution",
+            resource_id=execution.id,
+            evaluation_id=evaluation_id,
+            proposal_id=proposal_id,
+            snapshot_id=proposal.snapshot.snapshot_id,
+            metadata={
+                "requirement_ids": target_requirement_ids,
+                "prompt_template": SCORE_SUGGESTION_PROMPT_TEMPLATE,
+                "prompt_version": SCORE_SUGGESTION_PROMPT_VERSION,
+            },
+        )
+        return execution
+
+    def get_score_suggestion_execution(
+        self, tenant_id: str, evaluation_id: str, proposal_id: str, execution_id: str
+    ) -> AIExecution:
+        doc = self._executions.find_by_id(tenant_id, execution_id)
+        if doc is None:
+            raise AIExecutionNotFoundError(execution_id)
+        execution = AIExecution.from_document(doc)
+        if execution.evaluation_id != evaluation_id or execution.proposal_id != proposal_id:
+            raise AIExecutionNotFoundError(execution_id)
+        return execution
+
+    def process_score_suggestion_job(
+        self, tenant_id: str, execution_id: str, *, requirement_ids: list[str]
+    ) -> None:
+        doc = self._executions.find_by_id(tenant_id, execution_id)
+        if doc is None:
+            logger.error("ai_execution_not_found_for_job", extra={"execution_id": execution_id})
+            return
+        execution = AIExecution.from_document(doc)
+        if execution.status != "queued":
+            # Idempotency guard (ADR 0005), same as process_generation_job.
+            return
+        if not self._executions.transition_status(tenant_id, execution_id, "queued", "running"):
+            return
+
+        try:
+            candidates, model, token_usage, latency_ms = self._generate_score_suggestions(
+                tenant_id, execution, requirement_ids=requirement_ids
+            )
+        except Exception as exc:  # noqa: BLE001 - any provider/validation failure lands the job in `failed`, never crashes the worker loop
+            logger.error(
+                "ai_score_suggestion_failed",
+                extra={"execution_id": execution_id, "error_type": type(exc).__name__},
+                exc_info=True,
+            )
+            self._executions.transition_status(
+                tenant_id,
+                execution_id,
+                "running",
+                "failed",
+                extra_set={"error": str(exc), "completed_at": datetime.now(UTC)},
+            )
+            self._record_score_suggestion_failure_audit(tenant_id, execution, str(exc))
+            return
+
+        cost_estimate = self._estimate_cost(token_usage)
+        self._executions.transition_status(
+            tenant_id,
+            execution_id,
+            "running",
+            "succeeded",
+            extra_set={
+                "model": model,
+                "token_usage": token_usage.to_document(),
+                "cost_estimate": cost_estimate,
+                "latency_ms": latency_ms,
+                "candidates": [candidate.model_dump() for candidate in candidates],
+                "completed_at": datetime.now(UTC),
+            },
+        )
+        self._record_score_suggestion_success_audit(tenant_id, execution, len(candidates))
+
+    def _evaluating_evaluation_or_raise(self, tenant_id: str, evaluation_id: str) -> Evaluation:
+        evaluation_doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
+        if evaluation_doc is None:
+            raise EvaluationNotFoundError(evaluation_id)
+        evaluation = Evaluation.from_document(evaluation_doc)
+        if evaluation.status != "evaluating":
+            raise ScoringPreconditionError("evaluation is not evaluating")
+        return evaluation
+
+    def _submitted_proposal_or_raise(
+        self, tenant_id: str, proposal_id: str, evaluation_id: str
+    ) -> Proposal:
+        assert self._proposals is not None
+        proposal_doc = self._proposals.find_by_id(tenant_id, proposal_id)
+        if proposal_doc is None or proposal_doc["evaluation_id"] != evaluation_id:
+            raise ProposalNotFoundError(proposal_id)
+        proposal = Proposal.from_document(proposal_doc)
+        if proposal.status != "submitted" or proposal.snapshot is None:
+            raise ScoringPreconditionError("proposal is not submitted")
+        return proposal
+
+    def _resolve_score_suggestion_requirements(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        proposal: Proposal,
+        requirement_ids: list[str],
+        actor: ActorContext,
+    ) -> list[Requirement]:
+        """Explicit ids: validated against the snapshot and the actor's
+        assignment, raising if either check fails (the caller asked for
+        something specific and can't have it). Empty list: silently
+        narrowed to whatever the actor is allowed to score and already has
+        an answer - the common "review my whole section" case."""
+        assert self._assignments is not None and proposal.snapshot is not None
+        requirements_by_id = {r.id: r for r in proposal.snapshot.requirements}
+        answered_ids = {a.requirement_id for a in proposal.snapshot.answers if a.value is not None}
+
+        if requirement_ids:
+            selected: list[Requirement] = []
+            for requirement_id in requirement_ids:
+                requirement = requirements_by_id.get(requirement_id)
+                if requirement is None:
+                    raise RequirementNotInSnapshotError(requirement_id)
+                enforce_section_assignment(
+                    self._assignments,
+                    tenant_id,
+                    evaluation_id,
+                    requirement.dimension,
+                    requirement.category,
+                    actor,
+                )
+                selected.append(requirement)
+            return selected
+
+        eligible: list[Requirement] = []
+        for requirement in proposal.snapshot.requirements:
+            if requirement.id not in answered_ids:
+                continue
+            try:
+                enforce_section_assignment(
+                    self._assignments,
+                    tenant_id,
+                    evaluation_id,
+                    requirement.dimension,
+                    requirement.category,
+                    actor,
+                )
+            except SectionNotAssignedToActorError:
+                continue
+            eligible.append(requirement)
+        return eligible
+
+    def _generate_score_suggestions(
+        self, tenant_id: str, execution: AIExecution, *, requirement_ids: list[str]
+    ) -> tuple[list[AIScoreSuggestionCandidate], str, TokenUsage, int]:
+        assert self._proposals is not None and execution.proposal_id is not None
+        proposal_doc = self._proposals.find_by_id(tenant_id, execution.proposal_id)
+        if proposal_doc is None:
+            raise ProposalNotFoundError(execution.proposal_id)
+        proposal = Proposal.from_document(proposal_doc)
+        assert proposal.snapshot is not None
+        requirements_by_id = {r.id: r for r in proposal.snapshot.requirements}
+        answers_by_id = {a.requirement_id: a for a in proposal.snapshot.answers}
+
+        blocks = [
+            _render_requirement_block(requirements_by_id[rid], answers_by_id.get(rid))
+            for rid in requirement_ids
+            if rid in requirements_by_id
+        ]
+        rendered = render_prompt(
+            SCORE_SUGGESTION_PROMPT_TEMPLATE,
+            SCORE_SUGGESTION_PROMPT_VERSION,
+            {"requirements_and_answers": "\n\n".join(blocks)},
+        )
+        response_schema = AIScoreSuggestionCandidateBatch.model_json_schema()
+
+        system_prompt = rendered.system
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_latency_ms = 0
+        last_model = ""
+        last_error: Exception | None = None
+        valid_requirement_ids = set(requirement_ids)
+
+        for _attempt in range(1, _MAX_GENERATION_ATTEMPTS + 1):
+            response = self._provider.generate(
+                AIRequest(
+                    system_prompt=system_prompt,
+                    user_prompt=rendered.user,
+                    response_schema=response_schema,
+                    max_tokens=_SCORE_SUGGESTION_MAX_TOKENS,
+                    temperature=_TEMPERATURE,
+                    timeout_seconds=self._request_timeout_seconds,
+                )
+            )
+            total_prompt_tokens += response.token_usage.prompt_tokens
+            total_completion_tokens += response.token_usage.completion_tokens
+            total_latency_ms += response.latency_ms
+            last_model = response.model
+
+            try:
+                valid_candidates, _dropped_count = _parse_score_candidates(response.parsed_output)
+            except (ValidationError, _NoValidScoreCandidatesError) as exc:
+                last_error = exc
+                system_prompt = (
+                    f"{rendered.system}\n\nLa respuesta anterior no cumplio el schema JSON "
+                    f"requerido ({exc}). Corrige el formato y responde nuevamente solo con "
+                    "JSON valido."
+                )
+                continue
+
+            # Never trust a requirement_id the model invented - same
+            # defense-in-depth principle as _sanitize_candidate_sources, and
+            # drop duplicates (keep first occurrence) so a job never
+            # produces two candidates for the same requirement.
+            seen: set[str] = set()
+            sanitized: list[AIScoreSuggestionCandidate] = []
+            for candidate in valid_candidates:
+                if candidate.requirement_id not in valid_requirement_ids:
+                    continue
+                if candidate.requirement_id in seen:
+                    continue
+                seen.add(candidate.requirement_id)
+                sanitized.append(candidate)
+
+            token_usage = TokenUsage(
+                prompt_tokens=total_prompt_tokens,
+                completion_tokens=total_completion_tokens,
+                total_tokens=total_prompt_tokens + total_completion_tokens,
+            )
+            return sanitized, last_model, token_usage, total_latency_ms
+
+        assert last_error is not None
+        raise last_error
+
+    def _record_score_suggestion_success_audit(
+        self, tenant_id: str, execution: AIExecution, candidate_count: int
+    ) -> None:
+        actor = self._resolve_requester(execution)
+        if actor is None:
+            return
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="ai_score_suggestion_succeeded",
+            resource_type="ai_execution",
+            resource_id=execution.id,
+            evaluation_id=execution.evaluation_id,
+            proposal_id=execution.proposal_id,
+            snapshot_id=execution.snapshot_id,
+            metadata={
+                "candidate_count": candidate_count,
+                "prompt_version": execution.prompt_version,
+            },
+        )
+
+    def _record_score_suggestion_failure_audit(
+        self, tenant_id: str, execution: AIExecution, error: str
+    ) -> None:
+        actor = self._resolve_requester(execution)
+        if actor is None:
+            return
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="ai_score_suggestion_failed",
+            resource_type="ai_execution",
+            resource_id=execution.id,
+            evaluation_id=execution.evaluation_id,
+            proposal_id=execution.proposal_id,
+            snapshot_id=execution.snapshot_id,
+            metadata={"error_type": error[:200]},
+        )
 
     def _draft_evaluation_or_raise(self, tenant_id: str, evaluation_id: str) -> Evaluation:
         evaluation_doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
@@ -517,4 +917,6 @@ def build_ai_service(settings: Settings, provider: AIProvider) -> AIService:
         request_timeout_seconds=settings.ai_request_timeout_seconds,
         prompt_price_per_1k=settings.ai_prompt_price_per_1k_tokens_usd,
         completion_price_per_1k=settings.ai_completion_price_per_1k_tokens_usd,
+        proposals=ProposalRepository(db),
+        assignments=AssignmentRepository(db),
     )

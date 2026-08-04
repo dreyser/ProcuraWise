@@ -34,6 +34,13 @@ class Score:
     updated_by_membership_id: str
     created_at: datetime
     updated_at: datetime
+    # Fase 18 (evaluacion asistida por IA, ADR 0022): set only when this
+    # write's ScoreWriteRequest referenced an AIExecution's suggestion -
+    # None for every purely-manual score, past and future. Never written by
+    # `ai/` itself: the evaluator's own PUT request carries this id, same as
+    # any other field on ScoreWriteRequest (plan §1/§11 - "aceptar o
+    # modificar" is not a new write path).
+    source_ai_execution_id: str | None
 
     @staticmethod
     def create(
@@ -48,6 +55,7 @@ class Score:
         score: int,
         comment: str | None,
         membership_id: str,
+        source_ai_execution_id: str | None = None,
     ) -> "Score":
         now = datetime.now(UTC)
         return Score(
@@ -67,6 +75,7 @@ class Score:
             updated_by_membership_id=membership_id,
             created_at=now,
             updated_at=now,
+            source_ai_execution_id=source_ai_execution_id,
         )
 
     @property
@@ -95,6 +104,7 @@ class Score:
             "updated_by_membership_id": self.updated_by_membership_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "source_ai_execution_id": self.source_ai_execution_id,
         }
 
     @staticmethod
@@ -116,4 +126,5 @@ class Score:
             updated_by_membership_id=doc["updated_by_membership_id"],
             created_at=doc["created_at"],
             updated_at=doc["updated_at"],
+            source_ai_execution_id=doc.get("source_ai_execution_id"),
         )

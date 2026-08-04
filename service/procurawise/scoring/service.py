@@ -3,6 +3,7 @@ from typing import Any
 
 from pymongo.errors import DuplicateKeyError
 
+from procurawise.ai.repository import AIExecutionRepository
 from procurawise.assignments.repository import AssignmentRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import (
@@ -36,6 +37,35 @@ from procurawise.shared.roles import EVALUATOR_ROLES
 _PARTIAL_RESULT_MAX_POINTS = sum(DIMENSION_MAX_POINTS.values())
 
 
+def enforce_section_assignment(
+    assignments: AssignmentRepository,
+    tenant_id: str,
+    evaluation_id: str,
+    dimension: str,
+    section: str,
+    actor: ActorContext,
+) -> None:
+    """An evaluator sub-role may act on any (dimension, section) that has no
+    Assignment recorded yet (today's VS-2B behavior, unchanged) - but once at
+    least one evaluator has been assigned to a section, acting on it is
+    restricted to the assigned evaluator(s) only, even for other holders of
+    the same sub-role (Fase 9 Block 3, spec §4/§6.7). The evaluation_owner is
+    never restricted by this check.
+
+    Module-level (not a ScoringService method) since Fase 18 needs the exact
+    same gate for requesting/reviewing an AI score suggestion - ai.service
+    imports this function directly rather than duplicating the check or
+    importing a private method."""
+    if actor.role not in EVALUATOR_ROLES:
+        return
+    assignments_docs = assignments.list_for_section(tenant_id, evaluation_id, dimension, section)
+    if not assignments_docs:
+        return
+    assigned_membership_ids = {doc["evaluator_membership_id"] for doc in assignments_docs}
+    if actor.membership_id not in assigned_membership_ids:
+        raise SectionNotAssignedToActorError(section)
+
+
 class ScoringService:
     def __init__(
         self,
@@ -45,6 +75,7 @@ class ScoringService:
         vendor_orgs: VendorOrganizationRepository,
         audit: AuditEventService,
         assignments: AssignmentRepository,
+        ai_executions: AIExecutionRepository,
     ) -> None:
         self._scores = scores
         self._proposals = proposals
@@ -52,26 +83,40 @@ class ScoringService:
         self._vendor_orgs = vendor_orgs
         self._audit = audit
         self._assignments = assignments
+        self._ai_executions = ai_executions
 
     def _enforce_section_assignment(
         self, tenant_id: str, evaluation_id: str, dimension: str, section: str, actor: ActorContext
     ) -> None:
-        """An evaluator sub-role may score any (dimension, section) that has
-        no Assignment recorded yet (today's VS-2B behavior, unchanged) - but
-        once at least one evaluator has been assigned to a section, scoring
-        it is restricted to the assigned evaluator(s) only, even for other
-        holders of the same sub-role (Fase 9 Block 3, spec §4/§6.7). The
-        evaluation_owner is never restricted by this check."""
-        if actor.role not in EVALUATOR_ROLES:
-            return
-        assignments = self._assignments.list_for_section(
-            tenant_id, evaluation_id, dimension, section
+        enforce_section_assignment(
+            self._assignments, tenant_id, evaluation_id, dimension, section, actor
         )
-        if not assignments:
-            return
-        assigned_membership_ids = {doc["evaluator_membership_id"] for doc in assignments}
-        if actor.membership_id not in assigned_membership_ids:
-            raise SectionNotAssignedToActorError(section)
+
+    def _ai_decision(
+        self,
+        tenant_id: str,
+        source_ai_execution_id: str | None,
+        requirement_id: str,
+        score_value: int,
+    ) -> str | None:
+        """Fase 18 (ADR 0022): never trusts the client's own claim of
+        "accepted"/"modified" - derives it server-side by comparing the
+        submitted score against the referenced job's own persisted
+        candidate. Returns None (no metadata added) if the execution/
+        candidate can't be found - a stale or foreign id degrades to "just a
+        manual score with an unresolvable reference", never an error, since
+        this is provenance for audit only, not a precondition of the write."""
+        if source_ai_execution_id is None:
+            return None
+        doc = self._ai_executions.find_by_id(tenant_id, source_ai_execution_id)
+        if doc is None or doc.get("candidates") is None:
+            return None
+        candidate = next(
+            (c for c in doc["candidates"] if c.get("requirement_id") == requirement_id), None
+        )
+        if candidate is None:
+            return None
+        return "accepted" if candidate.get("suggested_score") == score_value else "modified"
 
     def upsert_score(
         self,
@@ -85,6 +130,7 @@ class ScoringService:
         membership_id: str,
         *,
         actor: ActorContext,
+        source_ai_execution_id: str | None = None,
     ) -> Score:
         if score_value < 0 or score_value > 5:
             raise ScoreOutOfRangeError(score_value)
@@ -117,6 +163,13 @@ class ScoringService:
             tenant_id, evaluation_id, proposal_id, proposal.snapshot.snapshot_id, requirement_id
         )
 
+        ai_decision = self._ai_decision(
+            tenant_id, source_ai_execution_id, requirement_id, score_value
+        )
+        audit_metadata: dict[str, Any] = {"requirement_id": requirement_id, "score": score_value}
+        if ai_decision is not None:
+            audit_metadata["ai_decision"] = ai_decision
+
         if existing_doc is None:
             if expected_version is not None:
                 raise StaleScoreVersionError(requirement_id)
@@ -132,6 +185,7 @@ class ScoringService:
                 score=score_value,
                 comment=comment,
                 membership_id=membership_id,
+                source_ai_execution_id=source_ai_execution_id,
             )
             try:
                 self._scores.insert(tenant_id, score.to_document())
@@ -147,7 +201,7 @@ class ScoringService:
                 proposal_id=proposal_id,
                 snapshot_id=proposal.snapshot.snapshot_id,
                 version=score.version,
-                metadata={"requirement_id": requirement_id, "score": score_value},
+                metadata=audit_metadata,
             )
             return score
 
@@ -155,7 +209,13 @@ class ScoringService:
         if expected_version != existing.version:
             raise StaleScoreVersionError(requirement_id)
         matched = self._scores.update(
-            tenant_id, existing.id, expected_version, score_value, comment, membership_id
+            tenant_id,
+            existing.id,
+            expected_version,
+            score_value,
+            comment,
+            membership_id,
+            source_ai_execution_id,
         )
         if not matched:
             raise StaleScoreVersionError(requirement_id)
@@ -174,7 +234,7 @@ class ScoringService:
             proposal_id=proposal_id,
             snapshot_id=proposal.snapshot.snapshot_id,
             version=updated.version,
-            metadata={"requirement_id": requirement_id, "score": score_value},
+            metadata=audit_metadata,
         )
         return updated
 

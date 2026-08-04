@@ -47,6 +47,7 @@ class ScoreRepository:
         score: int,
         comment: str | None,
         membership_id: str,
+        source_ai_execution_id: str | None = None,
     ) -> bool:
         result = self._scoped(tenant_id).update_one(
             {"_id": score_id, "version": expected_version},
@@ -56,6 +57,7 @@ class ScoreRepository:
                     "comment": comment,
                     "updated_by_membership_id": membership_id,
                     "updated_at": datetime.now(UTC),
+                    "source_ai_execution_id": source_ai_execution_id,
                 },
                 "$inc": {"version": 1},
             },

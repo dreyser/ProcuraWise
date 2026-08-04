@@ -18,6 +18,14 @@ class AIExecutionRepository:
     def find_by_id(self, tenant_id: str, execution_id: str) -> dict[str, Any] | None:
         return self._scoped(tenant_id).find_one({"_id": execution_id})
 
+    def list_for_proposal(self, tenant_id: str, proposal_id: str) -> list[dict[str, Any]]:
+        """Fase 18 (ADR 0022): history of score-suggestion jobs for a given
+        proposal, newest first - served by the (tenant_id, proposal_id,
+        created_at desc) index added in migrations/0015."""
+        return list(
+            self._scoped(tenant_id).find({"proposal_id": proposal_id}).sort("created_at", -1)
+        )
+
     def transition_status(
         self,
         tenant_id: str,
