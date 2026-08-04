@@ -29,6 +29,10 @@ from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.jwt_provider import create_admin_access_token
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.mongo import get_database
+from procurawise.tco.models import FXRate
+from procurawise.tco.repository import FXRateRepository
+from procurawise.tco.schemas import CreateFxRateRequest, FxRateListResponse, FxRateResponse
+from procurawise.tco.service import FXRateService
 
 # Physically separate from every buyer/vendor router (CLAUDE.md §4: platform_admin
 # routes stay in their own router, never mixed with buyer or vendor-portal ones).
@@ -53,6 +57,23 @@ def _curated_source_response(source: CuratedSource) -> CuratedSourceResponse:
         active=source.active,
         created_at=source.created_at,
         updated_at=source.updated_at,
+    )
+
+
+def get_fx_rate_service(settings: Settings = Depends(get_settings)) -> FXRateService:
+    return FXRateService(FXRateRepository(get_database(settings)))
+
+
+def _fx_rate_response(fx_rate: FXRate) -> FxRateResponse:
+    return FxRateResponse(
+        id=fx_rate.id,
+        from_currency=fx_rate.from_currency,
+        to_currency=fx_rate.to_currency,
+        rate=fx_rate.rate,
+        effective_date=fx_rate.effective_date,
+        source=fx_rate.source,
+        created_by_admin_id=fx_rate.created_by_admin_id,
+        created_at=fx_rate.created_at,
     )
 
 
@@ -185,6 +206,37 @@ def activate_curated_source(
     except CuratedSourceNotFoundError:
         raise HTTPException(status_code=404) from None
     return _curated_source_response(source)
+
+
+# Fase 19 (ADR 0008): FXRate is create-only in this phase (plan §9 R4) - no
+# update/delete endpoint, so a rate already frozen into some
+# ProposalSnapshot.tco_result can never be retroactively altered. Same "no
+# dedicated frontend screen this phase" precedent as curated-sources above -
+# managed via this API directly.
+
+
+@router.post("/fx-rates", response_model=FxRateResponse, status_code=201)
+def create_fx_rate(
+    body: CreateFxRateRequest,
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: FXRateService = Depends(get_fx_rate_service),
+) -> FxRateResponse:
+    fx_rate = service.create(
+        from_currency=body.from_currency,
+        to_currency=body.to_currency,
+        rate=body.rate,
+        effective_date=body.effective_date,
+        admin_id=admin.admin_id,
+    )
+    return _fx_rate_response(fx_rate)
+
+
+@router.get("/fx-rates", response_model=FxRateListResponse)
+def list_fx_rates(
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: FXRateService = Depends(get_fx_rate_service),
+) -> FxRateListResponse:
+    return FxRateListResponse(items=[_fx_rate_response(r) for r in service.list_all()])
 
 
 @router.post("/curated-sources/{source_id}/deactivate", response_model=CuratedSourceResponse)

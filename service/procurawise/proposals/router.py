@@ -21,6 +21,7 @@ from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
 from procurawise.shared.mongo import get_database
 from procurawise.shared.roles import BUYER_READ_ROLES
+from procurawise.tco.repository import FXRateRepository
 
 router = APIRouter(prefix="/evaluations/{evaluation_id}/proposals", tags=["proposals"])
 
@@ -35,6 +36,7 @@ def get_proposal_service(settings: Settings = Depends(get_settings)) -> Proposal
         vendor_orgs=VendorOrganizationRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
         documents=DocumentRepository(db),
+        fx_rates=FXRateRepository(db),
     )
 
 

@@ -444,11 +444,231 @@ export interface CollaboratorSummaryResponse {
   accepted_at: CollaboratorSummaryResponseAcceptedAt
 }
 
+export type CostItemResponseCategory =
+  (typeof CostItemResponseCategory)[keyof typeof CostItemResponseCategory]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CostItemResponseCategory = {
+  initial: 'initial',
+  recurring: 'recurring',
+  variable_extraordinary: 'variable_extraordinary',
+} as const
+
+export type CostItemResponseDescription = string | null
+
+export type CostItemResponseCurrency =
+  (typeof CostItemResponseCurrency)[keyof typeof CostItemResponseCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CostItemResponseCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type CostItemResponseCostType =
+  (typeof CostItemResponseCostType)[keyof typeof CostItemResponseCostType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CostItemResponseCostType = {
+  one_time: 'one_time',
+  recurring: 'recurring',
+  variable: 'variable',
+} as const
+
+export type CostItemResponseNotes = string | null
+
+export interface CostItemResponse {
+  id: string
+  concept: string
+  category: CostItemResponseCategory
+  description: CostItemResponseDescription
+  billing_unit: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  quantity: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  unit_price: string
+  currency: CostItemResponseCurrency
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  frequency_per_year: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  tax_pct: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  discount_pct: string
+  year_start: number
+  year_end: number
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  annual_increment_pct: string
+  mandatory: boolean
+  cost_type: CostItemResponseCostType
+  notes: CostItemResponseNotes
+  created_at: string
+  updated_at: string
+}
+
+export type CostItemUpdateRequestConcept = string | null
+
+export type CostItemUpdateRequestCategory =
+  'initial' | 'recurring' | 'variable_extraordinary' | null
+
+export type CostItemUpdateRequestDescription = string | null
+
+export type CostItemUpdateRequestBillingUnit = string | null
+
+export type CostItemUpdateRequestQuantity = number | string | null
+
+export type CostItemUpdateRequestUnitPrice = number | string | null
+
+export type CostItemUpdateRequestCurrency = 'MXN' | 'USD' | null
+
+export type CostItemUpdateRequestFrequencyPerYear = number | string | null
+
+export type CostItemUpdateRequestTaxPct = number | string | null
+
+export type CostItemUpdateRequestDiscountPct = number | string | null
+
+export type CostItemUpdateRequestYearStart = number | null
+
+export type CostItemUpdateRequestYearEnd = number | null
+
+export type CostItemUpdateRequestAnnualIncrementPct = number | string | null
+
+export type CostItemUpdateRequestMandatory = boolean | null
+
+export type CostItemUpdateRequestCostType = 'one_time' | 'recurring' | 'variable' | null
+
+export type CostItemUpdateRequestNotes = string | null
+
+export interface CostItemUpdateRequest {
+  concept?: CostItemUpdateRequestConcept
+  category?: CostItemUpdateRequestCategory
+  description?: CostItemUpdateRequestDescription
+  billing_unit?: CostItemUpdateRequestBillingUnit
+  quantity?: CostItemUpdateRequestQuantity
+  unit_price?: CostItemUpdateRequestUnitPrice
+  currency?: CostItemUpdateRequestCurrency
+  frequency_per_year?: CostItemUpdateRequestFrequencyPerYear
+  tax_pct?: CostItemUpdateRequestTaxPct
+  discount_pct?: CostItemUpdateRequestDiscountPct
+  year_start?: CostItemUpdateRequestYearStart
+  year_end?: CostItemUpdateRequestYearEnd
+  annual_increment_pct?: CostItemUpdateRequestAnnualIncrementPct
+  mandatory?: CostItemUpdateRequestMandatory
+  cost_type?: CostItemUpdateRequestCostType
+  notes?: CostItemUpdateRequestNotes
+  expected_version: number
+}
+
+export type CostItemWriteRequestCategory =
+  (typeof CostItemWriteRequestCategory)[keyof typeof CostItemWriteRequestCategory]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CostItemWriteRequestCategory = {
+  initial: 'initial',
+  recurring: 'recurring',
+  variable_extraordinary: 'variable_extraordinary',
+} as const
+
+export type CostItemWriteRequestDescription = string | null
+
+export type CostItemWriteRequestQuantity = number | string
+
+export type CostItemWriteRequestUnitPrice = number | string
+
+export type CostItemWriteRequestCurrency =
+  (typeof CostItemWriteRequestCurrency)[keyof typeof CostItemWriteRequestCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CostItemWriteRequestCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type CostItemWriteRequestFrequencyPerYear = number | string
+
+export type CostItemWriteRequestTaxPct = number | string
+
+export type CostItemWriteRequestDiscountPct = number | string
+
+export type CostItemWriteRequestAnnualIncrementPct = number | string
+
+export type CostItemWriteRequestCostType =
+  (typeof CostItemWriteRequestCostType)[keyof typeof CostItemWriteRequestCostType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CostItemWriteRequestCostType = {
+  one_time: 'one_time',
+  recurring: 'recurring',
+  variable: 'variable',
+} as const
+
+export type CostItemWriteRequestNotes = string | null
+
+/**
+ * Fase 19 (spec §8.2) - free-form vendor-authored cost line, no
+buyer-defined template (plan §6.A9). Numeric/enum bounds enforced here
+via Pydantic; cross-field checks (year_start<=year_end) enforced by
+`proposals.service.validate_cost_item_fields`.
+ */
+export interface CostItemWriteRequest {
+  concept: string
+  category: CostItemWriteRequestCategory
+  description?: CostItemWriteRequestDescription
+  billing_unit: string
+  quantity: CostItemWriteRequestQuantity
+  unit_price: CostItemWriteRequestUnitPrice
+  currency: CostItemWriteRequestCurrency
+  frequency_per_year: CostItemWriteRequestFrequencyPerYear
+  tax_pct?: CostItemWriteRequestTaxPct
+  discount_pct?: CostItemWriteRequestDiscountPct
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  year_start: number
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  year_end: number
+  annual_increment_pct?: CostItemWriteRequestAnnualIncrementPct
+  mandatory?: boolean
+  cost_type: CostItemWriteRequestCostType
+  notes?: CostItemWriteRequestNotes
+  expected_version: number
+}
+
 export interface CreateCuratedSourceRequest {
   title: string
   url: string
   summary: string
   tags?: string[]
+}
+
+export type CreateFxRateRequestFromCurrency =
+  (typeof CreateFxRateRequestFromCurrency)[keyof typeof CreateFxRateRequestFromCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CreateFxRateRequestFromCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type CreateFxRateRequestToCurrency =
+  (typeof CreateFxRateRequestToCurrency)[keyof typeof CreateFxRateRequestToCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CreateFxRateRequestToCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type CreateFxRateRequestRate = number | string
+
+export interface CreateFxRateRequest {
+  from_currency: CreateFxRateRequestFromCurrency
+  to_currency: CreateFxRateRequestToCurrency
+  rate: CreateFxRateRequestRate
+  effective_date: string
 }
 
 export interface CuratedSourceListResponse {
@@ -613,6 +833,8 @@ export interface EvaluationDetailResponse {
   approval_decided_by_membership_id: EvaluationDetailResponseApprovalDecidedByMembershipId
   approval_comment: EvaluationDetailResponseApprovalComment
   approval_snapshot_id: EvaluationDetailResponseApprovalSnapshotId
+  base_currency: string
+  tco_horizon_years: number
 }
 
 export type EvaluationSnapshotResponseDimensionWeights = { [key: string]: number }
@@ -668,10 +890,77 @@ export type EvaluationUpdateRequestDescription = string | null
 
 export type EvaluationUpdateRequestResponseDeadline = string | null
 
+export type EvaluationUpdateRequestBaseCurrency = 'MXN' | 'USD' | null
+
+export type EvaluationUpdateRequestTcoHorizonYears = number | null
+
 export interface EvaluationUpdateRequest {
   name?: EvaluationUpdateRequestName
   description?: EvaluationUpdateRequestDescription
   response_deadline?: EvaluationUpdateRequestResponseDeadline
+  base_currency?: EvaluationUpdateRequestBaseCurrency
+  tco_horizon_years?: EvaluationUpdateRequestTcoHorizonYears
+}
+
+export type FrozenFxRateResponseFromCurrency =
+  (typeof FrozenFxRateResponseFromCurrency)[keyof typeof FrozenFxRateResponseFromCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const FrozenFxRateResponseFromCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type FrozenFxRateResponseToCurrency =
+  (typeof FrozenFxRateResponseToCurrency)[keyof typeof FrozenFxRateResponseToCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const FrozenFxRateResponseToCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export interface FrozenFxRateResponse {
+  from_currency: FrozenFxRateResponseFromCurrency
+  to_currency: FrozenFxRateResponseToCurrency
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  rate: string
+  effective_date: string
+  source: string
+}
+
+export interface FxRateListResponse {
+  items: FxRateResponse[]
+}
+
+export type FxRateResponseFromCurrency =
+  (typeof FxRateResponseFromCurrency)[keyof typeof FxRateResponseFromCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const FxRateResponseFromCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type FxRateResponseToCurrency =
+  (typeof FxRateResponseToCurrency)[keyof typeof FxRateResponseToCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const FxRateResponseToCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export interface FxRateResponse {
+  id: string
+  from_currency: FxRateResponseFromCurrency
+  to_currency: FxRateResponseToCurrency
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  rate: string
+  effective_date: string
+  source: string
+  created_by_admin_id: string
+  created_at: string
 }
 
 export interface HTTPValidationError {
@@ -1359,6 +1648,72 @@ export interface SwitchTenantRequest {
   membership_id: string
 }
 
+export type TcoPreviewResponseBaseCurrency =
+  (typeof TcoPreviewResponseBaseCurrency)[keyof typeof TcoPreviewResponseBaseCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const TcoPreviewResponseBaseCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type TcoPreviewResponseByYear = { [key: string]: string }
+
+export type TcoPreviewResponseByYearWithTax = { [key: string]: string }
+
+export type TcoPreviewResponseByCategory = { [key: string]: string }
+
+/**
+ * Fase 19 - bajo-demanda, nunca persistido (plan §6.E78-79); uses the
+FX rate(s) vigente right now, distinct from the frozen result a
+submitted proposal carries.
+ */
+export interface TcoPreviewResponse {
+  base_currency: TcoPreviewResponseBaseCurrency
+  horizon_years: number
+  by_year: TcoPreviewResponseByYear
+  by_year_with_tax: TcoPreviewResponseByYearWithTax
+  by_category: TcoPreviewResponseByCategory
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  grand_total: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  grand_total_with_tax: string
+}
+
+export type TcoResultResponseBaseCurrency =
+  (typeof TcoResultResponseBaseCurrency)[keyof typeof TcoResultResponseBaseCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const TcoResultResponseBaseCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type TcoResultResponseByYear = { [key: string]: string }
+
+export type TcoResultResponseByYearWithTax = { [key: string]: string }
+
+export type TcoResultResponseByCategory = { [key: string]: string }
+
+/**
+ * Fase 19 - the frozen result read back from `ProposalSnapshot.
+tco_result` (buyer-only, post-submit). Never recalculated from a live
+FXRate - see plan §11.2/§14.
+ */
+export interface TcoResultResponse {
+  base_currency: TcoResultResponseBaseCurrency
+  horizon_years: number
+  by_year: TcoResultResponseByYear
+  by_year_with_tax: TcoResultResponseByYearWithTax
+  by_category: TcoResultResponseByCategory
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  grand_total: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  grand_total_with_tax: string
+  fx_rates_used: FrozenFxRateResponse[]
+  calculated_at: string
+}
+
 /**
  * The final access token, scoped to exactly one tenant/role - "one JWT =
 one tenant" (ADR 0002).
@@ -1517,6 +1872,7 @@ export interface VendorProposalDetailResponse {
   version: number
   requirements: VendorRequirementResponse[]
   answers: VendorAnswerResponse[]
+  cost_items: CostItemResponse[]
   created_at: string
   updated_at: string
   submitted_at: VendorProposalDetailResponseSubmittedAt
@@ -1676,6 +2032,10 @@ export type ListAuditEventsApiV1EvaluationsEvaluationIdAuditEventsGetParams = {
    */
   limit?: number
   cursor?: string | null
+}
+
+export type RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams = {
+  expected_version: number
 }
 
 export type ListEvaluationsAcrossTenantsApiV1AdminEvaluationsGetParams = {
@@ -9621,6 +9981,248 @@ export const useCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePost = <
 }
 
 /**
+ * Fase 19 - the TCO frozen at submit time (plan §11.4). 404 if the
+proposal doesn't belong to this evaluation, or hasn't been submitted yet
+(no snapshot -> no tco_result to read, same "not available before
+submit" principle as scoring results).
+ * @summary Get Tco Result
+ */
+export type getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponse200 = {
+  data: TcoResultResponse
+  status: 200
+}
+
+export type getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponseSuccess =
+  getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponse200 & {
+    headers: Headers
+  }
+export type getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponseError =
+  getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponse422 & {
+    headers: Headers
+  }
+
+export type getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponse =
+  | getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponseSuccess
+  | getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponseError
+
+export const getGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetUrl = (
+  evaluationId: string,
+  proposalId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/tco`
+}
+
+export const getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet = async (
+  evaluationId: string,
+  proposalId: string,
+  options?: RequestInit,
+): Promise<getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponse> => {
+  return apiFetch<getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetResponse>(
+    getGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetUrl(
+      evaluationId,
+      proposalId,
+    ),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetQueryKey = (
+  evaluationId?: string,
+  proposalId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/tco`] as const
+}
+
+export const getGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetQueryKey(
+      evaluationId,
+      proposalId,
+    )
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>>
+  > = () =>
+    getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet(evaluationId, proposalId)
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(evaluationId && proposalId),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>>
+  >
+export type GetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetQueryError =
+  HTTPValidationError
+
+export function useGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet<
+  TData = Awaited<
+    ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet<
+  TData = Awaited<
+    ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet<
+  TData = Awaited<
+    ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Tco Result
+ */
+
+export function useGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet<
+  TData = Awaited<
+    ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetTcoResultApiV1EvaluationsEvaluationIdProposalsProposalIdTcoGetQueryOptions(
+      evaluationId,
+      proposalId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
  * @summary Create Assignment
  */
 export type createAssignmentApiV1EvaluationsEvaluationIdAssignmentsPostResponse201 = {
@@ -12314,6 +12916,636 @@ export const useSubmitProposalApiV1VendorPortalProposalsProposalIdSubmitPost = <
 }
 
 /**
+ * @summary Add Cost Item
+ */
+export type addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponse200 = {
+  data: VendorProposalDetailResponse
+  status: 200
+}
+
+export type addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponseSuccess =
+  addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponse200 & {
+    headers: Headers
+  }
+export type addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponseError =
+  addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponse422 & {
+    headers: Headers
+  }
+
+export type addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponse =
+  | addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponseSuccess
+  | addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponseError
+
+export const getAddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostUrl = (
+  proposalId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/cost-items`
+}
+
+export const addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost = async (
+  proposalId: string,
+  costItemWriteRequest: CostItemWriteRequest,
+  options?: RequestInit,
+): Promise<addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponse> => {
+  return apiFetch<addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostResponse>(
+    getAddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostUrl(proposalId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(costItemWriteRequest),
+    },
+  )
+}
+
+export const getAddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost>>,
+    TError,
+    { proposalId: string; data: CostItemWriteRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost>>,
+  TError,
+  { proposalId: string; data: CostItemWriteRequest },
+  TContext
+> => {
+  const mutationKey = ['addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost>>,
+    { proposalId: string; data: CostItemWriteRequest }
+  > = (props) => {
+    const { proposalId, data } = props ?? {}
+
+    return addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost(proposalId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type AddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost>>
+  >
+export type AddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostMutationBody =
+  CostItemWriteRequest
+export type AddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Add Cost Item
+ */
+export const useAddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost>>,
+      TError,
+      { proposalId: string; data: CostItemWriteRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof addCostItemApiV1VendorPortalProposalsProposalIdCostItemsPost>>,
+  TError,
+  { proposalId: string; data: CostItemWriteRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getAddCostItemApiV1VendorPortalProposalsProposalIdCostItemsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Update Cost Item
+ */
+export type updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponse200 = {
+  data: VendorProposalDetailResponse
+  status: 200
+}
+
+export type updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponseSuccess =
+  updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponse200 & {
+    headers: Headers
+  }
+export type updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponseError =
+  updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponse422 & {
+    headers: Headers
+  }
+
+export type updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponse =
+  | updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponseSuccess
+  | updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponseError
+
+export const getUpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutUrl = (
+  proposalId: string,
+  costItemId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/cost-items/${costItemId}`
+}
+
+export const updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut = async (
+  proposalId: string,
+  costItemId: string,
+  costItemUpdateRequest: CostItemUpdateRequest,
+  options?: RequestInit,
+): Promise<updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponse> => {
+  return apiFetch<updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutResponse>(
+    getUpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutUrl(
+      proposalId,
+      costItemId,
+    ),
+    {
+      ...options,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(costItemUpdateRequest),
+    },
+  )
+}
+
+export const getUpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut>
+      >,
+      TError,
+      { proposalId: string; costItemId: string; data: CostItemUpdateRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut>
+    >,
+    TError,
+    { proposalId: string; costItemId: string; data: CostItemUpdateRequest },
+    TContext
+  > => {
+    const mutationKey = ['updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut>
+      >,
+      { proposalId: string; costItemId: string; data: CostItemUpdateRequest }
+    > = (props) => {
+      const { proposalId, costItemId, data } = props ?? {}
+
+      return updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut(
+        proposalId,
+        costItemId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type UpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut>
+    >
+  >
+export type UpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutMutationBody =
+  CostItemUpdateRequest
+export type UpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Update Cost Item
+ */
+export const useUpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut>
+      >,
+      TError,
+      { proposalId: string; costItemId: string; data: CostItemUpdateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof updateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPut>
+  >,
+  TError,
+  { proposalId: string; costItemId: string; data: CostItemUpdateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdPutMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Remove Cost Item
+ */
+export type removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponse200 =
+  {
+    data: VendorProposalDetailResponse
+    status: 200
+  }
+
+export type removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponseSuccess =
+  removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponse200 & {
+    headers: Headers
+  }
+export type removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponseError =
+  removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponse =
+  | removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponseSuccess
+  | removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponseError
+
+export const getRemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteUrl = (
+  proposalId: string,
+  costItemId: string,
+  params: RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams,
+) => {
+  const normalizedParams = new URLSearchParams()
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  })
+
+  const stringifiedParams = normalizedParams.toString()
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/vendor-portal/proposals/${proposalId}/cost-items/${costItemId}?${stringifiedParams}`
+    : `/api/v1/vendor-portal/proposals/${proposalId}/cost-items/${costItemId}`
+}
+
+export const removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete = async (
+  proposalId: string,
+  costItemId: string,
+  params: RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams,
+  options?: RequestInit,
+): Promise<removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponse> => {
+  return apiFetch<removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteResponse>(
+    getRemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteUrl(
+      proposalId,
+      costItemId,
+      params,
+    ),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+}
+
+export const getRemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete
+        >
+      >,
+      TError,
+      {
+        proposalId: string
+        costItemId: string
+        params: RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams
+      },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete>
+    >,
+    TError,
+    {
+      proposalId: string
+      costItemId: string
+      params: RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams
+    },
+    TContext
+  > => {
+    const mutationKey = [
+      'removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete
+        >
+      >,
+      {
+        proposalId: string
+        costItemId: string
+        params: RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams
+      }
+    > = (props) => {
+      const { proposalId, costItemId, params } = props ?? {}
+
+      return removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete(
+        proposalId,
+        costItemId,
+        params,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete>
+    >
+  >
+
+export type RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Remove Cost Item
+ */
+export const useRemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete
+        >
+      >,
+      TError,
+      {
+        proposalId: string
+        costItemId: string
+        params: RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams
+      },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof removeCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDelete>
+  >,
+  TError,
+  {
+    proposalId: string
+    costItemId: string
+    params: RemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteParams
+  },
+  TContext
+> => {
+  const mutationOptions =
+    getRemoveCostItemApiV1VendorPortalProposalsProposalIdCostItemsCostItemIdDeleteMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Preview Tco
+ */
+export type previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponse200 = {
+  data: TcoPreviewResponse
+  status: 200
+}
+
+export type previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponseSuccess =
+  previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponse200 & {
+    headers: Headers
+  }
+export type previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponseError =
+  previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponse422 & {
+    headers: Headers
+  }
+
+export type previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponse =
+  | previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponseSuccess
+  | previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponseError
+
+export const getPreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetUrl = (
+  proposalId: string,
+) => {
+  return `/api/v1/vendor-portal/proposals/${proposalId}/tco-preview`
+}
+
+export const previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet = async (
+  proposalId: string,
+  options?: RequestInit,
+): Promise<previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponse> => {
+  return apiFetch<previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetResponse>(
+    getPreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetUrl(proposalId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getPreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetQueryKey = (
+  proposalId?: string,
+) => {
+  return [`/api/v1/vendor-portal/proposals/${proposalId}/tco-preview`] as const
+}
+
+export const getPreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getPreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetQueryKey(proposalId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>
+  > = () => previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet(proposalId)
+
+  return { queryKey, queryFn, enabled: !!proposalId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type PreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>
+>
+export type PreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetQueryError =
+  HTTPValidationError
+
+export function usePreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet<
+  TData = Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+          TError,
+          Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet<
+  TData = Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+          TError,
+          Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function usePreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet<
+  TData = Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Preview Tco
+ */
+
+export function usePreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet<
+  TData = Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+  TError = HTTPValidationError,
+>(
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof previewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getPreviewTcoApiV1VendorPortalProposalsProposalIdTcoPreviewGetQueryOptions(
+    proposalId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
  * @summary Upload Document
  */
 export type uploadDocumentApiV1VendorPortalProposalsProposalIdDocumentsPostResponse201 = {
@@ -14617,6 +15849,265 @@ export const useActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePos
     getActivateCuratedSourceApiV1AdminCuratedSourcesSourceIdActivatePostMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Create Fx Rate
+ */
+export type createFxRateApiV1AdminFxRatesPostResponse201 = {
+  data: FxRateResponse
+  status: 201
+}
+
+export type createFxRateApiV1AdminFxRatesPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createFxRateApiV1AdminFxRatesPostResponseSuccess =
+  createFxRateApiV1AdminFxRatesPostResponse201 & {
+    headers: Headers
+  }
+export type createFxRateApiV1AdminFxRatesPostResponseError =
+  createFxRateApiV1AdminFxRatesPostResponse422 & {
+    headers: Headers
+  }
+
+export type createFxRateApiV1AdminFxRatesPostResponse =
+  createFxRateApiV1AdminFxRatesPostResponseSuccess | createFxRateApiV1AdminFxRatesPostResponseError
+
+export const getCreateFxRateApiV1AdminFxRatesPostUrl = () => {
+  return `/api/v1/admin/fx-rates`
+}
+
+export const createFxRateApiV1AdminFxRatesPost = async (
+  createFxRateRequest: CreateFxRateRequest,
+  options?: RequestInit,
+): Promise<createFxRateApiV1AdminFxRatesPostResponse> => {
+  return apiFetch<createFxRateApiV1AdminFxRatesPostResponse>(
+    getCreateFxRateApiV1AdminFxRatesPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(createFxRateRequest),
+    },
+  )
+}
+
+export const getCreateFxRateApiV1AdminFxRatesPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFxRateApiV1AdminFxRatesPost>>,
+    TError,
+    { data: CreateFxRateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createFxRateApiV1AdminFxRatesPost>>,
+  TError,
+  { data: CreateFxRateRequest },
+  TContext
+> => {
+  const mutationKey = ['createFxRateApiV1AdminFxRatesPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createFxRateApiV1AdminFxRatesPost>>,
+    { data: CreateFxRateRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return createFxRateApiV1AdminFxRatesPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateFxRateApiV1AdminFxRatesPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createFxRateApiV1AdminFxRatesPost>>
+>
+export type CreateFxRateApiV1AdminFxRatesPostMutationBody = CreateFxRateRequest
+export type CreateFxRateApiV1AdminFxRatesPostMutationError = HTTPValidationError
+
+/**
+ * @summary Create Fx Rate
+ */
+export const useCreateFxRateApiV1AdminFxRatesPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createFxRateApiV1AdminFxRatesPost>>,
+      TError,
+      { data: CreateFxRateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createFxRateApiV1AdminFxRatesPost>>,
+  TError,
+  { data: CreateFxRateRequest },
+  TContext
+> => {
+  const mutationOptions = getCreateFxRateApiV1AdminFxRatesPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Fx Rates
+ */
+export type listFxRatesApiV1AdminFxRatesGetResponse200 = {
+  data: FxRateListResponse
+  status: 200
+}
+
+export type listFxRatesApiV1AdminFxRatesGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listFxRatesApiV1AdminFxRatesGetResponseSuccess =
+  listFxRatesApiV1AdminFxRatesGetResponse200 & {
+    headers: Headers
+  }
+export type listFxRatesApiV1AdminFxRatesGetResponseError =
+  listFxRatesApiV1AdminFxRatesGetResponse422 & {
+    headers: Headers
+  }
+
+export type listFxRatesApiV1AdminFxRatesGetResponse =
+  listFxRatesApiV1AdminFxRatesGetResponseSuccess | listFxRatesApiV1AdminFxRatesGetResponseError
+
+export const getListFxRatesApiV1AdminFxRatesGetUrl = () => {
+  return `/api/v1/admin/fx-rates`
+}
+
+export const listFxRatesApiV1AdminFxRatesGet = async (
+  options?: RequestInit,
+): Promise<listFxRatesApiV1AdminFxRatesGetResponse> => {
+  return apiFetch<listFxRatesApiV1AdminFxRatesGetResponse>(
+    getListFxRatesApiV1AdminFxRatesGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListFxRatesApiV1AdminFxRatesGetQueryKey = () => {
+  return [`/api/v1/admin/fx-rates`] as const
+}
+
+export const getListFxRatesApiV1AdminFxRatesGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>, TError, TData>
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getListFxRatesApiV1AdminFxRatesGetQueryKey()
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>> = () =>
+    listFxRatesApiV1AdminFxRatesGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListFxRatesApiV1AdminFxRatesGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>
+>
+export type ListFxRatesApiV1AdminFxRatesGetQueryError = HTTPValidationError
+
+export function useListFxRatesApiV1AdminFxRatesGet<
+  TData = Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>, TError, TData>
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFxRatesApiV1AdminFxRatesGet<
+  TData = Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>, TError, TData>
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFxRatesApiV1AdminFxRatesGet<
+  TData = Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>, TError, TData>
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Fx Rates
+ */
+
+export function useListFxRatesApiV1AdminFxRatesGet<
+  TData = Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<Awaited<ReturnType<typeof listFxRatesApiV1AdminFxRatesGet>>, TError, TData>
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListFxRatesApiV1AdminFxRatesGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**

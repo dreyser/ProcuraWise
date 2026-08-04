@@ -22,6 +22,7 @@ import { VendorsPage } from '@/features/evaluations/pages/VendorsPage'
 import { ProposalsPage } from '@/features/proposals/pages/ProposalsPage'
 import { ScoringPage } from '@/features/scoring/pages/ScoringPage'
 import { ResultsPage } from '@/features/scoring/pages/ResultsPage'
+import { TcoResultPage } from '@/features/tco/pages/TcoResultPage'
 import { VendorProposalListPage } from '@/features/vendor-portal/pages/VendorProposalListPage'
 import { VendorProposalDetailPage } from '@/features/vendor-portal/pages/VendorProposalDetailPage'
 import { AssignmentsPage } from '@/features/evaluations/pages/AssignmentsPage'
@@ -223,6 +224,14 @@ export function AppRouter() {
           element={
             <BuyerLayout>
               <ScoringPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/evaluations/:evaluationId/proposals/:proposalId/tco"
+          element={
+            <BuyerLayout>
+              <TcoResultPage />
             </BuyerLayout>
           }
         />

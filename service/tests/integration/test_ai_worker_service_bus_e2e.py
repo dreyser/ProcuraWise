@@ -180,6 +180,8 @@ def test_worker_loop_consumes_real_service_bus_message_for_score_suggestion_and_
         submitted_by_membership_id="vendor-membership",
         submitted_at=now,
         document_ids=[],
+        cost_items=[],
+        tco_result=None,
     )
     proposal = Proposal.create(
         tenant_id=tenant_id, evaluation_id=evaluation.id, vendor_org_id="vendor-org-1"

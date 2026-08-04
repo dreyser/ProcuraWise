@@ -89,6 +89,8 @@ def _evaluation_detail(evaluation: Evaluation) -> EvaluationDetailResponse:
         approval_decided_by_membership_id=evaluation.approval_decided_by_membership_id,
         approval_comment=evaluation.approval_comment,
         approval_snapshot_id=evaluation.approval_snapshot_id,
+        base_currency=evaluation.base_currency,
+        tco_horizon_years=evaluation.tco_horizon_years,
     )
 
 

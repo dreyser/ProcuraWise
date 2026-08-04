@@ -1,4 +1,7 @@
 from datetime import datetime
+from typing import Literal
+
+from pydantic import Field
 
 from procurawise.evaluations.models import (
     ApprovalStatus,
@@ -8,6 +11,12 @@ from procurawise.evaluations.models import (
     ResponseType,
 )
 from procurawise.shared.api_models import APIModel
+
+# Fase 19 - same MXN/USD pair as proposals.service._CURRENCY_CODES /
+# tco.models.TCO_CURRENCIES, duplicated locally rather than imported: this
+# module intentionally does not depend on `tco` (plan §11.9's currency
+# constant lives with the module that owns the concept it validates).
+EvaluationCurrency = Literal["MXN", "USD"]
 
 
 class EvaluationCreateRequest(APIModel):
@@ -19,6 +28,10 @@ class EvaluationUpdateRequest(APIModel):
     name: str | None = None
     description: str | None = None
     response_deadline: datetime | None = None
+    # Fase 19 (plan §9 R9): TCO config for the evaluation, same "optional,
+    # only applied if not None" convention as the fields above.
+    base_currency: EvaluationCurrency | None = None
+    tco_horizon_years: int | None = Field(default=None, ge=1, le=5)
 
 
 class RequirementCreateRequest(APIModel):
@@ -101,6 +114,8 @@ class EvaluationDetailResponse(APIModel):
     approval_decided_by_membership_id: str | None
     approval_comment: str | None
     approval_snapshot_id: str | None
+    base_currency: str
+    tco_horizon_years: int
 
 
 class SetApproverRequest(APIModel):

@@ -55,6 +55,20 @@ def test_evaluation_from_document_defaults_approval_status_for_pre_phase12_docum
     assert restored.approval_snapshot_id is None
 
 
+def test_evaluation_from_document_defaults_tco_fields_for_pre_phase19_documents() -> None:
+    """Evaluations persisted before Fase 19 have neither key (plan §17
+    N239-241: no backfill) - MXN/1 year are the safe defaults."""
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    doc = evaluation.to_document()
+    del doc["base_currency"]
+    del doc["tco_horizon_years"]
+    restored = Evaluation.from_document(doc)
+    assert restored.base_currency == "MXN"
+    assert restored.tco_horizon_years == 1
+
+
 def test_requirement_create_rejects_single_choice_without_options() -> None:
     with pytest.raises(ValueError, match="options"):
         Requirement.create(

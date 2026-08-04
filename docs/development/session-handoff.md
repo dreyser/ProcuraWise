@@ -32,6 +32,40 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-04 — Fase 19 (E8): `tco` — CostItem, cálculo TCO 1-5 años, FX congelado desde `FXRate`
+
+**Resumen:** Sesión de planeación exclusiva en Plan Mode (verificación independiente del cierre de Fase 18 vía API de GitHub — PR #32, merge commit `a4dac51`, 8/8 checks verdes —, identificación de la siguiente fase confirmada por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`mvp-scope.md`/`approved-mvp-plan.md` sin asumirla por la secuencia histórica esperada) que identificó **una única pregunta genuinamente bloqueante** — el algoritmo exacto de agregación del TCO por `CostItem` a través de los años, ausente de todo ADR/spec (solo el listado de campos existe) — resuelta por el founder en la misma sesión vía `AskUserQuestion` (fórmula única para los 3 tipos de costo, sin una segunda forma de campos para "variable"). Tras la aprobación del plan y autorización explícita de avanzar, ejecución completa en 7 bloques incrementales (modelo+FXRate admin, `TcoService` puro+tests exhaustivos de fórmula, captura vendor+preview, congelamiento en submit+lectura buyer, contratos, frontend, E2E+documentación), cada uno verificado contra Docker real antes de avanzar.
+
+**Decisión bloqueante resuelta por el founder (2026-08-04):**
+1. Fórmula TCO (Pregunta Bloqueante #1 del plan): una única fórmula para los 3 tipos de costo (único/recurrente/variable) — `monto(año Y) = cantidad × precio_unitario × frecuencia_anual × (1+incremento_anual)^(Y-año_inicio) × (1-descuento)` —, en vez de una tabla manual `{año:monto}` separada para "variable"; razonamiento aceptado: la especificación (§8.2) describe una única estructura de campos para las 3 categorías de tipo, sin evidencia de una segunda forma.
+
+**Decisión de diseño central (no bloqueante, resuelta por evidencia):** el congelamiento de FX+costos+TCO ocurre dentro del mismo `ProposalService.submit()` ya existente, no en un endpoint nuevo — `TcoService.calculate()` es puro y nunca consulta `FXRateRepository` por sí misma, haciendo estructuralmente imposible que un recálculo posterior use una tasa distinta a la ya congelada.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo módulo `tco/` (`models.py`, `repository.py`, `service.py`, `schemas.py`, `router.py`, `exceptions.py`), `evaluations/models.py`/`schemas.py`/`service.py`/`router.py` (+`base_currency`/`tco_horizon_years`), `proposals/models.py`/`repository.py`/`service.py` (+`cost_items` embebido, +congelamiento de TCO en `submit()`), `vendor_portal/schemas.py`/`service.py`/`router.py` (+CRUD de `CostItem` y preview), `admin/router.py` (+CRUD create-only de `FXRate`), `scoring/router.py` (respuesta de evaluación extendida), `migrations/0016_fx_rates_indexes.py` (nuevo); frontend: `features/vendor-portal/components/CostItemsPanel.tsx` (nuevo), `features/tco/pages/TcoResultPage.tsx` (nuevo), `features/vendor-portal/pages/VendorProposalDetailPage.tsx` (extendido), `features/proposals/pages/ProposalsPage.tsx` (+enlace "Ver TCO"), `app/router.tsx` (+ruta), `lib/enumLabels.ts` (+`costCategoryLabels`/`costTypeLabels`); `e2e/tco.spec.ts` (nuevo); ~10 archivos de test backend nuevos/extendidos, 2 de test frontend nuevos.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker and not docker_servicebus"`) → 190 passed.
+- Backend integración/API/seguridad Docker (`make test-integration`) → 322 passed (incluye la prueba directa del criterio de aceptación: actualizar `FXRate` después del submit no cambia el TCO ya leído).
+- Frontend (`pnpm test`) → 161 passed.
+- `pnpm build` → build de producción exitoso.
+- `make test-e2e` → 13/13 specs passed (1 nuevo — `tco.spec.ts`).
+- `make contracts` corrido dos veces seguidas → sin diff.
+- No aplica `make test-integration-ai` — Fase 19 no toca `ai/`/Service Bus (ADR 0020: sin cola para cálculos síncronos).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Fórmula TCO — ya resuelta por el founder, ver arriba; no se documentó como ADR nuevo (detalle de cálculo, no una decisión arquitectónica ni de política de datos como ADR 0008/0009/0022).
+- `Decimal`/`Decimal128` para todo monto monetario de `tco/` (nunca `float`) — desviación deliberada del único precedente existente (`proposals`' respuestas tipo `currency` usan `float`); justificada por precisión en sumas compuestas multi-año, no requiere ADR (decisión de implementación dentro de un módulo nuevo, no cambia un contrato ya aprobado).
+- `FXRate` create-only (sin edición/borrado) — refuerza la garantía de inmutabilidad de snapshots sin necesitar un mecanismo de soft-delete; no requiere ADR (subconjunto más simple del CRUD ya anticipado por ADR 0008).
+
+**Deuda técnica introducida:**
+- Ninguna material — módulo `tco/` nuevo y aditivo; `Proposal`/`ProposalSnapshot`/`Evaluation` extendidos con campos opcionales/con default, compatibles con todos los documentos existentes sin backfill.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md` (fila 20, columna "Depende de" — fuente autoritativa, no `session-handoff.md`): **Fase 20**, scoring económico completo (TCO normalizado 70%, condiciones comerciales 15% con sub-pesos de ADR 0009, riesgo/predictibilidad 15%, fórmula final 40/20/40 + flags eliminatorios), depende de Fase 19 (cerrada en esta sesión). `Dimension` gana el valor `"economic"` en esa fase, no antes.
+- No tocar todavía: `Dimension="economic"` (llega con Fase 20); versionado de `CostItem` por ronda de negociación (Fase 21, ADR 0013 ya declara la restricción "el TCO se recalcula completo por versión, nunca se mezclan costos de versiones distintas" — el diseño de esta fase ya es compatible sin cambios); UI de administración de `FXRate` (gestionado vía API, mismo precedente y founder decision de Fase 14 para `curated-sources`).
+- Housekeeping pendiente heredado, sin cambios: ramas `phase-14`/`phase-15`/`phase-16`/`phase-17`/`phase-18` siguen sin borrarse (requiere confirmación explícita del founder).
+
 ### Sesión — 2026-08-03 — Fase 18 (E7): Evaluación asistida por IA (riesgos/score sugerido) con "aceptar o modificar" obligatorio
 
 **Resumen:** Sesión de planeación exclusiva en Plan Mode (verificación independiente del cierre de Fase 17 vía API de GitHub — PR #31, merge commit `d3d9266`, 8/8 checks verdes —, 3 agentes de exploración en paralelo sobre `ai/`+worker+messaging, scoring/assignments/proposals, y especificación/compliance) que identificó **una única pregunta genuinamente bloqueante** — política de datos para enviar `ProposalAnswer` (protegido por NDA/Agreement) a Azure OpenAI, dado que ADR 0021 excluyó textualmente ese contenido de su alcance cubierto en Fase 13 — resuelta por el founder en la misma sesión vía `AskUserQuestion` (ADR nuevo, sin gate legal duro tipo Foundry). Tras la aprobación del plan y autorización explícita de avanzar, ejecución completa en 7 bloques incrementales (modelo+candidato+ADR 0022, servicio de dominio, worker con dispatch multi-topic, endpoints+extensión de `ScoringService`, contratos, frontend, E2E+documentación), cada uno verificado contra Docker/Service Bus real antes de avanzar.

@@ -115,12 +115,20 @@ export function ProposalsPage() {
                     {evaluation.status === 'evaluating' || evaluation.status === 'completed' ? (
                       <TableCell>
                         {proposal.status === 'submitted' ? (
-                          <Link
-                            to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/score`}
-                            className="text-sm text-foreground underline-offset-2 hover:underline"
-                          >
-                            Calificar
-                          </Link>
+                          <div className="flex flex-col gap-1">
+                            <Link
+                              to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/score`}
+                              className="text-sm text-foreground underline-offset-2 hover:underline"
+                            >
+                              Calificar
+                            </Link>
+                            <Link
+                              to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/tco`}
+                              className="text-sm text-foreground underline-offset-2 hover:underline"
+                            >
+                              Ver TCO
+                            </Link>
+                          </div>
                         ) : (
                           <span className="text-sm text-muted-foreground">
                             No enviada, sin calificar

@@ -58,6 +58,24 @@ class ProposalRepository:
         )
         return result.matched_count > 0
 
+    def replace_cost_items(
+        self,
+        tenant_id: str,
+        proposal_id: str,
+        expected_version: int,
+        cost_items: list[dict[str, Any]],
+    ) -> bool:
+        """Fase 19 - same whole-array-replace + version-conditioned pattern
+        as replace_answers above."""
+        result = self._scoped(tenant_id).update_one(
+            {"_id": proposal_id, "status": "draft", "version": expected_version},
+            {
+                "$set": {"cost_items": cost_items, "updated_at": datetime.now(UTC)},
+                "$inc": {"version": 1},
+            },
+        )
+        return result.matched_count > 0
+
     def submit(
         self,
         tenant_id: str,

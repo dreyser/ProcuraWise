@@ -53,6 +53,8 @@ function evaluation(overrides: Partial<EvaluationDetailResponse>): EvaluationDet
     approval_decided_by_membership_id: null,
     approval_comment: null,
     approval_snapshot_id: null,
+    base_currency: 'MXN',
+    tco_horizon_years: 1,
     ...overrides,
   }
 }

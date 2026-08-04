@@ -4,6 +4,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from procurawise.evaluations.models import Requirement
+from procurawise.tco.models import CostItem, TcoResult
 
 ProposalStatus = Literal["draft", "submitted"]
 
@@ -68,6 +69,13 @@ class ProposalSnapshot:
     # live. Absent (`doc.get`) on any snapshot taken before this field
     # existed - an empty list is the correct, honest answer for those.
     document_ids: list[str]
+    # Fase 19 (ADR 0008, plan §11.1): full copy of the CostItems submitted,
+    # plus the deterministic TcoResult computed from them and the FX rate(s)
+    # resolved at this exact moment - never recomputed later, same
+    # "requirements"/"answers" freeze-at-submit reasoning above. `None` on
+    # any snapshot taken before this field existed.
+    cost_items: list[CostItem]
+    tco_result: TcoResult | None
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -82,10 +90,13 @@ class ProposalSnapshot:
             "submitted_by_membership_id": self.submitted_by_membership_id,
             "submitted_at": self.submitted_at,
             "document_ids": self.document_ids,
+            "cost_items": [c.to_document() for c in self.cost_items],
+            "tco_result": self.tco_result.to_document() if self.tco_result else None,
         }
 
     @staticmethod
     def from_document(doc: dict[str, Any]) -> "ProposalSnapshot":
+        tco_result_doc = doc.get("tco_result")
         return ProposalSnapshot(
             snapshot_id=doc["snapshot_id"],
             taken_at=doc["taken_at"],
@@ -98,6 +109,8 @@ class ProposalSnapshot:
             submitted_by_membership_id=doc["submitted_by_membership_id"],
             submitted_at=doc["submitted_at"],
             document_ids=doc.get("document_ids", []),
+            cost_items=[CostItem.from_document(c) for c in doc.get("cost_items", [])],
+            tco_result=TcoResult.from_document(tco_result_doc) if tco_result_doc else None,
         )
 
 
@@ -118,6 +131,9 @@ class Proposal:
     status: ProposalStatus
     version: int
     answers: list[ProposalAnswer]
+    # Fase 19: vendor-authored cost lines, same lifecycle as `answers`
+    # (draft-editable, frozen into `snapshot.cost_items` at submit).
+    cost_items: list[CostItem]
     snapshot: ProposalSnapshot | None
     created_at: datetime
     updated_at: datetime
@@ -134,6 +150,7 @@ class Proposal:
             status="draft",
             version=1,
             answers=[],
+            cost_items=[],
             snapshot=None,
             created_at=now,
             updated_at=now,
@@ -149,6 +166,7 @@ class Proposal:
             "status": self.status,
             "version": self.version,
             "answers": [a.to_document() for a in self.answers],
+            "cost_items": [c.to_document() for c in self.cost_items],
             "snapshot": self.snapshot.to_document() if self.snapshot else None,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -166,6 +184,7 @@ class Proposal:
             status=doc["status"],
             version=doc["version"],
             answers=[ProposalAnswer.from_document(a) for a in doc.get("answers", [])],
+            cost_items=[CostItem.from_document(c) for c in doc.get("cost_items", [])],
             snapshot=ProposalSnapshot.from_document(snapshot_doc) if snapshot_doc else None,
             created_at=doc["created_at"],
             updated_at=doc["updated_at"],

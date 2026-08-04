@@ -14,6 +14,7 @@ from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.proposals.service import ProposalService
 from procurawise.shared.context import ActorContext
+from procurawise.tco.repository import FXRateRepository
 
 pytestmark = pytest.mark.docker
 
@@ -30,6 +31,7 @@ def _setup(mongo_test_db, mongo_test_settings):
         vendor_orgs=vendor_orgs,
         audit=audit,
         documents=DocumentRepository(mongo_test_db),
+        fx_rates=FXRateRepository(mongo_test_db),
     )
 
     tenant = Tenant.create(slug="vs2b-proposal-concurrency", name="Proposal Concurrency Tenant")
