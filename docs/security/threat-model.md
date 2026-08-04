@@ -152,6 +152,18 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 - **Trazabilidad sin fuga de contenido**: `ai_decision` ("accepted"/"modified") se deriva server-side comparando el score enviado contra el candidato original, nunca confiando en una declaración del cliente — se registra en la metadata de `score_created`/`score_updated` ya existentes, nunca el `rationale` completo generado por el modelo ni el contenido de `ProposalAnswer`.
 - **Worker con dispatch multi-topic**: generalizado de un único topic fijo (Fase 13) a un dispatch real por topic — probado explícitamente que el topic de Fase 13 (`ai-requirement-generation`) no sufrió regresión al agregar el segundo (`ai-score-suggestion`), tanto en memoria como contra el emulador real de Service Bus.
 
+## TCO: CostItem, FX congelado (Fase 19)
+
+**Estado: implementado y verificado con Docker real (2026-08-04).**
+
+- **Exposición de costos entre proveedores (IDOR)**: mismo patrón 404-nunca-403 ya establecido en todo el proyecto — `ProposalService.get_proposal_for_vendor`/`_require_draft_cost_item_write` resuelven siempre por `(tenant_id, vendor_org_id)` del actor autenticado, nunca por un `vendor_org_id` del cliente; un proveedor nunca puede editar ni previsualizar el TCO de otra `Proposal`. Verificado con tests de aislamiento cross-vendor dedicados (`test_tco_isolation.py`) que confirman ausencia de mutación además del 404.
+- **`FXRate` create-only**: sin endpoint de edición/borrado — una tasa ya congelada dentro de algún `ProposalSnapshot.tco_result` nunca puede alterarse retroactivamente; una corrección es siempre una fila nueva con `effective_date` posterior, nunca una mutación de la existente.
+- **El TCO nunca se recalcula con una tasa posterior**: `TcoService.calculate()` es una función pura que nunca consulta `FXRateRepository` por sí misma — quien la llama (submit o preview) resuelve las tasas primero. Esto hace estructuralmente imposible que una actualización de `FXRate` alcance un `TcoResult` ya congelado, garantía probada directamente en `test_proposal_submit_tco_freeze.py` (criterio de aceptación textual de la fase).
+- **Falla cerrada ante tasa faltante**: si algún `CostItem` requiere un par de monedas sin `FXRate` vigente al momento del submit, la operación completa se rechaza (422, `MissingFxRateError`) sin congelar nada — mismo principio que `IncompleteRequiredAnswersError` ya aplicaba a respuestas obligatorias faltantes.
+- **Precisión financiera**: `Decimal`/`Decimal128` en todo el flujo monetario (primer módulo del proyecto en usarlo) — desviación deliberada del único precedente existente (`float` en las respuestas tipo `currency` de `proposals`), para evitar arrastre de error de redondeo en sumas compuestas multi-año.
+- **Auditoría sin fuga de montos**: los eventos de auditoría de costos (creados vía logging estructurado para `FXRate`, y metadata agregada en `proposal_submitted` para el submit) registran solo conteos/totales agregados/tasas usadas, nunca el desglose línea por línea de `CostItem` — mismo principio ya aplicado a `ai_score_suggestion_*` (Fase 18) de nunca auditar contenido, solo metadata.
+- **`FXRate` sin UI de administración dedicada**: mismo precedente y founder decision que `CuratedSourceProvider` (Fase 14) — gestión solo vía API `/api/v1/admin/fx-rates`.
+
 ## Riesgos aceptados temporalmente
 
 | Riesgo | Dueño | Fecha de revisión | Referencia |
@@ -167,6 +179,7 @@ Detalle arquitectónico completo en [ADR 0002](../architecture/decisions/0002-mu
 | `POST /vendor-auth/login` resuelve determinísticamente a la `vendor_contact` Membership más antigua si un mismo email tiene más de una (distintas organizaciones), en vez de ofrecer un selector (Fase 15) | Founder | Sin fecha fija, edge case sin requisito de producto detrás | Sesión de planeación de Fase 15 |
 | Blobs huérfanos por fallo parcial (Blob subido, inserción en Mongo falla) — inaccesibles pero no barridos automáticamente (Fase 16) | Founder | Sin fecha fija, condicionado a volumen observado en producción | Sesión de planeación de Fase 16 |
 | Azurite 3.33.0 no hace cumplir el alcance de permiso `sp=r` de una SAS en escrituras (gap de fidelidad del emulador, no de la implementación — Azure real sí lo hace cumplir) (Fase 16) | Founder | Sin fecha fija, revisitar si Azurite corrige el gap o si se detecta un caso real en Azure | `tests/integration/test_documents_storage.py` |
+| `FXRate` sin UI de administración dedicada (Fase 19) — gestión solo vía API `/api/v1/admin/fx-rates`, create-only | Founder | Sin fecha fija, condicionado a volumen de tasas administradas | Sesión de planeación de Fase 19 |
 
 ## Bandera GDPR
 

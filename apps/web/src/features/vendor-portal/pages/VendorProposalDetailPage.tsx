@@ -23,6 +23,7 @@ import { ProposalDocumentsPanel } from '@/features/vendor-portal/components/Prop
 import { RequirementEvidenceUpload } from '@/features/vendor-portal/components/RequirementEvidenceUpload'
 import { ProposalQnaPanel } from '@/features/vendor-portal/components/ProposalQnaPanel'
 import { RequirementQuestionThread } from '@/features/vendor-portal/components/RequirementQuestionThread'
+import { CostItemsPanel } from '@/features/vendor-portal/components/CostItemsPanel'
 
 export function VendorProposalDetailPage() {
   const { proposalId } = useParams<{ proposalId: string }>()
@@ -145,6 +146,10 @@ export function VendorProposalDetailPage() {
             </div>
           )
         })}
+      </div>
+
+      <div className="mt-6">
+        <CostItemsPanel proposalId={proposalId!} proposal={proposal} disabled={isSubmitted} />
       </div>
 
       <div className="mt-6">

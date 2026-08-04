@@ -193,6 +193,13 @@ class Evaluation:
     approval_decided_by_membership_id: str | None
     approval_comment: str | None
     approval_snapshot_id: str | None
+    # Fase 19 (ADR 0008, plan §9 R9): TCO config lives on the Evaluation
+    # (like weights/response_deadline), not per-Proposal - every vendor's
+    # CostItems are compared against the same base currency/horizon.
+    # Defaulted (never backfilled) so evaluations persisted before Fase 19
+    # deserialize safely - see from_document.
+    base_currency: str
+    tco_horizon_years: int
 
     @staticmethod
     def create(
@@ -222,6 +229,8 @@ class Evaluation:
             approval_decided_by_membership_id=None,
             approval_comment=None,
             approval_snapshot_id=None,
+            base_currency="MXN",
+            tco_horizon_years=1,
         )
 
     def to_document(self) -> dict[str, Any]:
@@ -248,6 +257,8 @@ class Evaluation:
             "approval_decided_by_membership_id": self.approval_decided_by_membership_id,
             "approval_comment": self.approval_comment,
             "approval_snapshot_id": self.approval_snapshot_id,
+            "base_currency": self.base_currency,
+            "tco_horizon_years": self.tco_horizon_years,
         }
 
     @staticmethod
@@ -277,6 +288,11 @@ class Evaluation:
             approval_decided_by_membership_id=doc.get("approval_decided_by_membership_id"),
             approval_comment=doc.get("approval_comment"),
             approval_snapshot_id=doc.get("approval_snapshot_id"),
+            # Fase 19 - evaluations persisted before this phase have neither
+            # key; MXN/1 year are the safe defaults (plan §17 N239-241, no
+            # backfill).
+            base_currency=doc.get("base_currency", "MXN"),
+            tco_horizon_years=doc.get("tco_horizon_years", 1),
         )
 
     def approval_invalidation_extra_set(self) -> dict[str, Any]:

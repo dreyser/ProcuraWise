@@ -83,6 +83,20 @@ export const riskFlagLabels = {
   contractual_risk: 'Riesgo contractual',
 } as const satisfies Record<string, string>
 
+// Fase 19 (ADR 0008, spec §8.1) - matches tco.models.CostCategory exactly.
+export const costCategoryLabels = {
+  initial: 'Iniciales',
+  recurring: 'Recurrentes',
+  variable_extraordinary: 'Variables y extraordinarios',
+} as const satisfies Record<string, string>
+
+// Fase 19 (spec §8.2) - matches tco.models.CostType exactly.
+export const costTypeLabels = {
+  one_time: 'Único',
+  recurring: 'Recurrente',
+  variable: 'Variable',
+} as const satisfies Record<string, string>
+
 function translate<T extends Record<string, string>>(map: T, key: string): string {
   return key in map ? map[key as keyof T] : key
 }
@@ -104,3 +118,5 @@ export const translateAssignmentStatus = (value: string): string =>
 export const translateApprovalStatus = (value: string): string =>
   translate(approvalStatusLabels, value)
 export const translateRiskFlag = (value: string): string => translate(riskFlagLabels, value)
+export const translateCostCategory = (value: string): string => translate(costCategoryLabels, value)
+export const translateCostType = (value: string): string => translate(costTypeLabels, value)

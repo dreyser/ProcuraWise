@@ -21,6 +21,7 @@ from procurawise.scoring.router import router as scoring_router
 from procurawise.shared.config import get_settings
 from procurawise.shared.logging import configure_logging
 from procurawise.shared.request_context import new_correlation_id, set_correlation_id
+from procurawise.tco.router import router as tco_router
 from procurawise.vendor_portal.agreements_router import router as vendor_portal_agreements_router
 from procurawise.vendor_portal.router import router as vendor_portal_router
 
@@ -57,6 +58,7 @@ app.include_router(proposals_router, prefix="/api/v1")
 app.include_router(buyer_documents_router, prefix="/api/v1")
 app.include_router(buyer_qna_router, prefix="/api/v1")
 app.include_router(scoring_router, prefix="/api/v1")
+app.include_router(tco_router, prefix="/api/v1")
 app.include_router(assignments_router, prefix="/api/v1")
 app.include_router(knowledge_templates_router, prefix="/api/v1")
 app.include_router(knowledge_template_apply_router, prefix="/api/v1")

@@ -115,6 +115,8 @@ def _create_evaluating_proposal(
         submitted_by_membership_id="vendor-membership",
         submitted_at=now,
         document_ids=[],
+        cost_items=[],
+        tco_result=None,
     )
     proposal = Proposal.create(
         tenant_id=tenant_id, evaluation_id=evaluation.id, vendor_org_id=vendor_org_id

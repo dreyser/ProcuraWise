@@ -97,6 +97,8 @@ class EvaluationService:
         name: str | None,
         description: str | None,
         response_deadline: datetime | None = None,
+        base_currency: str | None = None,
+        tco_horizon_years: int | None = None,
         *,
         actor: ActorContext,
     ) -> Evaluation:
@@ -108,6 +110,10 @@ class EvaluationService:
             updates["description"] = description
         if response_deadline is not None:
             updates["response_deadline"] = response_deadline
+        if base_currency is not None:
+            updates["base_currency"] = base_currency
+        if tco_horizon_years is not None:
+            updates["tco_horizon_years"] = tco_horizon_years
         fields_changed = sorted(updates.keys())
         updates.update(evaluation.approval_invalidation_extra_set())
         matched = self._evaluations.update_metadata(tenant_id, evaluation_id, updates)

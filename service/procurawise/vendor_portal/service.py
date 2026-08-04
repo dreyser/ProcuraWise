@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Any
 
 from procurawise.evaluations.models import Requirement
@@ -5,6 +6,7 @@ from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.service import ProposalService
 from procurawise.shared.context import ActorContext
+from procurawise.tco.models import CostCategory, CostType, Currency, TcoResult
 
 
 class VendorPortalService:
@@ -79,3 +81,78 @@ class VendorPortalService:
         return self._proposals.submit(
             tenant_id, vendor_org_id, proposal_id, expected_version, membership_id, actor=actor
         )
+
+    def add_cost_item(
+        self,
+        tenant_id: str,
+        vendor_org_id: str,
+        proposal_id: str,
+        expected_version: int,
+        *,
+        concept: str,
+        category: CostCategory,
+        description: str | None,
+        billing_unit: str,
+        quantity: Decimal,
+        unit_price: Decimal,
+        currency: Currency,
+        frequency_per_year: Decimal,
+        tax_pct: Decimal,
+        discount_pct: Decimal,
+        year_start: int,
+        year_end: int,
+        annual_increment_pct: Decimal,
+        mandatory: bool,
+        cost_type: CostType,
+        notes: str | None,
+    ) -> Proposal:
+        return self._proposals.add_cost_item(
+            tenant_id,
+            vendor_org_id,
+            proposal_id,
+            expected_version,
+            concept=concept,
+            category=category,
+            description=description,
+            billing_unit=billing_unit,
+            quantity=quantity,
+            unit_price=unit_price,
+            currency=currency,
+            frequency_per_year=frequency_per_year,
+            tax_pct=tax_pct,
+            discount_pct=discount_pct,
+            year_start=year_start,
+            year_end=year_end,
+            annual_increment_pct=annual_increment_pct,
+            mandatory=mandatory,
+            cost_type=cost_type,
+            notes=notes,
+        )
+
+    def update_cost_item(
+        self,
+        tenant_id: str,
+        vendor_org_id: str,
+        proposal_id: str,
+        cost_item_id: str,
+        expected_version: int,
+        **fields: Any,
+    ) -> Proposal:
+        return self._proposals.update_cost_item(
+            tenant_id, vendor_org_id, proposal_id, cost_item_id, expected_version, **fields
+        )
+
+    def remove_cost_item(
+        self,
+        tenant_id: str,
+        vendor_org_id: str,
+        proposal_id: str,
+        cost_item_id: str,
+        expected_version: int,
+    ) -> Proposal:
+        return self._proposals.remove_cost_item(
+            tenant_id, vendor_org_id, proposal_id, cost_item_id, expected_version
+        )
+
+    def preview_tco(self, tenant_id: str, vendor_org_id: str, proposal_id: str) -> TcoResult:
+        return self._proposals.preview_tco(tenant_id, vendor_org_id, proposal_id)
