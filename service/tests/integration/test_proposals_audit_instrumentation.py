@@ -114,7 +114,7 @@ def test_autosave_never_generates_an_audit_event_only_submit_does(
     # VendorProposalDetailResponse deliberately has no top-level snapshot_id
     # (vendor-portal schemas never expose that field) - read it from the
     # persisted document instead, just to cross-check the audited value.
-    snapshot_id = mongo_test_db["proposals"].find_one({"_id": proposal_id})["snapshot"][
+    snapshot_id = mongo_test_db["proposals"].find_one({"_id": proposal_id})["snapshots"][-1][
         "snapshot_id"
     ]
 
@@ -130,7 +130,9 @@ def test_autosave_never_generates_an_audit_event_only_submit_does(
     assert submit_event["version"] == 5
     assert submit_event["actor_type"] == "vendor_contact"
     assert submit_event["actor_vendor_org_id"] == vendor_org_id
-    assert submit_event["metadata"] == {"requirements_answered_count": 1}
+    # Fase 21: metadata also records which round this submit closed (0 =
+    # the initial proposal, never a negotiation round yet in this test).
+    assert submit_event["metadata"] == {"requirements_answered_count": 1, "round": 0}
 
     # Never the answer content, vendor comments, or pricing - only counts/ids.
     metadata_values = str(submit_event["metadata"])

@@ -15,7 +15,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
-import { translateProposalStatus } from '@/lib/enumLabels'
+import { translateAnswerStatus, translateProposalStatus } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
 import { useAnswerAutosave } from '@/features/vendor-portal/hooks/useAnswerAutosave'
 import { AnswerField } from '@/features/vendor-portal/components/AnswerField'
@@ -83,7 +83,22 @@ export function VendorProposalDetailPage() {
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold text-foreground">{proposal.evaluation_name}</h1>
         <StatusBadge label={translateProposalStatus(proposal.status)} />
+        {proposal.round > 0 && <StatusBadge label={`Ronda ${proposal.round}`} />}
       </div>
+
+      {proposal.round > 0 && proposal.reopened_reason && (
+        <div className="mt-2 rounded-md border border-dashed border-border bg-muted p-3 text-sm">
+          <p className="font-medium text-foreground">
+            El comprador reabrió esta propuesta para una ronda de negociación.
+          </p>
+          <p className="mt-1 text-muted-foreground">Motivo: {proposal.reopened_reason}</p>
+          {proposal.reopened_at && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Reabierta el {new Date(proposal.reopened_at).toLocaleString()}
+            </p>
+          )}
+        </div>
+      )}
 
       {isSubmitted ? (
         <p className="mt-2 text-sm text-muted-foreground">
@@ -108,6 +123,9 @@ export function VendorProposalDetailPage() {
                 <h2 className="text-sm font-semibold text-foreground">{requirement.title}</h2>
                 <PriorityBadge priority={requirement.priority} />
                 {requirement.required && <StatusBadge label="Obligatorio" />}
+                {proposal.round > 0 && answer && (
+                  <StatusBadge label={translateAnswerStatus(answer.status)} />
+                )}
                 {!isSubmitted && controller.isFieldPending(requirement.id) && (
                   <span className="text-xs text-muted-foreground">Guardando…</span>
                 )}

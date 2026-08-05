@@ -20,6 +20,7 @@ import { EvaluationDetailPage } from '@/features/evaluations/pages/EvaluationDet
 import { RequirementsPage } from '@/features/evaluations/pages/RequirementsPage'
 import { VendorsPage } from '@/features/evaluations/pages/VendorsPage'
 import { ProposalsPage } from '@/features/proposals/pages/ProposalsPage'
+import { ProposalVersionComparisonPage } from '@/features/proposals/pages/ProposalVersionComparisonPage'
 import { ScoringPage } from '@/features/scoring/pages/ScoringPage'
 import { ResultsPage } from '@/features/scoring/pages/ResultsPage'
 import { TcoResultPage } from '@/features/tco/pages/TcoResultPage'
@@ -232,6 +233,14 @@ export function AppRouter() {
           element={
             <BuyerLayout>
               <TcoResultPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/evaluations/:evaluationId/proposals/:proposalId/versions"
+          element={
+            <BuyerLayout>
+              <ProposalVersionComparisonPage />
             </BuyerLayout>
           }
         />

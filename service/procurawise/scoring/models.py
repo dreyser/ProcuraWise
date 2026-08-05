@@ -173,6 +173,11 @@ class EconomicAssessment:
     tenant_id: str
     evaluation_id: str
     proposal_id: str
+    # Fase 21 (ADR 0013): joined the natural key so a negotiation round
+    # always starts unscored - see scoring.repository.
+    # EconomicAssessmentRepository's docstring for why there is deliberately
+    # no herencia/fallback to a previous round's assessment.
+    snapshot_id: str
     commercial_scores: list[CriterionScore]
     risk_scores: list[CriterionScore]
     version: int
@@ -186,6 +191,7 @@ class EconomicAssessment:
         tenant_id: str,
         evaluation_id: str,
         proposal_id: str,
+        snapshot_id: str,
         commercial_scores: list[CriterionScore],
         risk_scores: list[CriterionScore],
         membership_id: str,
@@ -196,6 +202,7 @@ class EconomicAssessment:
             tenant_id=tenant_id,
             evaluation_id=evaluation_id,
             proposal_id=proposal_id,
+            snapshot_id=snapshot_id,
             commercial_scores=commercial_scores,
             risk_scores=risk_scores,
             version=1,
@@ -211,6 +218,7 @@ class EconomicAssessment:
             "tenant_id": self.tenant_id,
             "evaluation_id": self.evaluation_id,
             "proposal_id": self.proposal_id,
+            "snapshot_id": self.snapshot_id,
             "commercial_scores": [c.to_document() for c in self.commercial_scores],
             "risk_scores": [c.to_document() for c in self.risk_scores],
             "version": self.version,
@@ -227,6 +235,7 @@ class EconomicAssessment:
             tenant_id=doc["tenant_id"],
             evaluation_id=doc["evaluation_id"],
             proposal_id=doc["proposal_id"],
+            snapshot_id=doc["snapshot_id"],
             commercial_scores=[CriterionScore.from_document(c) for c in doc["commercial_scores"]],
             risk_scores=[CriterionScore.from_document(c) for c in doc["risk_scores"]],
             version=doc["version"],

@@ -84,14 +84,58 @@ class ProposalRepository:
         snapshot: dict[str, Any],
         submitted_at: datetime,
     ) -> bool:
+        """Fase 21 (ADR 0013): appends to `snapshots` (`$push`) rather than
+        overwriting a single slot (`$set`) - this is what makes a second
+        round's submit() preserve Ronda 0's snapshot instead of clobbering
+        it. Still conditioned on `status="draft"` + `version=expected_version`,
+        same optimistic-concurrency guard as every other write here - true
+        both for the very first submit (Ronda 0) and for a resubmit after
+        `reopen()` (Ronda 1)."""
         result = self._scoped(tenant_id).update_one(
             {"_id": proposal_id, "status": "draft", "version": expected_version},
             {
                 "$set": {
                     "status": "submitted",
-                    "snapshot": snapshot,
                     "submitted_at": submitted_at,
                     "updated_at": submitted_at,
+                },
+                "$push": {"snapshots": snapshot},
+                "$inc": {"version": 1},
+            },
+        )
+        return result.matched_count > 0
+
+    def reopen(
+        self,
+        tenant_id: str,
+        proposal_id: str,
+        *,
+        new_round: int,
+        answers: list[dict[str, Any]],
+        cost_items: list[dict[str, Any]],
+        reason: str,
+        reopened_at: datetime,
+        reopened_by_membership_id: str,
+    ) -> bool:
+        """Fase 21 (ADR 0013/FR-047) - `submitted -> draft` for a single
+        proposal, carrying forward its last snapshot's answers/cost_items
+        (already marked `status="inherited"` by the caller) as the new
+        editable draft. Conditioned on `status="submitted"` - the same
+        precondition ProposalService.reopen() already checked, re-asserted
+        here atomically so a concurrent reopen (or a submit racing a reopen)
+        can never both succeed."""
+        result = self._scoped(tenant_id).update_one(
+            {"_id": proposal_id, "status": "submitted"},
+            {
+                "$set": {
+                    "status": "draft",
+                    "round": new_round,
+                    "answers": answers,
+                    "cost_items": cost_items,
+                    "reopened_reason": reason,
+                    "reopened_at": reopened_at,
+                    "reopened_by_membership_id": reopened_by_membership_id,
+                    "updated_at": reopened_at,
                 },
                 "$inc": {"version": 1},
             },

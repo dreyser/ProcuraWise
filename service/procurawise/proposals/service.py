@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any, cast
@@ -13,7 +14,10 @@ from procurawise.proposals.exceptions import (
     AnswerValidationError,
     IncompleteRequiredAnswersError,
     InvalidProposalTransitionError,
+    InvalidReopenReasonError,
+    ProposalAlreadyMaxRoundsError,
     ProposalNotFoundError,
+    ProposalNotSubmittedError,
     StaleVersionError,
 )
 from procurawise.proposals.models import Proposal, ProposalAnswer, ProposalSnapshot
@@ -40,6 +44,9 @@ _CURRENCY_CODES = {"MXN", "USD"}
 _COMPLIANCE_VALUES = {"compliant", "partially_compliant", "non_compliant"}
 _TCO_CATEGORIES = {"initial", "recurring", "variable_extraordinary"}
 _TCO_COST_TYPES = {"one_time", "recurring", "variable"}
+# Fase 21 (ADR 0013, mvp-scope.md): Ronda 0 (initial) + Ronda 1 (BAFO) is the
+# maximum the MVP allows - a 3rd snapshot is explicitly out of scope.
+_MAX_PROPOSAL_ROUNDS = 2
 
 
 def validate_cost_item_fields(
@@ -219,6 +226,16 @@ class ProposalService:
 
         validate_answer_value(requirement, value)
 
+        # Fase 21 (ADR 0013): editing an answer always marks it "modified"
+        # - whether it started this round as "inherited" (unedited copy of
+        # the previous round's value) or was already "modified" earlier in
+        # this same round. `source_proposal_version` is preserved from
+        # whatever it already was (which round it was originally inherited
+        # from, if any) rather than reset - it identifies provenance, not
+        # "last touched".
+        existing = next((a for a in proposal.answers if a.requirement_id == requirement_id), None)
+        source_proposal_version = existing.source_proposal_version if existing else None
+
         now = datetime.now(UTC)
         new_answers = [a for a in proposal.answers if a.requirement_id != requirement_id]
         new_answers.append(
@@ -227,6 +244,8 @@ class ProposalService:
                 value=value,
                 vendor_comment=vendor_comment,
                 updated_at=now,
+                status="modified",
+                source_proposal_version=source_proposal_version,
             )
         )
         matched = self._proposals.replace_answers(
@@ -379,6 +398,10 @@ class ProposalService:
             notes=notes if notes is not None else current.notes,
             created_at=current.created_at,
             updated_at=datetime.now(UTC),
+            # Fase 21 (ADR 0013): same "editing always marks modified,
+            # provenance is preserved" rule as update_answer above.
+            status="modified",
+            source_proposal_version=current.source_proposal_version,
         )
         validate_cost_item_fields(
             category=updated.category,
@@ -412,9 +435,24 @@ class ProposalService:
         proposal, _evaluation = self._require_draft_cost_item_write(
             tenant_id, vendor_org_id, proposal_id, expected_version
         )
-        if not any(c.id == cost_item_id for c in proposal.cost_items):
+        current = next((c for c in proposal.cost_items if c.id == cost_item_id), None)
+        if current is None:
             raise CostItemNotFoundError(cost_item_id)
-        new_items = [c for c in proposal.cost_items if c.id != cost_item_id]
+        # Fase 21 (ADR 0013): an item that already appeared in a previous
+        # round's frozen snapshot (status=="inherited", or "modified" with a
+        # known source_proposal_version) must not disappear without a
+        # trace - it's kept as a "removed" tombstone (excluded from TCO,
+        # see submit()/preview_tco() below) so the comparison view can show
+        # it was dropped. An item authored fresh this round (never frozen
+        # into any snapshot yet) has no history to lose, so it's a plain
+        # hard delete - unchanged from pre-Fase-21 behavior.
+        if current.status == "inherited" or current.source_proposal_version is not None:
+            new_items = [
+                replace(c, status="removed") if c.id == cost_item_id else c
+                for c in proposal.cost_items
+            ]
+        else:
+            new_items = [c for c in proposal.cost_items if c.id != cost_item_id]
         matched = self._proposals.replace_cost_items(
             tenant_id, proposal_id, expected_version, [c.to_document() for c in new_items]
         )
@@ -446,6 +484,13 @@ class ProposalService:
             )
         return frozen
 
+    @staticmethod
+    def _active_cost_items(cost_items: list[CostItem]) -> list[CostItem]:
+        """Fase 21 (ADR 0013): a `status="removed"` item is a tombstone kept
+        only so the negotiation-round comparison view can show it was
+        dropped - it must never contribute to TCO."""
+        return [c for c in cost_items if c.status != "removed"]
+
     def preview_tco(self, tenant_id: str, vendor_org_id: str, proposal_id: str) -> TcoResult:
         """Fase 19 - bought-demand calculation using the FX rate(s) vigente
         right now, for the vendor's own eyes while still editing (plan
@@ -453,11 +498,12 @@ class ProposalService:
         proposal = self.get_proposal_for_vendor(tenant_id, vendor_org_id, proposal_id)
         evaluation = self._require_evaluation(tenant_id, proposal.evaluation_id)
         today = datetime.now(UTC).date()
+        active_cost_items = self._active_cost_items(proposal.cost_items)
         frozen_rates = self._resolve_frozen_fx_rates(
-            proposal.cost_items, evaluation.base_currency, today
+            active_cost_items, evaluation.base_currency, today
         )
         return self._tco.calculate(
-            proposal.cost_items,
+            active_cost_items,
             frozen_rates,
             cast(Currency, evaluation.base_currency),
             evaluation.tco_horizon_years,
@@ -506,11 +552,15 @@ class ProposalService:
         # Fase 19 (plan §11.2/§14): resolve+freeze FX and compute the TCO
         # result in this same atomic step - MissingFxRateError aborts the
         # submit before anything is written (fails closed, nothing frozen).
+        # Fase 21: "removed" tombstones (see _active_cost_items) never
+        # contribute, even though they're still frozen into the snapshot's
+        # own cost_items list below for historical visibility.
+        active_cost_items = self._active_cost_items(proposal.cost_items)
         frozen_rates = self._resolve_frozen_fx_rates(
-            proposal.cost_items, evaluation.base_currency, now.date()
+            active_cost_items, evaluation.base_currency, now.date()
         )
         tco_result = self._tco.calculate(
-            proposal.cost_items,
+            active_cost_items,
             frozen_rates,
             cast(Currency, evaluation.base_currency),
             evaluation.tco_horizon_years,
@@ -529,6 +579,7 @@ class ProposalService:
             document_ids=document_ids,
             cost_items=list(proposal.cost_items),
             tco_result=tco_result,
+            round=proposal.round,
         )
         matched = self._proposals.submit(
             tenant_id, proposal_id, expected_version, snapshot.to_document(), now
@@ -548,6 +599,99 @@ class ProposalService:
             proposal_id=proposal_id,
             snapshot_id=snapshot.snapshot_id,
             version=submitted.version,
-            metadata={"requirements_answered_count": answered_count},
+            metadata={"requirements_answered_count": answered_count, "round": proposal.round},
         )
         return submitted
+
+    def reopen(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        proposal_id: str,
+        reason: str,
+        response_deadline: datetime,
+        *,
+        actor: ActorContext,
+    ) -> Proposal:
+        """Fase 21 (ADR 0013, FR-047): owner-only, per-proposal reapertura
+        for the single negotiation round the MVP allows. Copies the last
+        snapshot's answers/cost_items forward into the new draft, each
+        marked `status="inherited"` with `source_proposal_version` pointing
+        at the round they came from - `update_answer`/`update_cost_item`
+        flip an individual item to "modified" the moment the vendor edits
+        it (unchanged items simply stay "inherited"). Does not touch any
+        other Proposal - a vendor not selected for Ronda 1 keeps its Ronda 0
+        submission exactly as-is (ADR 0013: "No invitados... conservan su
+        propuesta inicial")."""
+        if not reason.strip():
+            raise InvalidReopenReasonError("reason must not be empty")
+        proposal = self.get_proposal(tenant_id, proposal_id)
+        if proposal.evaluation_id != evaluation_id:
+            raise ProposalNotFoundError(proposal_id)
+        evaluation_doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
+        if evaluation_doc is None:
+            raise ProposalNotFoundError(evaluation_id)
+        evaluation = Evaluation.from_document(evaluation_doc)
+
+        if evaluation.status not in ("evaluating", "collecting_responses"):
+            raise InvalidProposalTransitionError("evaluation is not evaluating")
+        if proposal.status != "submitted":
+            raise ProposalNotSubmittedError(proposal_id)
+        if len(proposal.snapshots) >= _MAX_PROPOSAL_ROUNDS:
+            raise ProposalAlreadyMaxRoundsError(proposal_id)
+
+        last_snapshot = proposal.current_snapshot
+        assert last_snapshot is not None  # status=="submitted" guarantees at least one
+
+        # 1. Evaluation goes back to collecting_responses only on the first
+        # reopen() of this round (idempotent no-op transition-wise for the
+        # 2nd+ proposal reopened, which just gets the deadline refreshed).
+        transitioned = self._evaluations.transition_status(
+            tenant_id,
+            evaluation_id,
+            "evaluating",
+            "collecting_responses",
+            {"response_deadline": response_deadline},
+        )
+        if not transitioned:
+            updated_deadline = self._evaluations.update_deadline_while_collecting(
+                tenant_id, evaluation_id, response_deadline
+            )
+            if not updated_deadline:
+                raise InvalidProposalTransitionError("evaluation is not evaluating")
+
+        new_round = proposal.round + 1
+        inherited_answers = [
+            replace(a, status="inherited", source_proposal_version=proposal.round)
+            for a in last_snapshot.answers
+        ]
+        inherited_cost_items = [
+            replace(c, status="inherited", source_proposal_version=proposal.round)
+            for c in last_snapshot.cost_items
+        ]
+        now = datetime.now(UTC)
+        matched = self._proposals.reopen(
+            tenant_id,
+            proposal_id,
+            new_round=new_round,
+            answers=[a.to_document() for a in inherited_answers],
+            cost_items=[c.to_document() for c in inherited_cost_items],
+            reason=reason,
+            reopened_at=now,
+            reopened_by_membership_id=actor.membership_id,
+        )
+        if not matched:
+            raise ProposalNotSubmittedError(proposal_id)
+
+        reopened = self.get_proposal(tenant_id, proposal_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="proposal_reopened",
+            resource_type="proposal",
+            resource_id=proposal_id,
+            evaluation_id=evaluation_id,
+            proposal_id=proposal_id,
+            metadata={"reason": reason, "from_round": proposal.round, "to_round": new_round},
+        )
+        return reopened

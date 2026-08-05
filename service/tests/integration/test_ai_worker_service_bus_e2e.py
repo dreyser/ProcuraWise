@@ -186,7 +186,7 @@ def test_worker_loop_consumes_real_service_bus_message_for_score_suggestion_and_
     proposal = Proposal.create(
         tenant_id=tenant_id, evaluation_id=evaluation.id, vendor_org_id="vendor-org-1"
     )
-    proposal = replace(proposal, status="submitted", snapshot=snapshot, answers=snapshot.answers)
+    proposal = replace(proposal, status="submitted", snapshots=[snapshot], answers=snapshot.answers)
     proposals.insert(tenant_id, proposal.to_document())
 
     payload = {

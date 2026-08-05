@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  translateAnswerStatus,
   translateApprovalStatus,
   translateCompliantStatus,
+  translateCostItemStatus,
   translateDimension,
   translateEvaluationStatus,
   translatePriority,
@@ -74,6 +76,17 @@ describe('enumLabels translations', () => {
     expect(translateApprovalStatus('pending')).toBe('Aprobación pendiente')
     expect(translateApprovalStatus('approved')).toBe('Aprobada')
     expect(translateApprovalStatus('rejected')).toBe('Rechazada')
+  })
+
+  it('translates every real ProposalAnswer.status wire value (Fase 21)', () => {
+    expect(translateAnswerStatus('inherited')).toBe('Heredada')
+    expect(translateAnswerStatus('modified')).toBe('Modificada')
+  })
+
+  it('translates every real CostItem.status wire value (Fase 21)', () => {
+    expect(translateCostItemStatus('inherited')).toBe('Heredado')
+    expect(translateCostItemStatus('modified')).toBe('Modificado')
+    expect(translateCostItemStatus('removed')).toBe('Eliminado')
   })
 
   it('falls back to the raw value for an unknown enum (never throws)', () => {

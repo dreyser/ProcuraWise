@@ -6,7 +6,9 @@ def test_proposal_create_defaults_to_draft_version_one() -> None:
     assert proposal.status == "draft"
     assert proposal.version == 1
     assert proposal.answers == []
-    assert proposal.snapshot is None
+    assert proposal.round == 0
+    assert proposal.current_snapshot is None
+    assert proposal.snapshots == []
     assert proposal.submitted_at is None
 
 

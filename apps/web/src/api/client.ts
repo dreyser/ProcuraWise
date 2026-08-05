@@ -205,11 +205,23 @@ export interface AgreementStatusResponse {
 
 export type AnswerResponseVendorComment = string | null
 
+export type AnswerResponseStatus = (typeof AnswerResponseStatus)[keyof typeof AnswerResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const AnswerResponseStatus = {
+  inherited: 'inherited',
+  modified: 'modified',
+} as const
+
+export type AnswerResponseSourceProposalVersion = number | null
+
 export interface AnswerResponse {
   requirement_id: string
   value: unknown
   vendor_comment: AnswerResponseVendorComment
   updated_at: string
+  status: AnswerResponseStatus
+  source_proposal_version: AnswerResponseSourceProposalVersion
 }
 
 export type AnswerVersionResponseVisibility =
@@ -479,6 +491,18 @@ export const CostItemResponseCostType = {
 
 export type CostItemResponseNotes = string | null
 
+export type CostItemResponseStatus =
+  (typeof CostItemResponseStatus)[keyof typeof CostItemResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const CostItemResponseStatus = {
+  inherited: 'inherited',
+  modified: 'modified',
+  removed: 'removed',
+} as const
+
+export type CostItemResponseSourceProposalVersion = number | null
+
 export interface CostItemResponse {
   id: string
   concept: string
@@ -505,6 +529,8 @@ export interface CostItemResponse {
   notes: CostItemResponseNotes
   created_at: string
   updated_at: string
+  status: CostItemResponseStatus
+  source_proposal_version: CostItemResponseSourceProposalVersion
 }
 
 export type CostItemUpdateRequestConcept = string | null
@@ -1148,7 +1174,11 @@ export const ProposalDetailResponseStatus = {
   submitted: 'submitted',
 } as const
 
-export type ProposalDetailResponseSnapshot = SnapshotResponse | null
+export type ProposalDetailResponseReopenedReason = string | null
+
+export type ProposalDetailResponseReopenedAt = string | null
+
+export type ProposalDetailResponseReopenedByMembershipId = string | null
 
 export type ProposalDetailResponseSubmittedAt = string | null
 
@@ -1158,8 +1188,12 @@ export interface ProposalDetailResponse {
   vendor_org_id: string
   status: ProposalDetailResponseStatus
   version: number
+  round: number
   answers: AnswerResponse[]
-  snapshot: ProposalDetailResponseSnapshot
+  snapshots: SnapshotResponse[]
+  reopened_reason: ProposalDetailResponseReopenedReason
+  reopened_at: ProposalDetailResponseReopenedAt
+  reopened_by_membership_id: ProposalDetailResponseReopenedByMembershipId
   created_at: string
   updated_at: string
   submitted_at: ProposalDetailResponseSubmittedAt
@@ -1207,6 +1241,7 @@ export interface ProposalSummaryResponse {
   vendor_org_id: string
   status: ProposalSummaryResponseStatus
   version: number
+  round: number
   created_at: string
   updated_at: string
   submitted_at: ProposalSummaryResponseSubmittedAt
@@ -1296,6 +1331,18 @@ export interface QuestionCreateRequest {
 
 export interface RejectionRequest {
   comment: string
+}
+
+/**
+ * Fase 21 (FR-047: "Sólo el dueño; motivo, nueva fecha y auditoría").
+`reason` is required (never an empty/whitespace-only string, validated
+in the service layer) and is persisted on the Proposal itself (visible
+to the reopened vendor), not just audited - same transparency
+precedent as Evaluation.approval_comment.
+ */
+export interface ReopenProposalRequest {
+  reason: string
+  response_deadline: string
 }
 
 export type RequirementCreateRequestDimension =
@@ -1676,6 +1723,89 @@ export interface SetApproverRequest {
   approver_membership_id: string
 }
 
+export type SnapshotCostItemResponseCategory =
+  (typeof SnapshotCostItemResponseCategory)[keyof typeof SnapshotCostItemResponseCategory]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const SnapshotCostItemResponseCategory = {
+  initial: 'initial',
+  recurring: 'recurring',
+  variable_extraordinary: 'variable_extraordinary',
+} as const
+
+export type SnapshotCostItemResponseDescription = string | null
+
+export type SnapshotCostItemResponseCurrency =
+  (typeof SnapshotCostItemResponseCurrency)[keyof typeof SnapshotCostItemResponseCurrency]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const SnapshotCostItemResponseCurrency = {
+  MXN: 'MXN',
+  USD: 'USD',
+} as const
+
+export type SnapshotCostItemResponseCostType =
+  (typeof SnapshotCostItemResponseCostType)[keyof typeof SnapshotCostItemResponseCostType]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const SnapshotCostItemResponseCostType = {
+  one_time: 'one_time',
+  recurring: 'recurring',
+  variable: 'variable',
+} as const
+
+export type SnapshotCostItemResponseNotes = string | null
+
+export type SnapshotCostItemResponseStatus =
+  (typeof SnapshotCostItemResponseStatus)[keyof typeof SnapshotCostItemResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const SnapshotCostItemResponseStatus = {
+  inherited: 'inherited',
+  modified: 'modified',
+  removed: 'removed',
+} as const
+
+export type SnapshotCostItemResponseSourceProposalVersion = number | null
+
+/**
+ * Fase 21 - the frozen CostItem shape read back from
+`ProposalSnapshot.cost_items` for the round comparison view (plan §12.7,
+R10). Distinct from vendor_portal's own CostItemResponse (same field
+shape, different bounded context/OpenAPI component name).
+ */
+export interface SnapshotCostItemResponse {
+  id: string
+  concept: string
+  category: SnapshotCostItemResponseCategory
+  description: SnapshotCostItemResponseDescription
+  billing_unit: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  quantity: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  unit_price: string
+  currency: SnapshotCostItemResponseCurrency
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  frequency_per_year: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  tax_pct: string
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  discount_pct: string
+  year_start: number
+  year_end: number
+  /** @pattern ^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$ */
+  annual_increment_pct: string
+  mandatory: boolean
+  cost_type: SnapshotCostItemResponseCostType
+  notes: SnapshotCostItemResponseNotes
+  created_at: string
+  updated_at: string
+  status: SnapshotCostItemResponseStatus
+  source_proposal_version: SnapshotCostItemResponseSourceProposalVersion
+}
+
+export type SnapshotResponseTcoResult = TcoResultResponse | null
+
 export interface SnapshotResponse {
   snapshot_id: string
   taken_at: string
@@ -1688,6 +1818,9 @@ export interface SnapshotResponse {
   submitted_by_membership_id: string
   submitted_at: string
   document_ids: string[]
+  round: number
+  cost_items: SnapshotCostItemResponse[]
+  tco_result: SnapshotResponseTcoResult
 }
 
 export interface SubmitRequest {
@@ -1900,11 +2033,24 @@ export interface ValidationError {
 
 export type VendorAnswerResponseVendorComment = string | null
 
+export type VendorAnswerResponseStatus =
+  (typeof VendorAnswerResponseStatus)[keyof typeof VendorAnswerResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const VendorAnswerResponseStatus = {
+  inherited: 'inherited',
+  modified: 'modified',
+} as const
+
+export type VendorAnswerResponseSourceProposalVersion = number | null
+
 export interface VendorAnswerResponse {
   requirement_id: string
   value: unknown
   vendor_comment: VendorAnswerResponseVendorComment
   updated_at: string
+  status: VendorAnswerResponseStatus
+  source_proposal_version: VendorAnswerResponseSourceProposalVersion
 }
 
 /**
@@ -1972,6 +2118,10 @@ export const VendorProposalDetailResponseStatus = {
   submitted: 'submitted',
 } as const
 
+export type VendorProposalDetailResponseReopenedReason = string | null
+
+export type VendorProposalDetailResponseReopenedAt = string | null
+
 export type VendorProposalDetailResponseSubmittedAt = string | null
 
 export interface VendorProposalDetailResponse {
@@ -1980,9 +2130,12 @@ export interface VendorProposalDetailResponse {
   evaluation_name: string
   status: VendorProposalDetailResponseStatus
   version: number
+  round: number
   requirements: VendorRequirementResponse[]
   answers: VendorAnswerResponse[]
   cost_items: CostItemResponse[]
+  reopened_reason: VendorProposalDetailResponseReopenedReason
+  reopened_at: VendorProposalDetailResponseReopenedAt
   created_at: string
   updated_at: string
   submitted_at: VendorProposalDetailResponseSubmittedAt
@@ -2005,6 +2158,7 @@ export interface VendorProposalSummaryResponse {
   evaluation_name: string
   status: VendorProposalSummaryResponseStatus
   version: number
+  round: number
   created_at: string
   updated_at: string
   submitted_at: VendorProposalSummaryResponseSubmittedAt
@@ -8887,6 +9041,152 @@ export function useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet
   query.queryKey = queryOptions.queryKey
 
   return query
+}
+
+/**
+ * Fase 21 (ADR 0013, FR-047) - opens the single negotiation round the
+MVP allows for exactly this proposal; owner-only, one call per
+selected vendor (mirrors link_vendor's one-call-per-vendor convention).
+Proposals not reopened are untouched - they keep their last submitted
+snapshot as-is.
+ * @summary Reopen Proposal
+ */
+export type reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponse200 = {
+  data: ProposalDetailResponse
+  status: 200
+}
+
+export type reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponseSuccess =
+  reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponse200 & {
+    headers: Headers
+  }
+export type reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponseError =
+  reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponse422 & {
+    headers: Headers
+  }
+
+export type reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponse =
+  | reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponseSuccess
+  | reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponseError
+
+export const getReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostUrl = (
+  evaluationId: string,
+  proposalId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/reopen`
+}
+
+export const reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost = async (
+  evaluationId: string,
+  proposalId: string,
+  reopenProposalRequest: ReopenProposalRequest,
+  options?: RequestInit,
+): Promise<reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponse> => {
+  return apiFetch<reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostResponse>(
+    getReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostUrl(
+      evaluationId,
+      proposalId,
+    ),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(reopenProposalRequest),
+    },
+  )
+}
+
+export const getReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost>
+      >,
+      TError,
+      { evaluationId: string; proposalId: string; data: ReopenProposalRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost>
+    >,
+    TError,
+    { evaluationId: string; proposalId: string; data: ReopenProposalRequest },
+    TContext
+  > => {
+    const mutationKey = ['reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost>
+      >,
+      { evaluationId: string; proposalId: string; data: ReopenProposalRequest }
+    > = (props) => {
+      const { evaluationId, proposalId, data } = props ?? {}
+
+      return reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost(
+        evaluationId,
+        proposalId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type ReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost>
+    >
+  >
+export type ReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostMutationBody =
+  ReopenProposalRequest
+export type ReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Reopen Proposal
+ */
+export const useReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost>
+      >,
+      TError,
+      { evaluationId: string; proposalId: string; data: ReopenProposalRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<typeof reopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost>
+  >,
+  TError,
+  { evaluationId: string; proposalId: string; data: ReopenProposalRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPostMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
 }
 
 /**

@@ -115,6 +115,21 @@ export const economicCriterionLabels = {
   exit_portability_lockin: 'Salida y portabilidad',
 } as const satisfies Record<string, string>
 
+// Fase 21 (ADR 0013) - matches proposals.models.ProposalAnswerVersionStatus
+// exactly. A ProposalAnswer always maps 1:1 to a Requirement that can never
+// be removed, so "removed" is not a valid answer status (see costItemStatusLabels).
+export const answerStatusLabels = {
+  inherited: 'Heredada',
+  modified: 'Modificada',
+} as const satisfies Record<string, string>
+
+// Fase 21 (ADR 0013) - matches tco.models.CostItemVersionStatus exactly.
+export const costItemStatusLabels = {
+  inherited: 'Heredado',
+  modified: 'Modificado',
+  removed: 'Eliminado',
+} as const satisfies Record<string, string>
+
 function translate<T extends Record<string, string>>(map: T, key: string): string {
   return key in map ? map[key as keyof T] : key
 }
@@ -140,3 +155,6 @@ export const translateCostCategory = (value: string): string => translate(costCa
 export const translateCostType = (value: string): string => translate(costTypeLabels, value)
 export const translateEconomicCriterion = (value: string): string =>
   translate(economicCriterionLabels, value)
+export const translateAnswerStatus = (value: string): string => translate(answerStatusLabels, value)
+export const translateCostItemStatus = (value: string): string =>
+  translate(costItemStatusLabels, value)
