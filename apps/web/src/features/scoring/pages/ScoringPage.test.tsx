@@ -129,6 +129,10 @@ describe('ScoringPage', () => {
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
+    router.on('GET', /\/economic-assessment$/, () => ({
+      status: 404,
+      body: { detail: 'Not Found' },
+    }))
     vi.stubGlobal('fetch', router.fetchImpl)
 
     renderPage()
@@ -144,6 +148,10 @@ describe('ScoringPage', () => {
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
+    router.on('GET', /\/economic-assessment$/, () => ({
+      status: 404,
+      body: { detail: 'Not Found' },
+    }))
     vi.stubGlobal('fetch', router.fetchImpl)
 
     renderPage()
@@ -158,6 +166,10 @@ describe('ScoringPage', () => {
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
+    router.on('GET', /\/economic-assessment$/, () => ({
+      status: 404,
+      body: { detail: 'Not Found' },
+    }))
     router.on('POST', /\/ai\/score-suggestions$/, () => ({
       status: 202,
       body: {
@@ -213,6 +225,10 @@ describe('ScoringPage', () => {
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
+    router.on('GET', /\/economic-assessment$/, () => ({
+      status: 404,
+      body: { detail: 'Not Found' },
+    }))
     router.on('POST', /\/ai\/score-suggestions$/, () => ({
       status: 202,
       body: {

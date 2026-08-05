@@ -32,6 +32,39 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-05 — Fase 20 (E8): Scoring económico completo — TCO normalizado 70%, condiciones comerciales 15%, riesgo/predictibilidad 15%, fórmula final 40/20/40
+
+**Resumen:** Sesión de planeación exclusiva en Plan Mode que primero resolvió, con evidencia de Git/GitHub (no asumida), una inconsistencia aparente entre dos reportes sobre el estado de cierre de Fase 19 (ambos eran correctos para su propio momento — PR #33 se fusionó *entre* sesiones, mismo patrón ya observado en cada cierre de fase anterior), y después identificó Fase 20 por evidencia documental cruzada de `backlog.md`/`roadmap.md` (advertido explícitamente de no asumirla solo por la secuencia histórica esperada). Identificó **una única pregunta genuinamente bloqueante** — el alcance de la "configurabilidad" de criterios/pesos económicos que ADR 0009 menciona sin especificar (¿solo pesos editables, o autoría dinámica completa de criterios?) — resuelta por el founder en la misma sesión vía `AskUserQuestion` (pesos editables, los 10 criterios de ADR 0009 fijos). Tras la aprobación del plan y autorización explícita de avanzar, ejecución completa en 7 bloques incrementales (modelo económico+pesos, fórmulas puras+tests exhaustivos, captura backend+endpoint de pesos, integración a `get_results()`/`complete_evaluation()`, contratos, frontend, E2E+documentación), cada uno verificado contra Docker real antes de avanzar.
+
+**Decisión bloqueante resuelta por el founder (2026-08-05):**
+1. Configurabilidad de criterios económicos (Pregunta Bloqueante #1 del plan): los 5 criterios comerciales y los 5 de riesgo de ADR 0009 son fijos en toda evaluación (mismo nombre/clave siempre) — el `evaluation_owner` solo puede reajustar los pesos numéricos de cada grupo antes de publicar (deben sumar 100% cada uno), congelados en `EvaluationSnapshot` al publicar; no existe un CRUD para agregar/quitar/renombrar criterios.
+
+**Decisión de diseño central (no bloqueante, resuelta por evidencia):** nueva entidad `EconomicAssessment` (no una extensión de `Score`, que está atado a `requirement_id` y no tiene análogo cuando no hay Requirements — economic nunca los tiene). El TCO normalizado (70% del económico) nunca se persiste — se calcula en vivo comparando `TcoResult.grand_total` (Fase 19) entre las propuestas enviadas, mismo principio que `functional_points`/`technical_points`/`partial_result` ya usan. Autorización reutiliza `Assignment`/`enforce_section_assignment` (Fase 9/18) con un sentinel fijo `section="economic"`, sin inventar un segundo mecanismo de permisos.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: `evaluations/models.py`/`schemas.py`/`service.py`/`router.py` (+`RequirementDimension`, +`EconomicCriteriaWeights`, +endpoint de pesos), `scoring/models.py`/`repository.py`/`service.py`/`router.py`/`schemas.py`/`exceptions.py` (+`EconomicAssessment`/`CriterionScore`, +`economic_formulas.py` nuevo, +integración a `get_results()`/`complete_evaluation()`, +endpoints `PUT`/`GET .../economic-assessment`), `assignments/service.py` (+`ECONOMIC_SECTION`), `audit/models.py` (+2 acciones), `ai/schemas.py` (`AIRequirementCandidate`/`TriggerSuggestionRequest` narrowed a `RequirementDimension`), `migrations/0017_economic_assessments_indexes.py` (nuevo); frontend: `features/scoring/components/EconomicAssessmentPanel.tsx` (nuevo), `features/scoring/pages/ScoringPage.tsx`/`ResultsPage.tsx` (extendidos), `features/evaluations/wizard/EconomicWeightsForm.tsx` (nuevo, montado en `WizardStepReview.tsx`), `lib/enumLabels.ts` (+`economicCriterionLabels`); `e2e/vertical-slice.spec.ts` (extendido, no un spec nuevo); ~6 archivos de test backend nuevos (unit+integración), 3 de test frontend nuevos.
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker"`) → 210 passed (+20 sobre la base de Fase 19).
+- Backend integración/API/seguridad Docker (`make test-integration`) → 341 passed (+19 sobre la base de Fase 19 — incluye la prueba directa del criterio de aceptación: 2 propuestas con TCO normalizado exacto 100%/50%, `final_result` ausente hasta completitud de las 3 dimensiones, `mandatory_alert` coexistiendo correctamente con la fórmula final).
+- Frontend (`pnpm test`) → 170 passed (+9 sobre la base de Fase 19).
+- `make test-e2e` → 13/13 specs passed (0 nuevos, `vertical-slice.spec.ts` extendido en el mismo archivo).
+- `make contracts` corrido dos veces seguidas → sin diff.
+- No aplica `make test-integration-ai` — Fase 20 no toca `ai/`/Service Bus.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Configurabilidad de pesos económicos — ya resuelta por el founder, ver arriba; no se documentó como ADR nuevo (detalle de implementación dentro del alcance ya cubierto por ADR 0009, no una decisión arquitectónica nueva).
+- `RequirementDimension` como tipo más estrecho que `Dimension` para toda superficie de autoría de Requirements (`Requirement.dimension`, `RequirementCreateRequest`/`UpdateRequest`/`Response`, `AIRequirementCandidate`, `TriggerSuggestionRequest`) — no requiere ADR (refuerzo de tipo, no cambia ningún contrato ya aprobado ni agrega comportamiento nuevo).
+- `GET /evaluations/{id}/proposals/{id}/economic-assessment` (no estaba en el plan original, que solo listaba `PUT`) — agregado durante Bloque 6 al descubrir que el frontend necesita leer los scores/`version` actuales antes de poder construir una actualización válida (mismo rol que `/results` cumple para `Score`, pero `EconomicAssessment` no tiene un agregado por-requirement del que colgarse) — no requiere ADR (endpoint de lectura adicional, mismo patrón 404-nunca-403 ya establecido).
+
+**Deuda técnica introducida:**
+- Ninguna material — `EconomicAssessment`/pesos económicos son aditivos; `Evaluation`/`EvaluationSnapshot` extendidos con default seguro para documentos pre-Fase-20, sin backfill.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md` (columna "Depende de" — fuente autoritativa, no `session-handoff.md`): **Fase 21**, ronda de negociación (ADR 0013 ya declara el diseño de versionado de propuesta al que `EconomicAssessment`/`CostItem` ya son compatibles sin cambios, atados a `proposal_id`).
+- No tocar todavía: ranking/comparación entre proveedores en UI, reportes ejecutivos (fuera de alcance hasta fases posteriores); versión explícita de `EconomicAssessment` por ronda de negociación (Fase 21).
+- Housekeeping pendiente heredado, sin cambios: ramas `phase-14` a `phase-19` siguen sin borrarse (requiere confirmación explícita del founder).
+
 ### Sesión — 2026-08-04 — Fase 19 (E8): `tco` — CostItem, cálculo TCO 1-5 años, FX congelado desde `FXRate`
 
 **Resumen:** Sesión de planeación exclusiva en Plan Mode (verificación independiente del cierre de Fase 18 vía API de GitHub — PR #32, merge commit `a4dac51`, 8/8 checks verdes —, identificación de la siguiente fase confirmada por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`mvp-scope.md`/`approved-mvp-plan.md` sin asumirla por la secuencia histórica esperada) que identificó **una única pregunta genuinamente bloqueante** — el algoritmo exacto de agregación del TCO por `CostItem` a través de los años, ausente de todo ADR/spec (solo el listado de campos existe) — resuelta por el founder en la misma sesión vía `AskUserQuestion` (fórmula única para los 3 tipos de costo, sin una segunda forma de campos para "variable"). Tras la aprobación del plan y autorización explícita de avanzar, ejecución completa en 7 bloques incrementales (modelo+FXRate admin, `TcoService` puro+tests exhaustivos de fórmula, captura vendor+preview, congelamiento en submit+lectura buyer, contratos, frontend, E2E+documentación), cada uno verificado contra Docker real antes de avanzar.

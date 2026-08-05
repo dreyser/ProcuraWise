@@ -1,3 +1,4 @@
+from collections.abc import KeysView
 from datetime import UTC, datetime
 from typing import Any
 
@@ -9,6 +10,7 @@ from procurawise.evaluations.exceptions import (
     ApproverMembershipNotFoundError,
     ApproverRoleMismatchError,
     EvaluationNotFoundError,
+    InvalidEconomicWeightsError,
     InvalidTransitionError,
     NotAssignedApproverError,
     RequirementNotFoundError,
@@ -21,7 +23,10 @@ from procurawise.evaluations.exceptions import (
     VendorOrganizationNotFoundError,
 )
 from procurawise.evaluations.models import (
+    DEFAULT_COMMERCIAL_WEIGHTS,
+    DEFAULT_RISK_WEIGHTS,
     DIMENSION_MAX_POINTS,
+    EconomicCriteriaWeights,
     Evaluation,
     EvaluationSnapshot,
     Requirement,
@@ -128,6 +133,53 @@ class EvaluationService:
             metadata={"fields_changed": fields_changed},
         )
         return self.get_evaluation(tenant_id, evaluation_id)
+
+    def update_economic_criteria_weights(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        commercial: dict[str, float],
+        risk: dict[str, float],
+        *,
+        actor: ActorContext,
+    ) -> Evaluation:
+        """Fase 20 (ADR 0009, plan §9 Pregunta Bloqueante #1, Opción 1): the
+        5 keys per group are fixed (DEFAULT_COMMERCIAL_WEIGHTS/DEFAULT_RISK_
+        WEIGHTS) - only draft-only weight edits are allowed, same "config
+        window closes at publish" principle as dimension_weights (which
+        isn't even editable at all, always the DIMENSION_MAX_POINTS
+        constant) - economic weights are the first per-evaluation-
+        configurable weight this codebase has."""
+        evaluation = self.get_evaluation(tenant_id, evaluation_id)
+        if evaluation.status != "draft":
+            raise InvalidTransitionError(evaluation_id)
+        self._require_valid_weights_group(commercial, DEFAULT_COMMERCIAL_WEIGHTS.keys())
+        self._require_valid_weights_group(risk, DEFAULT_RISK_WEIGHTS.keys())
+
+        weights = EconomicCriteriaWeights(commercial=dict(commercial), risk=dict(risk))
+        matched = self._evaluations.update_metadata(
+            tenant_id, evaluation_id, {"economic_criteria_weights": weights.to_document()}
+        )
+        self._require_matched(matched, tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_updated",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"fields_changed": ["economic_criteria_weights"]},
+        )
+        return self.get_evaluation(tenant_id, evaluation_id)
+
+    @staticmethod
+    def _require_valid_weights_group(
+        weights: dict[str, float], expected_keys: KeysView[str]
+    ) -> None:
+        if set(weights.keys()) != set(expected_keys):
+            raise InvalidEconomicWeightsError(f"keys must be exactly {sorted(expected_keys)}")
+        if abs(sum(weights.values()) - 100.0) > _WEIGHT_TOLERANCE:
+            raise InvalidEconomicWeightsError("weights must sum to 100")
 
     def add_requirement(
         self,
@@ -601,6 +653,7 @@ class EvaluationService:
             approval_comment=evaluation.approval_comment,
             published_by_membership_id=actor.membership_id,
             published_at=now,
+            economic_criteria_weights=evaluation.economic_criteria_weights,
         )
 
     def _finish_publish(

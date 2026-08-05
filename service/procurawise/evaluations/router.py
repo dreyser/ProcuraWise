@@ -7,6 +7,7 @@ from procurawise.evaluations.exceptions import (
     ApproverMembershipNotFoundError,
     ApproverRoleMismatchError,
     EvaluationNotFoundError,
+    InvalidEconomicWeightsError,
     InvalidTransitionError,
     NotAssignedApproverError,
     RequirementNotFoundError,
@@ -22,6 +23,7 @@ from procurawise.evaluations.models import Evaluation, EvaluationSnapshot, Requi
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.schemas import (
     ApprovalDecisionRequest,
+    EconomicCriteriaWeightsResponse,
     EvaluationCreateRequest,
     EvaluationDetailResponse,
     EvaluationSnapshotResponse,
@@ -33,6 +35,7 @@ from procurawise.evaluations.schemas import (
     RequirementResponse,
     RequirementUpdateRequest,
     SetApproverRequest,
+    UpdateEconomicCriteriaWeightsRequest,
     VendorLinkRequest,
 )
 from procurawise.evaluations.service import EvaluationService
@@ -114,6 +117,10 @@ def _evaluation_detail(evaluation: Evaluation) -> EvaluationDetailResponse:
         approval_snapshot_id=evaluation.approval_snapshot_id,
         base_currency=evaluation.base_currency,
         tco_horizon_years=evaluation.tco_horizon_years,
+        economic_criteria_weights=EconomicCriteriaWeightsResponse(
+            commercial=evaluation.economic_criteria_weights.commercial,
+            risk=evaluation.economic_criteria_weights.risk,
+        ),
     )
 
 
@@ -182,6 +189,29 @@ def update_evaluation(
         raise HTTPException(status_code=404) from None
     except InvalidTransitionError:
         raise HTTPException(status_code=409, detail="evaluation is not draft") from None
+    return _evaluation_detail(evaluation)
+
+
+@router.patch("/{evaluation_id}/economic-criteria-weights", response_model=EvaluationDetailResponse)
+def update_economic_criteria_weights(
+    evaluation_id: str,
+    body: UpdateEconomicCriteriaWeightsRequest,
+    context: ActorContext = Depends(require_owner),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    """Fase 20 (ADR 0009) - draft-only, both groups must sum to 100 and
+    contain exactly the fixed criterion keys (plan §9 Pregunta Bloqueante
+    #1, Opción 1: pesos editables, criterios fijos)."""
+    try:
+        evaluation = service.update_economic_criteria_weights(
+            context.tenant_id, evaluation_id, body.commercial, body.risk, actor=context
+        )
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="evaluation is not draft") from None
+    except InvalidEconomicWeightsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     return _evaluation_detail(evaluation)
 
 
@@ -319,6 +349,10 @@ def _snapshot_response(snapshot: EvaluationSnapshot) -> EvaluationSnapshotRespon
         approval_comment=snapshot.approval_comment,
         published_by_membership_id=snapshot.published_by_membership_id,
         published_at=snapshot.published_at,
+        economic_criteria_weights=EconomicCriteriaWeightsResponse(
+            commercial=snapshot.economic_criteria_weights.commercial,
+            risk=snapshot.economic_criteria_weights.risk,
+        ),
     )
 
 

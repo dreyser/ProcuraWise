@@ -11,7 +11,12 @@ EvaluationStatus = Literal["draft", "collecting_responses", "evaluating", "compl
 # not_requested and rejected, looping back to pending (plan §14/§15).
 ApprovalStatus = Literal["not_requested", "pending", "approved", "rejected"]
 
-Dimension = Literal["functional", "technical"]
+Dimension = Literal["functional", "technical", "economic"]
+# Fase 20: Requirement authoring is intentionally narrower than the general
+# Dimension - a Requirement can never be "economic" (economic assessment has
+# no Requirement rows at all, see scoring.models.EconomicAssessment). Defense
+# in depth at the type level, not just a runtime check.
+RequirementDimension = Literal["functional", "technical"]
 Priority = Literal["mandatory", "important", "desirable"]
 ResponseType = Literal[
     "compliant_status",
@@ -30,11 +35,68 @@ ResponseType = Literal[
 # of a 100-point model. VS-2B only implements functional+technical - requirement
 # weights within a dimension are expressed directly on this global scale (they
 # must sum to exactly the dimension's allocation), not renormalized to 100 each.
+#
+# Fase 20 deliberately does NOT add an "economic" key here: economic scoring
+# has no Requirement rows at all (it's a fixed 10-criterion rubric, see
+# EconomicAssessment in scoring/models.py), so nothing should ever validate a
+# sum of Requirement weights for it. ECONOMIC_MAX_POINTS stays a separate
+# constant for exactly that reason - see evaluations.service._draft_readiness_
+# reasons, which iterates DIMENSION_MAX_POINTS.items() to validate Requirement
+# weight sums and must never be asked to do that for "economic".
 DIMENSION_MAX_POINTS: dict[Dimension, float] = {"functional": 40.0, "technical": 20.0}
 ECONOMIC_MAX_POINTS = 40.0
 PARTIAL_RESULT_MAX_POINTS = sum(DIMENSION_MAX_POINTS.values())  # 60 - functional+technical only
 
 MAX_LINKED_VENDORS = 6
+
+# Fase 20 (ADR 0009): default sub-weights for the two human-scored economic
+# rubrics, within their own 15%/15% slice of the 40% economic dimension - the
+# founder confirmed these criteria (the dict keys) are fixed across every
+# evaluation; only the numeric weights are owner-editable before publish
+# (plan §9 Pregunta Bloqueante #1, Opción 1). Each group must sum to 100.0.
+DEFAULT_COMMERCIAL_WEIGHTS: dict[str, float] = {
+    "payment_terms": 25.0,
+    "price_protection": 25.0,
+    "contractual_flexibility": 20.0,
+    "discounts_incentives": 15.0,
+    "billing_transparency": 15.0,
+}
+DEFAULT_RISK_WEIGHTS: dict[str, float] = {
+    "variable_cost_exposure": 30.0,
+    "increases_indexation": 25.0,
+    "assumptions_exclusions": 20.0,
+    "fx_fiscal_regulatory": 15.0,
+    "exit_portability_lockin": 10.0,
+}
+
+
+@dataclass(frozen=True)
+class EconomicCriteriaWeights:
+    """Fase 20 (ADR 0009) - the owner-configurable weights for the two
+    fixed-criteria economic rubrics. `commercial`/`risk` always carry exactly
+    the same 5 keys as DEFAULT_COMMERCIAL_WEIGHTS/DEFAULT_RISK_WEIGHTS (no
+    endpoint exists to add/remove/rename a criterion); each dict's values
+    must sum to 100.0, validated in evaluations.service before a write, never
+    in this dataclass itself (same "validation lives in the service, not the
+    model" convention as the rest of this module)."""
+
+    commercial: dict[str, float]
+    risk: dict[str, float]
+
+    @staticmethod
+    def defaults() -> "EconomicCriteriaWeights":
+        return EconomicCriteriaWeights(
+            commercial=dict(DEFAULT_COMMERCIAL_WEIGHTS), risk=dict(DEFAULT_RISK_WEIGHTS)
+        )
+
+    def to_document(self) -> dict[str, Any]:
+        return {"commercial": dict(self.commercial), "risk": dict(self.risk)}
+
+    @staticmethod
+    def from_document(doc: dict[str, Any] | None) -> "EconomicCriteriaWeights":
+        if doc is None:
+            return EconomicCriteriaWeights.defaults()
+        return EconomicCriteriaWeights(commercial=dict(doc["commercial"]), risk=dict(doc["risk"]))
 
 
 def new_id() -> str:
@@ -49,7 +111,7 @@ class Requirement:
     from PRD §6.3, not one field wearing two hats."""
 
     id: str
-    dimension: Dimension
+    dimension: RequirementDimension
     category: str
     title: str
     description: str
@@ -65,7 +127,7 @@ class Requirement:
 
     @staticmethod
     def create(
-        dimension: Dimension,
+        dimension: RequirementDimension,
         category: str,
         title: str,
         description: str,
@@ -200,6 +262,11 @@ class Evaluation:
     # deserialize safely - see from_document.
     base_currency: str
     tco_horizon_years: int
+    # Fase 20 (ADR 0009): owner-editable before publish, frozen into
+    # EvaluationSnapshot.economic_criteria_weights at publish time - same
+    # "config lives on Evaluation, not per-Proposal" reasoning as
+    # base_currency/tco_horizon_years above.
+    economic_criteria_weights: EconomicCriteriaWeights
 
     @staticmethod
     def create(
@@ -231,6 +298,7 @@ class Evaluation:
             approval_snapshot_id=None,
             base_currency="MXN",
             tco_horizon_years=1,
+            economic_criteria_weights=EconomicCriteriaWeights.defaults(),
         )
 
     def to_document(self) -> dict[str, Any]:
@@ -259,6 +327,7 @@ class Evaluation:
             "approval_snapshot_id": self.approval_snapshot_id,
             "base_currency": self.base_currency,
             "tco_horizon_years": self.tco_horizon_years,
+            "economic_criteria_weights": self.economic_criteria_weights.to_document(),
         }
 
     @staticmethod
@@ -293,6 +362,11 @@ class Evaluation:
             # backfill).
             base_currency=doc.get("base_currency", "MXN"),
             tco_horizon_years=doc.get("tco_horizon_years", 1),
+            # Fase 20 - evaluations persisted before this phase have no key;
+            # ADR 0009 defaults are the safe fallback (no backfill).
+            economic_criteria_weights=EconomicCriteriaWeights.from_document(
+                doc.get("economic_criteria_weights")
+            ),
         )
 
     def approval_invalidation_extra_set(self) -> dict[str, Any]:
@@ -343,6 +417,10 @@ class EvaluationSnapshot:
     approval_comment: str | None
     published_by_membership_id: str
     published_at: datetime
+    # Fase 20 (ADR 0009): frozen at the same moment as dimension_weights -
+    # changing weights after publish requires the new-version flow (ADR
+    # 0013, Fase 21), not a direct edit.
+    economic_criteria_weights: EconomicCriteriaWeights
 
     def to_document(self) -> dict[str, Any]:
         return {
@@ -365,6 +443,7 @@ class EvaluationSnapshot:
             "approval_comment": self.approval_comment,
             "published_by_membership_id": self.published_by_membership_id,
             "published_at": self.published_at,
+            "economic_criteria_weights": self.economic_criteria_weights.to_document(),
         }
 
     @staticmethod
@@ -389,4 +468,9 @@ class EvaluationSnapshot:
             approval_comment=doc.get("approval_comment"),
             published_by_membership_id=doc["published_by_membership_id"],
             published_at=doc["published_at"],
+            # Fase 20 - snapshots taken before this phase have no key; ADR
+            # 0009 defaults are the safe fallback (no backfill).
+            economic_criteria_weights=EconomicCriteriaWeights.from_document(
+                doc.get("economic_criteria_weights")
+            ),
         )

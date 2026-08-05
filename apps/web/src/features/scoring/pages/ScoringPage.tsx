@@ -27,6 +27,7 @@ import { normalizeApiError } from '@/lib/errors'
 import { translateDimension, translateRiskFlag } from '@/lib/enumLabels'
 import { ScoreInput } from '@/features/scoring/components/ScoreInput'
 import { BuyerDocumentsList } from '@/features/scoring/components/BuyerDocumentsList'
+import { EconomicAssessmentPanel } from '@/features/scoring/components/EconomicAssessmentPanel'
 import { useAiScoreSuggestionJobStatus } from '@/features/evaluations/hooks/useAiScoreSuggestionJobStatus'
 
 interface Draft {
@@ -417,6 +418,11 @@ export function ScoringPage() {
 
       {renderDimension('functional')}
       {renderDimension('technical')}
+      <EconomicAssessmentPanel
+        evaluationId={evaluationId!}
+        proposalId={proposalId!}
+        isEditable={isEditable}
+      />
 
       <BuyerDocumentsList evaluationId={evaluationId!} proposalId={proposalId!} />
     </div>

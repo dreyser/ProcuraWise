@@ -5,9 +5,9 @@ from pydantic import Field
 
 from procurawise.evaluations.models import (
     ApprovalStatus,
-    Dimension,
     EvaluationStatus,
     Priority,
+    RequirementDimension,
     ResponseType,
 )
 from procurawise.shared.api_models import APIModel
@@ -35,7 +35,7 @@ class EvaluationUpdateRequest(APIModel):
 
 
 class RequirementCreateRequest(APIModel):
-    dimension: Dimension
+    dimension: RequirementDimension
     category: str
     title: str
     description: str
@@ -49,7 +49,7 @@ class RequirementCreateRequest(APIModel):
 
 
 class RequirementUpdateRequest(APIModel):
-    dimension: Dimension | None = None
+    dimension: RequirementDimension | None = None
     category: str | None = None
     title: str | None = None
     description: str | None = None
@@ -66,9 +66,29 @@ class VendorLinkRequest(APIModel):
     vendor_org_id: str
 
 
+class EconomicCriteriaWeightsResponse(APIModel):
+    """Fase 20 (ADR 0009) - the 5 keys within each group are fixed across
+    every evaluation (plan §9 Pregunta Bloqueante #1); only the values are
+    owner-editable before publish."""
+
+    commercial: dict[str, float]
+    risk: dict[str, float]
+
+
+class UpdateEconomicCriteriaWeightsRequest(APIModel):
+    """Both groups are required (a full replace, not a partial patch) so a
+    caller can never submit a group that doesn't sum to 100 by omission -
+    validated in evaluations.service, not here (same convention as the rest
+    of this module: schemas describe shape, services validate business
+    rules)."""
+
+    commercial: dict[str, float]
+    risk: dict[str, float]
+
+
 class RequirementResponse(APIModel):
     id: str
-    dimension: Dimension
+    dimension: RequirementDimension
     category: str
     title: str
     description: str
@@ -116,6 +136,7 @@ class EvaluationDetailResponse(APIModel):
     approval_snapshot_id: str | None
     base_currency: str
     tco_horizon_years: int
+    economic_criteria_weights: EconomicCriteriaWeightsResponse
 
 
 class SetApproverRequest(APIModel):
@@ -159,3 +180,4 @@ class EvaluationSnapshotResponse(APIModel):
     approval_comment: str | None
     published_by_membership_id: str
     published_at: datetime
+    economic_criteria_weights: EconomicCriteriaWeightsResponse

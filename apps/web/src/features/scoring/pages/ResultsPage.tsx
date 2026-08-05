@@ -80,12 +80,18 @@ export function ResultsPage() {
   }
 
   const totalRequirements = evaluation.requirements.length
-  const pendingByProposal = (results?.proposals ?? [])
-    .filter((p) => p.scores.length < totalRequirements)
-    .map(
-      (p) =>
+  const pendingByProposal = (results?.proposals ?? []).flatMap((p) => {
+    const reasons: string[] = []
+    if (p.scores.length < totalRequirements) {
+      reasons.push(
         `${p.vendor_org_name}: ${totalRequirements - p.scores.length} requerimiento(s) sin calificar`,
-    )
+      )
+    }
+    if (p.economic.status !== 'available') {
+      reasons.push(`${p.vendor_org_name}: evaluación económica incompleta`)
+    }
+    return reasons
+  })
 
   const canComplete =
     isOwner && evaluation.status === 'evaluating' && results?.scoring_status === 'complete'
@@ -126,6 +132,7 @@ export function ResultsPage() {
                     <TableHead>Técnico</TableHead>
                     <TableHead>Económico</TableHead>
                     <TableHead>Parcial</TableHead>
+                    <TableHead>Resultado final</TableHead>
                     <TableHead>Alertas obligatorias</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -139,10 +146,19 @@ export function ResultsPage() {
                       <TableCell>
                         {proposal.technical.earned_points} / {proposal.technical.maximum_points}
                       </TableCell>
-                      <TableCell>No disponible</TableCell>
+                      <TableCell>
+                        {proposal.economic.status === 'available'
+                          ? `${proposal.economic.earned_points} / ${proposal.economic.maximum_points}`
+                          : 'No disponible'}
+                      </TableCell>
                       <TableCell>
                         {proposal.partial_result.earned_points} /{' '}
                         {proposal.partial_result.maximum_points}
+                      </TableCell>
+                      <TableCell>
+                        {proposal.final_result
+                          ? `${proposal.final_result.total_points} / ${proposal.final_result.maximum_points}`
+                          : 'No disponible'}
                       </TableCell>
                       <TableCell>
                         {proposal.mandatory_alerts_count > 0 ? (

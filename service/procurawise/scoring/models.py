@@ -128,3 +128,110 @@ class Score:
             updated_at=doc["updated_at"],
             source_ai_execution_id=doc.get("source_ai_execution_id"),
         )
+
+
+@dataclass(frozen=True)
+class CriterionScore:
+    """One human-scored sub-criterion within a commercial/risk economic
+    rubric (ADR 0009). `score is None` represents "N/A" (spec: "'N/A'
+    requiere justificación") - a comment is required whenever `score is
+    None` or `score in {0, 1, 2, 5}` (ADR 0009: "scores 0/1/2/5 requieren
+    comentario"), enforced in scoring.service, not here."""
+
+    criterion_key: str
+    score: int | None
+    comment: str | None
+
+    def to_document(self) -> dict[str, Any]:
+        return {"criterion_key": self.criterion_key, "score": self.score, "comment": self.comment}
+
+    @staticmethod
+    def from_document(doc: dict[str, Any]) -> "CriterionScore":
+        return CriterionScore(
+            criterion_key=doc["criterion_key"], score=doc.get("score"), comment=doc.get("comment")
+        )
+
+
+@dataclass(frozen=True)
+class EconomicAssessment:
+    """Fase 20 (ADR 0009): the human-scored half of the economic dimension
+    (commercial conditions + risk/predictability) - deliberately NOT a
+    `Score` (which is structurally tied to `requirement_id`; economic
+    scoring has no Requirement rows at all, see plan §6/F69-70). One per
+    (tenant_id, evaluation_id, proposal_id) - same grain as "all of a
+    proposal's Scores", but a single document per proposal (10 fixed
+    sub-criteria embedded), not one row per criterion, since the criterion
+    set is fixed and always scored/edited together.
+
+    The automatic TCO-normalized component (70% of economic) is NOT stored
+    here - it's derived live from `ProposalSnapshot.tco_result.grand_total`
+    across every submitted proposal of the evaluation (plan §12.2), same
+    "calculated in vivo, never cached" principle as `functional_points`/
+    `technical_points` in `ScoringService.get_results()` today."""
+
+    id: str
+    tenant_id: str
+    evaluation_id: str
+    proposal_id: str
+    commercial_scores: list[CriterionScore]
+    risk_scores: list[CriterionScore]
+    version: int
+    created_by_membership_id: str
+    updated_by_membership_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    @staticmethod
+    def create(
+        tenant_id: str,
+        evaluation_id: str,
+        proposal_id: str,
+        commercial_scores: list[CriterionScore],
+        risk_scores: list[CriterionScore],
+        membership_id: str,
+    ) -> "EconomicAssessment":
+        now = datetime.now(UTC)
+        return EconomicAssessment(
+            id=new_id(),
+            tenant_id=tenant_id,
+            evaluation_id=evaluation_id,
+            proposal_id=proposal_id,
+            commercial_scores=commercial_scores,
+            risk_scores=risk_scores,
+            version=1,
+            created_by_membership_id=membership_id,
+            updated_by_membership_id=membership_id,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def to_document(self) -> dict[str, Any]:
+        return {
+            "_id": self.id,
+            "tenant_id": self.tenant_id,
+            "evaluation_id": self.evaluation_id,
+            "proposal_id": self.proposal_id,
+            "commercial_scores": [c.to_document() for c in self.commercial_scores],
+            "risk_scores": [c.to_document() for c in self.risk_scores],
+            "version": self.version,
+            "created_by_membership_id": self.created_by_membership_id,
+            "updated_by_membership_id": self.updated_by_membership_id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+    @staticmethod
+    def from_document(doc: dict[str, Any]) -> "EconomicAssessment":
+        return EconomicAssessment(
+            id=doc["_id"],
+            tenant_id=doc["tenant_id"],
+            evaluation_id=doc["evaluation_id"],
+            proposal_id=doc["proposal_id"],
+            commercial_scores=[CriterionScore.from_document(c) for c in doc["commercial_scores"]],
+            risk_scores=[CriterionScore.from_document(c) for c in doc["risk_scores"]],
+            version=doc["version"],
+            created_by_membership_id=doc["created_by_membership_id"],
+            updated_by_membership_id=doc["updated_by_membership_id"],
+            created_at=doc["created_at"],
+            updated_at=doc["updated_at"],
+        )

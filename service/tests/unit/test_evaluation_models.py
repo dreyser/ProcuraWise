@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 import pytest
 
 from procurawise.evaluations.models import (
+    EconomicCriteriaWeights,
     Evaluation,
     EvaluationSnapshot,
     Requirement,
@@ -67,6 +68,24 @@ def test_evaluation_from_document_defaults_tco_fields_for_pre_phase19_documents(
     restored = Evaluation.from_document(doc)
     assert restored.base_currency == "MXN"
     assert restored.tco_horizon_years == 1
+
+
+def test_evaluation_from_document_defaults_economic_weights_for_pre_phase20_docs() -> None:
+    """Evaluations persisted before Fase 20 have no key - ADR 0009 defaults
+    are the safe fallback (no backfill)."""
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    doc = evaluation.to_document()
+    del doc["economic_criteria_weights"]
+    restored = Evaluation.from_document(doc)
+    assert restored.economic_criteria_weights == EconomicCriteriaWeights.defaults()
+
+
+def test_economic_criteria_weights_round_trips_through_document() -> None:
+    weights = EconomicCriteriaWeights.defaults()
+    restored = EconomicCriteriaWeights.from_document(weights.to_document())
+    assert restored == weights
 
 
 def test_requirement_create_rejects_single_choice_without_options() -> None:
@@ -171,6 +190,7 @@ def test_evaluation_snapshot_round_trips_through_document() -> None:
         approval_comment="Looks good",
         published_by_membership_id="owner-1",
         published_at=now,
+        economic_criteria_weights=EconomicCriteriaWeights.defaults(),
     )
     restored = EvaluationSnapshot.from_document(snapshot.to_document())
     assert restored == snapshot

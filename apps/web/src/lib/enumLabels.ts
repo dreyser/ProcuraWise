@@ -17,6 +17,7 @@ export const proposalStatusLabels = {
 export const dimensionLabels = {
   functional: 'Funcional',
   technical: 'Técnico',
+  economic: 'Económico',
 } as const satisfies Record<string, string>
 
 export const priorityLabels = {
@@ -97,6 +98,23 @@ export const costTypeLabels = {
   variable: 'Variable',
 } as const satisfies Record<string, string>
 
+// Fase 20 (ADR 0009) - the 5+5 fixed economic criterion keys, matching
+// evaluations.models.DEFAULT_COMMERCIAL_WEIGHTS/DEFAULT_RISK_WEIGHTS
+// exactly. Criteria are fixed (not user-authored), so a closed label map is
+// appropriate here the same way dimensionLabels/priorityLabels are.
+export const economicCriterionLabels = {
+  payment_terms: 'Pago y plazo',
+  price_protection: 'Protección de precio',
+  contractual_flexibility: 'Flexibilidad contractual',
+  discounts_incentives: 'Descuentos e incentivos',
+  billing_transparency: 'Transparencia y facturación',
+  variable_cost_exposure: 'Exposición a costos variables',
+  increases_indexation: 'Incrementos e indexación',
+  assumptions_exclusions: 'Supuestos y exclusiones',
+  fx_fiscal_regulatory: 'Exposición cambiaria y fiscal',
+  exit_portability_lockin: 'Salida y portabilidad',
+} as const satisfies Record<string, string>
+
 function translate<T extends Record<string, string>>(map: T, key: string): string {
   return key in map ? map[key as keyof T] : key
 }
@@ -120,3 +138,5 @@ export const translateApprovalStatus = (value: string): string =>
 export const translateRiskFlag = (value: string): string => translate(riskFlagLabels, value)
 export const translateCostCategory = (value: string): string => translate(costCategoryLabels, value)
 export const translateCostType = (value: string): string => translate(costTypeLabels, value)
+export const translateEconomicCriterion = (value: string): string =>
+  translate(economicCriterionLabels, value)

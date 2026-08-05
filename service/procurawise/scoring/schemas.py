@@ -43,6 +43,46 @@ class ScoreResponse(APIModel):
     source_ai_execution_id: str | None
 
 
+class CriterionScoreRequest(APIModel):
+    """`score is None` means "N/A" (ADR 0009). `comment` is required by
+    scoring.service whenever `score is None` or `score in {0,1,2,5}` -
+    validated server-side, not by a Pydantic constraint here (the rule
+    depends on the value of a sibling field)."""
+
+    criterion_key: str
+    score: int | None = None
+    comment: str | None = None
+
+
+class CriterionScoreResponse(APIModel):
+    criterion_key: str
+    score: int | None
+    comment: str | None
+
+
+class EconomicAssessmentWriteRequest(APIModel):
+    """Always a full replace of both groups (plan §12.1) - `version` follows
+    the same optimistic-concurrency convention as ScoreWriteRequest.version:
+    omit/None on first create, echo the current value on every update."""
+
+    commercial_scores: list[CriterionScoreRequest]
+    risk_scores: list[CriterionScoreRequest]
+    version: int | None = None
+
+
+class EconomicAssessmentResponse(APIModel):
+    id: str
+    evaluation_id: str
+    proposal_id: str
+    commercial_scores: list[CriterionScoreResponse]
+    risk_scores: list[CriterionScoreResponse]
+    version: int
+    created_by_membership_id: str
+    updated_by_membership_id: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class DimensionSubtotal(APIModel):
     earned_points: float
     maximum_points: float
@@ -58,6 +98,15 @@ class PartialResult(APIModel):
     earned_points: float
     maximum_points: float
     model_coverage_percent: float
+
+
+class FinalResult(APIModel):
+    """Fase 20 - present only once functional+technical+economic are all
+    complete for a given proposal (see ScoringService._economic_subtotals);
+    always informative, never triggers any automatic adjudication."""
+
+    total_points: float
+    maximum_points: float
 
 
 class RequirementScoreDetail(APIModel):
@@ -97,6 +146,7 @@ class ProposalResult(APIModel):
     technical: DimensionSubtotal
     economic: EconomicSubtotal
     partial_result: PartialResult
+    final_result: FinalResult | None
     scores: list[RequirementScoreDetail]
     mandatory_alerts_count: int
 
@@ -108,7 +158,7 @@ class DraftProposalSummary(APIModel):
 
 
 class ResultsResponse(APIModel):
-    result_status: Literal["partial"]
+    result_status: Literal["partial", "final"]
     is_final: bool
     scoring_status: Literal["incomplete", "complete"]
     proposals: list[ProposalResult]
