@@ -109,6 +109,18 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
     .check()
   await expect(page.getByText('Respondidos: 2 / 2')).toBeVisible()
 
+  // Fase 20: a nonzero cost item is required for the economic component's
+  // TCO-normalized 70% to be "available" rather than "no_comparable" - MXN
+  // matches the evaluation's default base_currency, so no FXRate needs to
+  // exist (same reasoning as tco.spec.ts).
+  await page.getByRole('button', { name: 'Agregar partida de costo' }).click()
+  await page.getByLabel('Concepto').fill('Licencia anual')
+  await page.getByLabel('Unidad de cobro').fill('usuario')
+  await page.getByLabel('Cantidad').fill('10')
+  await page.getByLabel('Precio unitario').fill('1000')
+  await page.getByRole('button', { name: 'Guardar partida' }).click()
+  await expect(page.getByText('Licencia anual')).toBeVisible()
+
   await page.getByRole('button', { name: 'Enviar propuesta' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Enviar propuesta' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
@@ -156,6 +168,30 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
     await expect(page.getByText(`Calificados: ${i + 1} / 2`)).toBeVisible()
   }
 
+  // 4b. Fase 20: the economic assessment (commercial/risk, score 3 - not an
+  // extreme value, so no comment is required) - no Assignment exists for
+  // this seeded evaluation, so evaluator_functional may fill it too (same
+  // "unassigned section is open to any evaluator sub-role" rule already
+  // exercised above for the technical requirement).
+  const economicCriterionLabels = [
+    'Pago y plazo',
+    'Protección de precio',
+    'Flexibilidad contractual',
+    'Descuentos e incentivos',
+    'Transparencia y facturación',
+    'Exposición a costos variables',
+    'Incrementos e indexación',
+    'Supuestos y exclusiones',
+    'Exposición cambiaria y fiscal',
+    'Salida y portabilidad',
+  ]
+  for (const label of economicCriterionLabels) {
+    await page.getByRole('radio', { name: `${label}: 3` }).check({ force: true })
+  }
+  await page.getByRole('button', { name: 'Guardar evaluación económica' }).click()
+  await expect(page.getByRole('button', { name: 'Guardar evaluación económica' })).toBeEnabled()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+
   // 5. Owner: consult results and complete. Uses the "Cerrar sesión" button
   // once here (rather than another bare page.goto) to also exercise that
   // real UI action, not just the login form.
@@ -171,7 +207,11 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await expect(page.getByText('Estado de calificación: Calificación completa')).toBeVisible()
   await expect(page.getByText('40 / 40')).toBeVisible()
   await expect(page.getByText('20 / 20')).toBeVisible()
-  await expect(page.getByText('No disponible')).toBeVisible()
+  // Economic: TCO_pct=100 (the only submitted proposal), commercial_pct=
+  // risk_pct=60 (all 10 criteria scored 3/5) -> 40 x (0.70x1 + 0.15x0.6 +
+  // 0.15x0.6) = 35.2 / 40. Final: 40 + 20 + 35.2 = 95.2 / 100.
+  await expect(page.getByText('35.2 / 40')).toBeVisible()
+  await expect(page.getByText('95.2 / 100')).toBeVisible()
   await expect(page.getByText(/No constituye recomendacion de adjudicacion/)).toBeVisible()
 
   await page.getByRole('button', { name: 'Completar evaluación' }).click()

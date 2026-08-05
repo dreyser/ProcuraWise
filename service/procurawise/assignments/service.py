@@ -18,6 +18,14 @@ from procurawise.identity.repository import MembershipRepository
 from procurawise.shared.context import ActorContext
 from procurawise.shared.roles import EVALUATOR_ROLE_BY_DIMENSION
 
+# Fase 20 (ADR 0009, plan §12.1/R3): economic scoring has no Requirement rows
+# at all (it's a fixed 10-criterion rubric, not per-section like functional/
+# technical), so there is no Requirement.category to validate a section
+# against. A single fixed sentinel section stands in for "the whole economic
+# dimension" - reusing Assignment/enforce_section_assignment as-is instead
+# of inventing a second authorization mechanism for this one dimension.
+ECONOMIC_SECTION = "economic"
+
 
 class AssignmentService:
     def __init__(
@@ -50,9 +58,12 @@ class AssignmentService:
     ) -> Assignment:
         evaluation = self._evaluation_or_raise(tenant_id, evaluation_id)
 
-        section_exists = any(
-            r.dimension == dimension and r.category == section for r in evaluation.requirements
-        )
+        if dimension == "economic":
+            section_exists = section == ECONOMIC_SECTION
+        else:
+            section_exists = any(
+                r.dimension == dimension and r.category == section for r in evaluation.requirements
+            )
         if not section_exists:
             raise SectionNotFoundError(section)
 

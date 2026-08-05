@@ -109,6 +109,32 @@ def test_vertical_slice_happy_path(client, seeded_actors, mongo_test_settings) -
     assert answer_technical.status_code == 200
     version = answer_technical.json()["version"]
 
+    # Fase 20: a nonzero cost item is required for TCO to be "available"
+    # rather than "no_comparable" (see scoring.economic_formulas) - without
+    # it, the economic component can never complete and the vertical slice
+    # could never reach `complete_evaluation()` below. Currency matches the
+    # evaluation's default base_currency (MXN) so submit doesn't also need
+    # an FXRate seeded (that's exercised separately by Fase 19's own tests).
+    cost_item = client.post(
+        f"/api/v1/vendor-portal/proposals/{proposal_id}/cost-items",
+        json={
+            "concept": "Licencia anual",
+            "category": "recurring",
+            "billing_unit": "usuario",
+            "quantity": "10",
+            "unit_price": "100",
+            "currency": "MXN",
+            "frequency_per_year": "1",
+            "year_start": 1,
+            "year_end": 1,
+            "cost_type": "recurring",
+            "expected_version": version,
+        },
+        headers=vendor_headers,
+    )
+    assert cost_item.status_code == 200
+    version = cost_item.json()["version"]
+
     submit = client.post(
         f"/api/v1/vendor-portal/proposals/{proposal_id}/submit",
         json={"expected_version": version},
@@ -150,7 +176,9 @@ def test_vertical_slice_happy_path(client, seeded_actors, mongo_test_settings) -
     body = results.json()
     assert body["result_status"] == "partial"
     assert body["is_final"] is False
-    assert body["scoring_status"] == "complete"
+    # Fase 20: scoring_status now also requires the economic assessment to
+    # be complete - functional/technical alone is no longer "complete".
+    assert body["scoring_status"] == "incomplete"
     [proposal_result] = body["proposals"]
     assert proposal_result["functional"] == {"earned_points": 40.0, "maximum_points": 40.0}
     assert proposal_result["technical"] == {"earned_points": 16.0, "maximum_points": 20.0}
@@ -175,6 +203,37 @@ def test_vertical_slice_happy_path(client, seeded_actors, mongo_test_settings) -
     assert rescored_functional.status_code == 200
     assert rescored_functional.json()["version"] == 2
     assert rescored_functional.json()["comment"] == "Revisado"
+
+    # Fase 20: complete_evaluation() now also requires the economic
+    # assessment to be filled in for every submitted proposal (in addition
+    # to functional/technical, unchanged from VS-2B).
+    commercial_keys = [
+        "payment_terms",
+        "price_protection",
+        "contractual_flexibility",
+        "discounts_incentives",
+        "billing_transparency",
+    ]
+    risk_keys = [
+        "variable_cost_exposure",
+        "increases_indexation",
+        "assumptions_exclusions",
+        "fx_fiscal_regulatory",
+        "exit_portability_lockin",
+    ]
+    economic_assessment = client.put(
+        f"/api/v1/evaluations/{evaluation_id}/proposals/{proposal_id}/economic-assessment",
+        json={
+            "commercial_scores": [
+                {"criterion_key": key, "score": 3, "comment": None} for key in commercial_keys
+            ],
+            "risk_scores": [
+                {"criterion_key": key, "score": 3, "comment": None} for key in risk_keys
+            ],
+        },
+        headers=owner_headers,
+    )
+    assert economic_assessment.status_code == 200
 
     complete = client.post(f"/api/v1/evaluations/{evaluation_id}/complete", headers=owner_headers)
     assert complete.status_code == 200

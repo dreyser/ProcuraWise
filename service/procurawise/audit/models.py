@@ -18,6 +18,7 @@ AuditResourceType = Literal[
     "vendor_organization",
     "document",
     "qna_question",
+    "economic_assessment",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -108,6 +109,12 @@ AuditAction = Literal[
     "ai_score_suggestion_requested",
     "ai_score_suggestion_succeeded",
     "ai_score_suggestion_failed",
+    # Fase 20 (scoring económico completo, ADR 0009) - resource_type
+    # "economic_assessment" for the commercial/risk rubric writes (the
+    # automatic TCO-normalized component is calculated in vivo, never
+    # written, so it never produces an audit event of its own).
+    "economic_assessment_created",
+    "economic_assessment_updated",
 ]
 
 

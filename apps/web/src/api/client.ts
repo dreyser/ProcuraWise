@@ -264,6 +264,7 @@ export type AssignmentCreateRequestDimension =
 export const AssignmentCreateRequestDimension = {
   functional: 'functional',
   technical: 'technical',
+  economic: 'economic',
 } as const
 
 export interface AssignmentCreateRequest {
@@ -283,6 +284,7 @@ export type AssignmentResponseDimension =
 export const AssignmentResponseDimension = {
   functional: 'functional',
   technical: 'technical',
+  economic: 'economic',
 } as const
 
 export type AssignmentResponseStatus =
@@ -671,6 +673,32 @@ export interface CreateFxRateRequest {
   effective_date: string
 }
 
+export type CriterionScoreRequestScore = number | null
+
+export type CriterionScoreRequestComment = string | null
+
+/**
+ * `score is None` means "N/A" (ADR 0009). `comment` is required by
+scoring.service whenever `score is None` or `score in {0,1,2,5}` -
+validated server-side, not by a Pydantic constraint here (the rule
+depends on the value of a sibling field).
+ */
+export interface CriterionScoreRequest {
+  criterion_key: string
+  score?: CriterionScoreRequestScore
+  comment?: CriterionScoreRequestComment
+}
+
+export type CriterionScoreResponseScore = number | null
+
+export type CriterionScoreResponseComment = string | null
+
+export interface CriterionScoreResponse {
+  criterion_key: string
+  score: CriterionScoreResponseScore
+  comment: CriterionScoreResponseComment
+}
+
 export interface CuratedSourceListResponse {
   items: CuratedSourceResponse[]
 }
@@ -743,6 +771,46 @@ export interface DraftProposalSummary {
   proposal_id: string
   vendor_org_id: string
   vendor_org_name: string
+}
+
+export interface EconomicAssessmentResponse {
+  id: string
+  evaluation_id: string
+  proposal_id: string
+  commercial_scores: CriterionScoreResponse[]
+  risk_scores: CriterionScoreResponse[]
+  version: number
+  created_by_membership_id: string
+  updated_by_membership_id: string
+  created_at: string
+  updated_at: string
+}
+
+export type EconomicAssessmentWriteRequestVersion = number | null
+
+/**
+ * Always a full replace of both groups (plan §12.1) - `version` follows
+the same optimistic-concurrency convention as ScoreWriteRequest.version:
+omit/None on first create, echo the current value on every update.
+ */
+export interface EconomicAssessmentWriteRequest {
+  commercial_scores: CriterionScoreRequest[]
+  risk_scores: CriterionScoreRequest[]
+  version?: EconomicAssessmentWriteRequestVersion
+}
+
+export type EconomicCriteriaWeightsResponseCommercial = { [key: string]: number }
+
+export type EconomicCriteriaWeightsResponseRisk = { [key: string]: number }
+
+/**
+ * Fase 20 (ADR 0009) - the 5 keys within each group are fixed across
+every evaluation (plan §9 Pregunta Bloqueante #1); only the values are
+owner-editable before publish.
+ */
+export interface EconomicCriteriaWeightsResponse {
+  commercial: EconomicCriteriaWeightsResponseCommercial
+  risk: EconomicCriteriaWeightsResponseRisk
 }
 
 export type EconomicSubtotalStatus =
@@ -835,6 +903,7 @@ export interface EvaluationDetailResponse {
   approval_snapshot_id: EvaluationDetailResponseApprovalSnapshotId
   base_currency: string
   tco_horizon_years: number
+  economic_criteria_weights: EconomicCriteriaWeightsResponse
 }
 
 export type EvaluationSnapshotResponseDimensionWeights = { [key: string]: number }
@@ -862,6 +931,7 @@ export interface EvaluationSnapshotResponse {
   approval_comment: EvaluationSnapshotResponseApprovalComment
   published_by_membership_id: string
   published_at: string
+  economic_criteria_weights: EconomicCriteriaWeightsResponse
 }
 
 export type EvaluationSummaryResponseStatus =
@@ -900,6 +970,16 @@ export interface EvaluationUpdateRequest {
   response_deadline?: EvaluationUpdateRequestResponseDeadline
   base_currency?: EvaluationUpdateRequestBaseCurrency
   tco_horizon_years?: EvaluationUpdateRequestTcoHorizonYears
+}
+
+/**
+ * Fase 20 - present only once functional+technical+economic are all
+complete for a given proposal (see ScoringService._economic_subtotals);
+always informative, never triggers any automatic adjudication.
+ */
+export interface FinalResult {
+  total_points: number
+  maximum_points: number
 }
 
 export type FrozenFxRateResponseFromCurrency =
@@ -1085,6 +1165,8 @@ export interface ProposalDetailResponse {
   submitted_at: ProposalDetailResponseSubmittedAt
 }
 
+export type ProposalResultFinalResult = FinalResult | null
+
 /**
  * functional/technical/economic/partial_result are per-proposal, not a
 single evaluation-wide aggregate: each vendor's Proposal is scored
@@ -1103,6 +1185,7 @@ export interface ProposalResult {
   technical: DimensionSubtotal
   economic: EconomicSubtotal
   partial_result: PartialResult
+  final_result: ProposalResultFinalResult
   scores: RequirementScoreDetail[]
   mandatory_alerts_count: number
 }
@@ -1333,6 +1416,7 @@ export type RequirementScoreDetailDimension =
 export const RequirementScoreDetailDimension = {
   functional: 'functional',
   technical: 'technical',
+  economic: 'economic',
 } as const
 
 export type RequirementScoreDetailComment = string | null
@@ -1460,6 +1544,15 @@ export interface ResearchWarningResponse {
   message: string
 }
 
+export type ResultsResponseResultStatus =
+  (typeof ResultsResponseResultStatus)[keyof typeof ResultsResponseResultStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const ResultsResponseResultStatus = {
+  partial: 'partial',
+  final: 'final',
+} as const
+
 export type ResultsResponseScoringStatus =
   (typeof ResultsResponseScoringStatus)[keyof typeof ResultsResponseScoringStatus]
 
@@ -1470,7 +1563,7 @@ export const ResultsResponseScoringStatus = {
 } as const
 
 export interface ResultsResponse {
-  result_status: 'partial'
+  result_status: ResultsResponseResultStatus
   is_final: boolean
   scoring_status: ResultsResponseScoringStatus
   proposals: ProposalResult[]
@@ -1485,6 +1578,7 @@ export type ScoreResponseDimension =
 export const ScoreResponseDimension = {
   functional: 'functional',
   technical: 'technical',
+  economic: 'economic',
 } as const
 
 export type ScoreResponseComment = string | null
@@ -1776,6 +1870,22 @@ export interface UpdateCuratedSourceRequest {
   tags?: UpdateCuratedSourceRequestTags
 }
 
+export type UpdateEconomicCriteriaWeightsRequestCommercial = { [key: string]: number }
+
+export type UpdateEconomicCriteriaWeightsRequestRisk = { [key: string]: number }
+
+/**
+ * Both groups are required (a full replace, not a partial patch) so a
+caller can never submit a group that doesn't sum to 100 by omission -
+validated in evaluations.service, not here (same convention as the rest
+of this module: schemas describe shape, services validate business
+rules).
+ */
+export interface UpdateEconomicCriteriaWeightsRequest {
+  commercial: UpdateEconomicCriteriaWeightsRequestCommercial
+  risk: UpdateEconomicCriteriaWeightsRequestRisk
+}
+
 export type ValidationErrorLocItem = string | number
 
 export type ValidationErrorCtx = { [key: string]: unknown }
@@ -1947,6 +2057,7 @@ export type VendorRequirementResponseDimension =
 export const VendorRequirementResponseDimension = {
   functional: 'functional',
   technical: 'technical',
+  economic: 'economic',
 } as const
 
 export type VendorRequirementResponsePriority =
@@ -5079,6 +5190,160 @@ export const useUpdateEvaluationApiV1EvaluationsEvaluationIdPatch = <
 
   return useMutation(mutationOptions, queryClient)
 }
+
+/**
+ * Fase 20 (ADR 0009) - draft-only, both groups must sum to 100 and
+contain exactly the fixed criterion keys (plan §9 Pregunta Bloqueante
+#1, Opción 1: pesos editables, criterios fijos).
+ * @summary Update Economic Criteria Weights
+ */
+export type updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponse200 =
+  {
+    data: EvaluationDetailResponse
+    status: 200
+  }
+
+export type updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponseSuccess =
+  updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponse200 & {
+    headers: Headers
+  }
+export type updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponseError =
+  updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponse422 & {
+    headers: Headers
+  }
+
+export type updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponse =
+  | updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponseSuccess
+  | updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponseError
+
+export const getUpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchUrl =
+  (evaluationId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/economic-criteria-weights`
+  }
+
+export const updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch =
+  async (
+    evaluationId: string,
+    updateEconomicCriteriaWeightsRequest: UpdateEconomicCriteriaWeightsRequest,
+    options?: RequestInit,
+  ): Promise<updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponse> => {
+    return apiFetch<updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchResponse>(
+      getUpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchUrl(
+        evaluationId,
+      ),
+      {
+        ...options,
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(updateEconomicCriteriaWeightsRequest),
+      },
+    )
+  }
+
+export const getUpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch
+        >
+      >,
+      TError,
+      { evaluationId: string; data: UpdateEconomicCriteriaWeightsRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch
+      >
+    >,
+    TError,
+    { evaluationId: string; data: UpdateEconomicCriteriaWeightsRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch
+        >
+      >,
+      { evaluationId: string; data: UpdateEconomicCriteriaWeightsRequest }
+    > = (props) => {
+      const { evaluationId, data } = props ?? {}
+
+      return updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch(
+        evaluationId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type UpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch
+      >
+    >
+  >
+export type UpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchMutationBody =
+  UpdateEconomicCriteriaWeightsRequest
+export type UpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Update Economic Criteria Weights
+ */
+export const useUpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch
+          >
+        >,
+        TError,
+        { evaluationId: string; data: UpdateEconomicCriteriaWeightsRequest },
+        TContext
+      >
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof updateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch
+      >
+    >,
+    TError,
+    { evaluationId: string; data: UpdateEconomicCriteriaWeightsRequest },
+    TContext
+  > => {
+    const mutationOptions =
+      getUpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatchMutationOptions(
+        options,
+      )
+
+    return useMutation(mutationOptions, queryClient)
+  }
 
 /**
  * @summary Set Approver
@@ -9679,6 +9944,451 @@ export const useUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScores
     )
 
   return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * Fase 20 (ADR 0009) - same role gate as upsert_score (SCORE_WRITE_ROLES),
+plus enforce_section_assignment reused with the fixed "economic" sentinel
+(see assignments.service.ECONOMIC_SECTION).
+ * @summary Upsert Economic Assessment
+ */
+export type upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponse200 =
+  {
+    data: EconomicAssessmentResponse
+    status: 200
+  }
+
+export type upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponseSuccess =
+  upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponse200 & {
+    headers: Headers
+  }
+export type upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponseError =
+  upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponse422 & {
+    headers: Headers
+  }
+
+export type upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponse =
+  | upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponseSuccess
+  | upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponseError
+
+export const getUpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutUrl =
+  (evaluationId: string, proposalId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/economic-assessment`
+  }
+
+export const upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut =
+  async (
+    evaluationId: string,
+    proposalId: string,
+    economicAssessmentWriteRequest: EconomicAssessmentWriteRequest,
+    options?: RequestInit,
+  ): Promise<upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponse> => {
+    return apiFetch<upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutResponse>(
+      getUpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutUrl(
+        evaluationId,
+        proposalId,
+      ),
+      {
+        ...options,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
+        body: JSON.stringify(economicAssessmentWriteRequest),
+      },
+    )
+  }
+
+export const getUpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut
+        >
+      >,
+      TError,
+      { evaluationId: string; proposalId: string; data: EconomicAssessmentWriteRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut
+      >
+    >,
+    TError,
+    { evaluationId: string; proposalId: string; data: EconomicAssessmentWriteRequest },
+    TContext
+  > => {
+    const mutationKey = [
+      'upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut
+        >
+      >,
+      { evaluationId: string; proposalId: string; data: EconomicAssessmentWriteRequest }
+    > = (props) => {
+      const { evaluationId, proposalId, data } = props ?? {}
+
+      return upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut(
+        evaluationId,
+        proposalId,
+        data,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type UpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut
+      >
+    >
+  >
+export type UpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutMutationBody =
+  EconomicAssessmentWriteRequest
+export type UpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Upsert Economic Assessment
+ */
+export const useUpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut
+          >
+        >,
+        TError,
+        { evaluationId: string; proposalId: string; data: EconomicAssessmentWriteRequest },
+        TContext
+      >
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof upsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut
+      >
+    >,
+    TError,
+    { evaluationId: string; proposalId: string; data: EconomicAssessmentWriteRequest },
+    TContext
+  > => {
+    const mutationOptions =
+      getUpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPutMutationOptions(
+        options,
+      )
+
+    return useMutation(mutationOptions, queryClient)
+  }
+
+/**
+ * Fase 20 - the read surface a client needs before it can build a valid
+upsert_economic_assessment call (current scores + version), same role as
+/results is for Score. 404 both when the proposal doesn't exist and when
+it exists but has no EconomicAssessment yet - the client can't tell (and
+doesn't need to) which case it is; either way the form starts empty.
+ * @summary Get Economic Assessment
+ */
+export type getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponse200 =
+  {
+    data: EconomicAssessmentResponse
+    status: 200
+  }
+
+export type getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponseSuccess =
+  getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponse200 & {
+    headers: Headers
+  }
+export type getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponseError =
+  getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponse422 & {
+    headers: Headers
+  }
+
+export type getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponse =
+  | getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponseSuccess
+  | getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponseError
+
+export const getGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetUrl =
+  (evaluationId: string, proposalId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/economic-assessment`
+  }
+
+export const getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet =
+  async (
+    evaluationId: string,
+    proposalId: string,
+    options?: RequestInit,
+  ): Promise<getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponse> => {
+    return apiFetch<getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetResponse>(
+      getGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetUrl(
+        evaluationId,
+        proposalId,
+      ),
+      {
+        ...options,
+        method: 'GET',
+      },
+    )
+  }
+
+export const getGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetQueryKey =
+  (evaluationId?: string, proposalId?: string) => {
+    return [
+      `/api/v1/evaluations/${evaluationId}/proposals/${proposalId}/economic-assessment`,
+    ] as const
+  }
+
+export const getGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetQueryOptions =
+  <
+    TData = Awaited<
+      ReturnType<
+        typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+      >
+    >,
+    TError = HTTPValidationError,
+  >(
+    evaluationId: string,
+    proposalId: string,
+    options?: {
+      query?: Partial<
+        UseQueryOptions<
+          Awaited<
+            ReturnType<
+              typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+            >
+          >,
+          TError,
+          TData
+        >
+      >
+    },
+  ) => {
+    const { query: queryOptions } = options ?? {}
+
+    const queryKey =
+      queryOptions?.queryKey ??
+      getGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetQueryKey(
+        evaluationId,
+        proposalId,
+      )
+
+    const queryFn: QueryFunction<
+      Awaited<
+        ReturnType<
+          typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+        >
+      >
+    > = () =>
+      getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet(
+        evaluationId,
+        proposalId,
+      )
+
+    return {
+      queryKey,
+      queryFn,
+      enabled: !!(evaluationId && proposalId),
+      ...queryOptions,
+    } as UseQueryOptions<
+      Awaited<
+        ReturnType<
+          typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+        >
+      >,
+      TError,
+      TData
+    > & { queryKey: DataTag<QueryKey, TData, TError> }
+  }
+
+export type GetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetQueryResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+      >
+    >
+  >
+export type GetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetQueryError =
+  HTTPValidationError
+
+export function useGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+          >
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<
+              typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+            >
+          >,
+          TError,
+          Awaited<
+            ReturnType<
+              typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+            >
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Economic Assessment
+ */
+
+export function useGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet<
+  TData = Awaited<
+    ReturnType<
+      typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+    >
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  proposalId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<
+            typeof getEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGet
+          >
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetQueryOptions(
+      evaluationId,
+      proposalId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**

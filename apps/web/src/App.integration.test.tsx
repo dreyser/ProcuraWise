@@ -114,6 +114,22 @@ function buildEvaluationDetail(
     approval_snapshot_id: null,
     base_currency: 'MXN',
     tco_horizon_years: 1,
+    economic_criteria_weights: {
+      commercial: {
+        payment_terms: 25,
+        price_protection: 25,
+        contractual_flexibility: 20,
+        discounts_incentives: 15,
+        billing_transparency: 15,
+      },
+      risk: {
+        variable_cost_exposure: 30,
+        increases_indexation: 25,
+        assumptions_exclusions: 20,
+        fx_fiscal_regulatory: 15,
+        exit_portability_lockin: 10,
+      },
+    },
     ...overrides,
   }
 }

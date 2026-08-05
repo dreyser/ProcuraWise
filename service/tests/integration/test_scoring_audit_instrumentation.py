@@ -86,9 +86,31 @@ def _submitted_proposal(client, seeded_actors, mongo_test_settings):
         json={"value": "answer", "expected_version": 1},
         headers=vendor_headers,
     )
+    # Fase 20: a nonzero cost item (currency == the evaluation's default
+    # base_currency MXN, so no FXRate needs seeding here) makes TCO
+    # "available" rather than "no_comparable" - needed by
+    # test_complete_evaluation_generates_exactly_one_event below, which
+    # must reach a real economic-complete state to call /complete.
+    client.post(
+        f"/api/v1/vendor-portal/proposals/{proposal_id}/cost-items",
+        json={
+            "concept": "Licencia anual",
+            "category": "recurring",
+            "billing_unit": "usuario",
+            "quantity": "10",
+            "unit_price": "100",
+            "currency": "MXN",
+            "frequency_per_year": "1",
+            "year_start": 1,
+            "year_end": 1,
+            "cost_type": "recurring",
+            "expected_version": 2,
+        },
+        headers=vendor_headers,
+    )
     client.post(
         f"/api/v1/vendor-portal/proposals/{proposal_id}/submit",
-        json={"expected_version": 2},
+        json={"expected_version": 3},
         headers=vendor_headers,
     )
     client.post(f"/api/v1/evaluations/{evaluation_id}/start-evaluation", headers=owner_headers)
@@ -179,6 +201,34 @@ def test_complete_evaluation_generates_exactly_one_event(
     client.put(
         f"/api/v1/evaluations/{evaluation_id}/proposals/{proposal_id}/scores/{technical_id}",
         json={"score": 5, "comment": None, "version": None},
+        headers=owner_headers,
+    )
+    # Fase 20: complete_evaluation() now also requires the economic
+    # assessment to be complete (see _submitted_proposal's cost item above).
+    client.put(
+        f"/api/v1/evaluations/{evaluation_id}/proposals/{proposal_id}/economic-assessment",
+        json={
+            "commercial_scores": [
+                {"criterion_key": key, "score": 3, "comment": None}
+                for key in [
+                    "payment_terms",
+                    "price_protection",
+                    "contractual_flexibility",
+                    "discounts_incentives",
+                    "billing_transparency",
+                ]
+            ],
+            "risk_scores": [
+                {"criterion_key": key, "score": 3, "comment": None}
+                for key in [
+                    "variable_cost_exposure",
+                    "increases_indexation",
+                    "assumptions_exclusions",
+                    "fx_fiscal_regulatory",
+                    "exit_portability_lockin",
+                ]
+            ],
+        },
         headers=owner_headers,
     )
 

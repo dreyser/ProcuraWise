@@ -67,3 +67,8 @@ class SnapshotNotFoundError(Exception):
     """No EvaluationSnapshot exists yet for this evaluation - either it has
     never been published, or (plan §29) it was published before Fase 12
     existed and has no retroactive snapshot."""
+
+
+class InvalidEconomicWeightsError(Exception):
+    """Fase 20 (ADR 0009): a commercial/risk weights group does not contain
+    exactly the fixed set of criterion keys, or does not sum to 100."""

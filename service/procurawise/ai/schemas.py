@@ -3,7 +3,7 @@ from typing import Literal
 
 from procurawise.ai.models import AIExecutionStatus
 from procurawise.ai.research_provider import ResearchSourceType, ResearchWarningCode
-from procurawise.evaluations.models import Dimension, Priority, ResponseType
+from procurawise.evaluations.models import Priority, RequirementDimension, ResponseType
 from procurawise.evaluations.schemas import RequirementResponse
 from procurawise.shared.api_models import APIModel
 
@@ -39,7 +39,7 @@ class AIRequirementCandidate(APIModel):
     persisted catalog, never from raw model output (founder decision, Fase
     14 planning)."""
 
-    dimension: Dimension
+    dimension: RequirementDimension
     category: str
     title: str
     description: str
@@ -83,7 +83,7 @@ class TokenUsageResponse(APIModel):
 
 
 class TriggerSuggestionRequest(APIModel):
-    dimension: Dimension
+    dimension: RequirementDimension
     description: str
 
 

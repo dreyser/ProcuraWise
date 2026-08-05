@@ -32,6 +32,7 @@ import {
   requestApprovalPreconditionReasons,
   startCollectionPreconditionReasons,
 } from '@/features/evaluations/lib/evaluationReadiness'
+import { EconomicWeightsForm } from './EconomicWeightsForm'
 
 interface WizardStepReviewProps {
   evaluation: EvaluationDetailResponse
@@ -165,6 +166,8 @@ export function WizardStepReview({ evaluation, onBack, onStarted }: WizardStepRe
           <dd className="text-foreground">{evaluation.linked_vendor_count} / 6</dd>
         </div>
       </dl>
+
+      <EconomicWeightsForm evaluation={evaluation} />
 
       <section className="mt-8 max-w-md">
         <div className="flex items-center gap-2">
