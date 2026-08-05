@@ -65,6 +65,7 @@ export function ScoringPage() {
     proposalId!,
   )
   const proposal = unwrapData<ProposalDetailResponse>(proposalQuery.data)
+  const currentSnapshot = proposal?.snapshots.at(-1)
 
   const resultsQuery = useGetResultsApiV1EvaluationsEvaluationIdResultsGet(evaluationId!)
   const results = unwrapData<ResultsResponse>(resultsQuery.data)
@@ -81,7 +82,7 @@ export function ScoringPage() {
   const scoresByRequirement = new Map(
     (proposalResult?.scores ?? []).map((s) => [s.requirement_id, s]),
   )
-  const requirements = proposal?.snapshot?.requirements ?? []
+  const requirements = currentSnapshot?.requirements ?? []
 
   useEffect(() => {
     if (initialized || requirements.length === 0) return
@@ -130,7 +131,7 @@ export function ScoringPage() {
     return <ErrorBanner message={normalizeApiError(proposalQuery.error).message} />
   if (!evaluation || !proposal) return null
 
-  if (proposal.status !== 'submitted' || !proposal.snapshot) {
+  if (proposal.status !== 'submitted' || !currentSnapshot) {
     return <ErrorBanner message="Solo las propuestas enviadas pueden calificarse." />
   }
 
@@ -361,12 +362,10 @@ export function ScoringPage() {
   return (
     <div className="max-w-3xl">
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-foreground">
-          {proposal.snapshot.vendor_org_name}
-        </h1>
+        <h1 className="text-lg font-semibold text-foreground">{currentSnapshot.vendor_org_name}</h1>
         <StatusBadge label="Enviada" />
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">{proposal.snapshot.evaluation_name}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{currentSnapshot.evaluation_name}</p>
 
       <div className="mt-2 text-sm text-muted-foreground" role="status">
         Calificados: {scoredCount} / {requirements.length}

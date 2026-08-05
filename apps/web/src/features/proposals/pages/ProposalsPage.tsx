@@ -3,9 +3,11 @@ import { Link, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   getGetEvaluationApiV1EvaluationsEvaluationIdGetQueryKey,
+  getListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryKey,
   useGetEvaluationApiV1EvaluationsEvaluationIdGet,
   useListProposalsApiV1EvaluationsEvaluationIdProposalsGet,
   useListVendorOrganizationsApiV1VendorOrganizationsGet,
+  useReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost,
   useStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost,
   type EvaluationDetailResponse,
   type ProposalSummaryResponse,
@@ -30,6 +32,9 @@ import {
 import { translateEvaluationStatus, translateProposalStatus } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
+import { ReopenProposalDialog } from '@/features/proposals/components/ReopenProposalDialog'
+
+const MAX_PROPOSAL_ROUNDS = 2
 
 export function ProposalsPage() {
   const { evaluationId } = useParams<{ evaluationId: string }>()
@@ -48,6 +53,7 @@ export function ProposalsPage() {
   const nameById = new Map((namesCatalog?.items ?? []).map((item) => [item.id, item.name]))
 
   const [confirmStart, setConfirmStart] = useState(false)
+  const [reopenTarget, setReopenTarget] = useState<ProposalSummaryResponse | null>(null)
 
   const startEvaluation = useStartEvaluationApiV1EvaluationsEvaluationIdStartEvaluationPost({
     mutation: {
@@ -59,6 +65,23 @@ export function ProposalsPage() {
       },
     },
   })
+
+  const reopenProposal = useReopenProposalApiV1EvaluationsEvaluationIdProposalsProposalIdReopenPost(
+    {
+      mutation: {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getGetEvaluationApiV1EvaluationsEvaluationIdGetQueryKey(evaluationId),
+          })
+          queryClient.invalidateQueries({
+            queryKey:
+              getListProposalsApiV1EvaluationsEvaluationIdProposalsGetQueryKey(evaluationId),
+          })
+          setReopenTarget(null)
+        },
+      },
+    },
+  )
 
   if (evaluationQuery.isLoading) return <LoadingState label="Cargando propuestas…" />
   if (evaluationQuery.error instanceof ApiError && evaluationQuery.error.status === 404) {
@@ -96,6 +119,7 @@ export function ProposalsPage() {
                 <TableRow>
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>Ronda</TableHead>
                   <TableHead>Última actualización</TableHead>
                   {evaluation.status === 'evaluating' || evaluation.status === 'completed' ? (
                     <TableHead>Acciones</TableHead>
@@ -103,41 +127,68 @@ export function ProposalsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {proposals.map((proposal) => (
-                  <TableRow key={proposal.id}>
-                    <TableCell>{nameById.get(proposal.vendor_org_id) ?? 'Proveedor'}</TableCell>
-                    <TableCell>
-                      <StatusBadge label={translateProposalStatus(proposal.status)} />
-                    </TableCell>
-                    <TableCell>
-                      {new Date(proposal.updated_at).toLocaleDateString('es-MX')}
-                    </TableCell>
-                    {evaluation.status === 'evaluating' || evaluation.status === 'completed' ? (
+                {proposals.map((proposal) => {
+                  const canReopen =
+                    isOwner &&
+                    evaluation.status === 'evaluating' &&
+                    proposal.status === 'submitted' &&
+                    proposal.round < MAX_PROPOSAL_ROUNDS - 1
+                  return (
+                    <TableRow key={proposal.id}>
+                      <TableCell>{nameById.get(proposal.vendor_org_id) ?? 'Proveedor'}</TableCell>
                       <TableCell>
-                        {proposal.status === 'submitted' ? (
-                          <div className="flex flex-col gap-1">
-                            <Link
-                              to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/score`}
-                              className="text-sm text-foreground underline-offset-2 hover:underline"
-                            >
-                              Calificar
-                            </Link>
-                            <Link
-                              to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/tco`}
-                              className="text-sm text-foreground underline-offset-2 hover:underline"
-                            >
-                              Ver TCO
-                            </Link>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">
-                            No enviada, sin calificar
-                          </span>
-                        )}
+                        <StatusBadge label={translateProposalStatus(proposal.status)} />
                       </TableCell>
-                    ) : null}
-                  </TableRow>
-                ))}
+                      <TableCell>Ronda {proposal.round}</TableCell>
+                      <TableCell>
+                        {new Date(proposal.updated_at).toLocaleDateString('es-MX')}
+                      </TableCell>
+                      {evaluation.status === 'evaluating' || evaluation.status === 'completed' ? (
+                        <TableCell>
+                          {proposal.status === 'submitted' ? (
+                            <div className="flex flex-col items-start gap-1">
+                              <Link
+                                to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/score`}
+                                className="text-sm text-foreground underline-offset-2 hover:underline"
+                              >
+                                Calificar
+                              </Link>
+                              <Link
+                                to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/tco`}
+                                className="text-sm text-foreground underline-offset-2 hover:underline"
+                              >
+                                Ver TCO
+                              </Link>
+                              {proposal.round > 0 && (
+                                <Link
+                                  to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/versions`}
+                                  className="text-sm text-foreground underline-offset-2 hover:underline"
+                                >
+                                  Comparar rondas
+                                </Link>
+                              )}
+                              {canReopen && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="mt-1"
+                                  onClick={() => setReopenTarget(proposal)}
+                                >
+                                  Reabrir para negociación
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              No enviada, sin calificar
+                            </span>
+                          )}
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
@@ -173,6 +224,29 @@ export function ProposalsPage() {
       {startEvaluation.isError && (
         <div className="mt-2">
           <ErrorBanner message={normalizeApiError(startEvaluation.error).message} />
+        </div>
+      )}
+
+      {reopenTarget && (
+        <ReopenProposalDialog
+          open
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setReopenTarget(null)
+          }}
+          vendorName={nameById.get(reopenTarget.vendor_org_id) ?? 'Proveedor'}
+          isPending={reopenProposal.isPending}
+          onConfirm={(data) =>
+            reopenProposal.mutate({
+              evaluationId: evaluation.id,
+              proposalId: reopenTarget.id,
+              data,
+            })
+          }
+        />
+      )}
+      {reopenProposal.isError && (
+        <div className="mt-2">
+          <ErrorBanner message={normalizeApiError(reopenProposal.error).message} />
         </div>
       )}
     </div>

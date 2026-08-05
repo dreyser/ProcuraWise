@@ -121,7 +121,7 @@ def _create_evaluating_proposal(
     proposal = Proposal.create(
         tenant_id=tenant_id, evaluation_id=evaluation.id, vendor_org_id=vendor_org_id
     )
-    proposal = replace(proposal, status="submitted", snapshot=snapshot, answers=snapshot.answers)
+    proposal = replace(proposal, status="submitted", snapshots=[snapshot], answers=snapshot.answers)
     proposals.insert(tenant_id, proposal.to_document())
     return evaluation.id, proposal.id, functional_req.id, technical_req.id
 

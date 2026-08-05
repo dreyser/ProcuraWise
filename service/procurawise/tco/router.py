@@ -73,6 +73,7 @@ def get_tco_result(
         raise HTTPException(status_code=404) from None
     if proposal.evaluation_id != evaluation_id:
         raise HTTPException(status_code=404)
-    if proposal.snapshot is None or proposal.snapshot.tco_result is None:
+    current_snapshot = proposal.current_snapshot
+    if current_snapshot is None or current_snapshot.tco_result is None:
         raise HTTPException(status_code=404)
-    return _tco_result_response(proposal.snapshot.tco_result)
+    return _tco_result_response(current_snapshot.tco_result)

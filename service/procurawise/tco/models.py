@@ -10,6 +10,13 @@ Currency = Literal["MXN", "USD"]
 CostCategory = Literal["initial", "recurring", "variable_extraordinary"]
 CostType = Literal["one_time", "recurring", "variable"]
 
+# Fase 21 (ADR 0013): by analogy with ProposalAnswer.status - CostItems are
+# freely added/removed by the vendor (unlike answers, which always map 1:1
+# to a fixed Requirement), so "removed" is meaningful here in a way it isn't
+# for ProposalAnswer. "modified" is also the correct status for every
+# Ronda-0-authored item (nothing to inherit from yet).
+CostItemVersionStatus = Literal["inherited", "modified", "removed"]
+
 TCO_CURRENCIES: frozenset[Currency] = frozenset({"MXN", "USD"})
 
 
@@ -60,6 +67,13 @@ class CostItem:
     notes: str | None
     created_at: datetime
     updated_at: datetime
+    # Fase 21 (ADR 0013): version-tracking pair, mirroring ProposalAnswer.
+    # "modified" is the correct default for a brand-new item (Ronda 0, or a
+    # genuinely new item authored during Ronda 1) - `source_proposal_version`
+    # stays None until this exact item is copied forward as "inherited" by
+    # ProposalService.reopen().
+    status: CostItemVersionStatus = "modified"
+    source_proposal_version: int | None = None
 
     @staticmethod
     def create(
@@ -125,6 +139,8 @@ class CostItem:
             "notes": self.notes,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "status": self.status,
+            "source_proposal_version": self.source_proposal_version,
         }
 
     @staticmethod
@@ -149,6 +165,8 @@ class CostItem:
             notes=doc.get("notes"),
             created_at=doc["created_at"],
             updated_at=doc["updated_at"],
+            status=doc.get("status", "modified"),
+            source_proposal_version=doc.get("source_proposal_version"),
         )
 
 

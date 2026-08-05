@@ -22,3 +22,20 @@ class AnswerValidationError(Exception):
 class IncompleteRequiredAnswersError(Exception):
     """submit was requested but at least one requirement with required=true
     has no answer value yet."""
+
+
+class ProposalNotSubmittedError(Exception):
+    """Fase 21 (FR-047) - reopen() was called on a Proposal that is not
+    currently `status="submitted"` (still draft, or already reopened for
+    the round already in progress)."""
+
+
+class ProposalAlreadyMaxRoundsError(Exception):
+    """Fase 21 (ADR 0013/mvp-scope.md): the MVP allows at most one
+    negotiation round (Ronda 0 + Ronda 1) - reopen() was called on a
+    Proposal that already has 2 snapshots."""
+
+
+class InvalidReopenReasonError(Exception):
+    """Fase 21 (FR-047: "motivo") - reopen()'s `reason` was empty or
+    whitespace-only."""

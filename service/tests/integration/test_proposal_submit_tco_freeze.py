@@ -188,7 +188,7 @@ def test_submit_without_available_fx_rate_fails_closed_and_freezes_nothing(
 
     doc = mongo_test_db["proposals"].find_one({"_id": proposal_id})
     assert doc["status"] == "draft"
-    assert doc["snapshot"] is None
+    assert doc["snapshots"] == []
     assert doc["version"] == 2  # only the cost-item add bumped it, not the failed submit
 
 

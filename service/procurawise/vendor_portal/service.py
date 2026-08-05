@@ -37,8 +37,15 @@ class VendorPortalService:
     ) -> tuple[Proposal, str, list[Requirement]]:
         proposal = self._proposals.get_proposal_for_vendor(tenant_id, vendor_org_id, proposal_id)
         evaluation_name = self._evaluation_name(tenant_id, proposal.evaluation_id)
-        if proposal.snapshot is not None:
-            requirements = proposal.snapshot.requirements
+        # Fase 21: while editing (status=="draft"), Requirements always come
+        # from the live Evaluation - true for the original Ronda 0 draft
+        # (before any snapshot exists) and equally true for a reopened
+        # Ronda 1 draft (a snapshot already exists from Ronda 0, but
+        # Requirements are draft-only and never change during negotiation,
+        # so the live Evaluation is still the right source while editing).
+        # Only a submitted proposal reads its own frozen snapshot.
+        if proposal.status == "submitted" and proposal.current_snapshot is not None:
+            requirements = proposal.current_snapshot.requirements
         else:
             evaluation_doc = self._evaluations.find_by_id(tenant_id, proposal.evaluation_id)
             requirements = (

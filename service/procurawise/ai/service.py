@@ -417,7 +417,7 @@ class AIService:
         assert self._proposals is not None and self._assignments is not None
         evaluation = self._evaluating_evaluation_or_raise(tenant_id, evaluation_id)
         proposal = self._submitted_proposal_or_raise(tenant_id, proposal_id, evaluation_id)
-        assert proposal.snapshot is not None
+        assert proposal.current_snapshot is not None
 
         target_requirements = self._resolve_score_suggestion_requirements(
             tenant_id, evaluation_id, proposal, requirement_ids, actor
@@ -428,7 +428,7 @@ class AIService:
             tenant_id=tenant_id,
             evaluation_id=evaluation.id,
             proposal_id=proposal_id,
-            snapshot_id=proposal.snapshot.snapshot_id,
+            snapshot_id=proposal.current_snapshot.snapshot_id,
             requested_by_membership_id=actor.membership_id,
             use_case="score_suggestion",
             provider="azure_openai",
@@ -453,7 +453,7 @@ class AIService:
             resource_id=execution.id,
             evaluation_id=evaluation_id,
             proposal_id=proposal_id,
-            snapshot_id=proposal.snapshot.snapshot_id,
+            snapshot_id=proposal.current_snapshot.snapshot_id,
             metadata={
                 "requirement_ids": target_requirement_ids,
                 "prompt_template": SCORE_SUGGESTION_PROMPT_TEMPLATE,
@@ -541,7 +541,7 @@ class AIService:
         if proposal_doc is None or proposal_doc["evaluation_id"] != evaluation_id:
             raise ProposalNotFoundError(proposal_id)
         proposal = Proposal.from_document(proposal_doc)
-        if proposal.status != "submitted" or proposal.snapshot is None:
+        if proposal.status != "submitted" or proposal.current_snapshot is None:
             raise ScoringPreconditionError("proposal is not submitted")
         return proposal
 
@@ -558,9 +558,11 @@ class AIService:
         something specific and can't have it). Empty list: silently
         narrowed to whatever the actor is allowed to score and already has
         an answer - the common "review my whole section" case."""
-        assert self._assignments is not None and proposal.snapshot is not None
-        requirements_by_id = {r.id: r for r in proposal.snapshot.requirements}
-        answered_ids = {a.requirement_id for a in proposal.snapshot.answers if a.value is not None}
+        assert self._assignments is not None and proposal.current_snapshot is not None
+        requirements_by_id = {r.id: r for r in proposal.current_snapshot.requirements}
+        answered_ids = {
+            a.requirement_id for a in proposal.current_snapshot.answers if a.value is not None
+        }
 
         if requirement_ids:
             selected: list[Requirement] = []
@@ -580,7 +582,7 @@ class AIService:
             return selected
 
         eligible: list[Requirement] = []
-        for requirement in proposal.snapshot.requirements:
+        for requirement in proposal.current_snapshot.requirements:
             if requirement.id not in answered_ids:
                 continue
             try:
@@ -605,9 +607,9 @@ class AIService:
         if proposal_doc is None:
             raise ProposalNotFoundError(execution.proposal_id)
         proposal = Proposal.from_document(proposal_doc)
-        assert proposal.snapshot is not None
-        requirements_by_id = {r.id: r for r in proposal.snapshot.requirements}
-        answers_by_id = {a.requirement_id: a for a in proposal.snapshot.answers}
+        assert proposal.current_snapshot is not None
+        requirements_by_id = {r.id: r for r in proposal.current_snapshot.requirements}
+        answers_by_id = {a.requirement_id: a for a in proposal.current_snapshot.answers}
 
         blocks = [
             _render_requirement_block(requirements_by_id[rid], answers_by_id.get(rid))

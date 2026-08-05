@@ -187,7 +187,7 @@ def test_submit_freezes_document_ids_into_snapshot(client, vendor_setup) -> None
         headers=vendor_setup["owner_headers"],
     )
     assert detail.status_code == 200
-    assert detail.json()["snapshot"]["document_ids"] == [document_id]
+    assert detail.json()["snapshots"][-1]["document_ids"] == [document_id]
 
     # The document remains readable/downloadable by the buyer after submit -
     # the snapshot only freezes *which* ids were current, the Document rows

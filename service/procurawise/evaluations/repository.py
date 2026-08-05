@@ -75,6 +75,21 @@ class EvaluationRepository:
         )
         return result.matched_count > 0
 
+    def update_deadline_while_collecting(
+        self, tenant_id: str, evaluation_id: str, response_deadline: datetime
+    ) -> bool:
+        """Fase 21 (FR-047) - lets ProposalService.reopen() update the
+        (evaluation-wide, shared) response_deadline for a 2nd+ proposal
+        reopened within the same negotiation round, when the evaluation is
+        already `collecting_responses` from the round's first reopen()
+        call. `transition_status` above handles that first call instead
+        (evaluating -> collecting_responses)."""
+        result = self._scoped(tenant_id).update_one(
+            {"_id": evaluation_id, "status": "collecting_responses"},
+            {"$set": {"response_deadline": response_deadline, "updated_at": datetime.now(UTC)}},
+        )
+        return result.matched_count > 0
+
     def add_requirement(
         self,
         tenant_id: str,

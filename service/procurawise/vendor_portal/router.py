@@ -95,6 +95,8 @@ def _cost_item_response(item: CostItem) -> CostItemResponse:
         notes=item.notes,
         created_at=item.created_at,
         updated_at=item.updated_at,
+        status=item.status,
+        source_proposal_version=item.source_proposal_version,
     )
 
 
@@ -119,6 +121,7 @@ def _detail(
         evaluation_name=evaluation_name,
         status=proposal.status,
         version=proposal.version,
+        round=proposal.round,
         requirements=[_requirement_response(r) for r in requirements],
         answers=[
             VendorAnswerResponse(
@@ -126,10 +129,14 @@ def _detail(
                 value=a.value,
                 vendor_comment=a.vendor_comment,
                 updated_at=a.updated_at,
+                status=a.status,
+                source_proposal_version=a.source_proposal_version,
             )
             for a in proposal.answers
         ],
         cost_items=[_cost_item_response(c) for c in proposal.cost_items],
+        reopened_reason=proposal.reopened_reason,
+        reopened_at=proposal.reopened_at,
         created_at=proposal.created_at,
         updated_at=proposal.updated_at,
         submitted_at=proposal.submitted_at,
@@ -143,6 +150,7 @@ def _summary(proposal: Proposal, evaluation_name: str) -> VendorProposalSummaryR
         evaluation_name=evaluation_name,
         status=proposal.status,
         version=proposal.version,
+        round=proposal.round,
         created_at=proposal.created_at,
         updated_at=proposal.updated_at,
         submitted_at=proposal.submitted_at,

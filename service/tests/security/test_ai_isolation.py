@@ -220,7 +220,7 @@ def _create_evaluating_proposal(mongo_test_settings, tenant_id: str, owner_membe
     proposal = Proposal.create(
         tenant_id=tenant_id, evaluation_id=evaluation.id, vendor_org_id="vendor-org-1"
     )
-    proposal = replace(proposal, status="submitted", snapshot=snapshot, answers=snapshot.answers)
+    proposal = replace(proposal, status="submitted", snapshots=[snapshot], answers=snapshot.answers)
     proposals.insert(tenant_id, proposal.to_document())
     return evaluation.id, proposal.id, requirement.id
 

@@ -167,11 +167,11 @@ class ScoringService:
         if proposal_doc is None or proposal_doc["evaluation_id"] != evaluation_id:
             raise ProposalNotFoundError(proposal_id)
         proposal = Proposal.from_document(proposal_doc)
-        if proposal.status != "submitted" or proposal.snapshot is None:
+        if proposal.status != "submitted" or proposal.current_snapshot is None:
             raise ScoringPreconditionError("proposal is not submitted")
 
         requirement = next(
-            (r for r in proposal.snapshot.requirements if r.id == requirement_id), None
+            (r for r in proposal.current_snapshot.requirements if r.id == requirement_id), None
         )
         if requirement is None:
             raise RequirementNotInSnapshotError(requirement_id)
@@ -181,7 +181,11 @@ class ScoringService:
         )
 
         existing_doc = self._scores.find_one_by_natural_key(
-            tenant_id, evaluation_id, proposal_id, proposal.snapshot.snapshot_id, requirement_id
+            tenant_id,
+            evaluation_id,
+            proposal_id,
+            proposal.current_snapshot.snapshot_id,
+            requirement_id,
         )
 
         ai_decision = self._ai_decision(
@@ -198,7 +202,7 @@ class ScoringService:
                 tenant_id=tenant_id,
                 evaluation_id=evaluation_id,
                 proposal_id=proposal_id,
-                snapshot_id=proposal.snapshot.snapshot_id,
+                snapshot_id=proposal.current_snapshot.snapshot_id,
                 requirement_id=requirement_id,
                 dimension=requirement.dimension,
                 priority=requirement.priority,
@@ -220,7 +224,7 @@ class ScoringService:
                 resource_id=score.id,
                 evaluation_id=evaluation_id,
                 proposal_id=proposal_id,
-                snapshot_id=proposal.snapshot.snapshot_id,
+                snapshot_id=proposal.current_snapshot.snapshot_id,
                 version=score.version,
                 metadata=audit_metadata,
             )
@@ -241,7 +245,11 @@ class ScoringService:
         if not matched:
             raise StaleScoreVersionError(requirement_id)
         updated_doc = self._scores.find_one_by_natural_key(
-            tenant_id, evaluation_id, proposal_id, proposal.snapshot.snapshot_id, requirement_id
+            tenant_id,
+            evaluation_id,
+            proposal_id,
+            proposal.current_snapshot.snapshot_id,
+            requirement_id,
         )
         assert updated_doc is not None
         updated = Score.from_document(updated_doc)
@@ -253,7 +261,7 @@ class ScoringService:
             resource_id=updated.id,
             evaluation_id=evaluation_id,
             proposal_id=proposal_id,
-            snapshot_id=proposal.snapshot.snapshot_id,
+            snapshot_id=proposal.current_snapshot.snapshot_id,
             version=updated.version,
             metadata=audit_metadata,
         )
@@ -308,15 +316,16 @@ class ScoringService:
         if proposal_doc is None or proposal_doc["evaluation_id"] != evaluation_id:
             raise ProposalNotFoundError(proposal_id)
         proposal = Proposal.from_document(proposal_doc)
-        if proposal.status != "submitted" or proposal.snapshot is None:
+        if proposal.status != "submitted" or proposal.current_snapshot is None:
             raise ScoringPreconditionError("proposal is not submitted")
 
         self._enforce_section_assignment(
             tenant_id, evaluation_id, "economic", ECONOMIC_SECTION, actor
         )
+        current_snapshot_id = proposal.current_snapshot.snapshot_id
 
         existing_doc = self._economic_assessments.find_by_evaluation_and_proposal(
-            tenant_id, evaluation_id, proposal_id
+            tenant_id, evaluation_id, proposal_id, current_snapshot_id
         )
 
         if existing_doc is None:
@@ -326,6 +335,7 @@ class ScoringService:
                 tenant_id=tenant_id,
                 evaluation_id=evaluation_id,
                 proposal_id=proposal_id,
+                snapshot_id=current_snapshot_id,
                 commercial_scores=commercial_scores,
                 risk_scores=risk_scores,
                 membership_id=membership_id,
@@ -366,7 +376,7 @@ class ScoringService:
         if not matched:
             raise StaleEconomicAssessmentVersionError(proposal_id)
         updated_doc = self._economic_assessments.find_by_evaluation_and_proposal(
-            tenant_id, evaluation_id, proposal_id
+            tenant_id, evaluation_id, proposal_id, current_snapshot_id
         )
         assert updated_doc is not None
         updated = EconomicAssessment.from_document(updated_doc)
@@ -397,8 +407,11 @@ class ScoringService:
         proposal_doc = self._proposals.find_by_id(tenant_id, proposal_id)
         if proposal_doc is None or proposal_doc["evaluation_id"] != evaluation_id:
             raise ProposalNotFoundError(proposal_id)
+        proposal = Proposal.from_document(proposal_doc)
+        if proposal.current_snapshot is None:
+            raise EconomicAssessmentNotFoundError(proposal_id)
         assessment_doc = self._economic_assessments.find_by_evaluation_and_proposal(
-            tenant_id, evaluation_id, proposal_id
+            tenant_id, evaluation_id, proposal_id, proposal.current_snapshot.snapshot_id
         )
         if assessment_doc is None:
             raise EconomicAssessmentNotFoundError(proposal_id)
@@ -415,13 +428,59 @@ class ScoringService:
         drafts = [p for p in proposals if p.status == "draft"]
         return submitted, drafts
 
+    def _scores_for_current_snapshot(self, tenant_id: str, proposal: Proposal) -> list[Score]:
+        """Fase 21 (ADR 0013): the read-side half of "modificar una
+        respuesta invalida su score". Score already lives by `snapshot_id`
+        in its natural key (Fase 9) - a fresh Ronda 1 snapshot means a
+        requirement whose answer was edited simply has no Score against the
+        new snapshot_id yet (invalidated, by construction, without deleting
+        anything). For a requirement whose answer is still "inherited"
+        (unedited since the last round), this falls back to that previous
+        round's Score so the evaluator isn't forced to re-score everything -
+        never a monetary/financial value, purely a per-requirement score
+        carry-forward, same "calculate in vivo, never copy data" principle
+        already used for functional_points/tco_pct elsewhere in this class.
+        Round 0 (no previous round to fall back to) is the identity case."""
+        current = proposal.current_snapshot
+        assert current is not None
+        current_scores_by_requirement = {
+            doc["requirement_id"]: Score.from_document(doc)
+            for doc in self._scores.find_by_proposal_and_snapshot(
+                tenant_id, proposal.id, current.snapshot_id
+            )
+        }
+        if proposal.round == 0:
+            return list(current_scores_by_requirement.values())
+
+        previous = proposal.snapshots[-2]
+        previous_scores_by_requirement = {
+            doc["requirement_id"]: Score.from_document(doc)
+            for doc in self._scores.find_by_proposal_and_snapshot(
+                tenant_id, proposal.id, previous.snapshot_id
+            )
+        }
+        answers_by_requirement = {a.requirement_id: a for a in current.answers}
+
+        result: list[Score] = []
+        for requirement in current.requirements:
+            score = current_scores_by_requirement.get(requirement.id)
+            if score is not None:
+                result.append(score)
+                continue
+            answer = answers_by_requirement.get(requirement.id)
+            if answer is not None and answer.status == "inherited":
+                fallback = previous_scores_by_requirement.get(requirement.id)
+                if fallback is not None:
+                    result.append(fallback)
+        return result
+
     def _is_fully_scored(self, tenant_id: str, evaluation_id: str) -> bool:
         submitted, _drafts = self._submitted_and_draft_proposals(tenant_id, evaluation_id)
         for proposal in submitted:
-            assert proposal.snapshot is not None
-            score_docs = self._scores.find_by_proposal(tenant_id, proposal.id)
-            scored_ids = {doc["requirement_id"] for doc in score_docs}
-            requirement_ids = {r.id for r in proposal.snapshot.requirements}
+            assert proposal.current_snapshot is not None
+            scores = self._scores_for_current_snapshot(tenant_id, proposal)
+            scored_ids = {s.requirement_id for s in scores}
+            requirement_ids = {r.id for r in proposal.current_snapshot.requirements}
             if not requirement_ids.issubset(scored_ids):
                 return False
         return True
@@ -442,7 +501,9 @@ class ScoringService:
         functional_points/technical_points/partial_result below."""
         tco_totals: dict[str, Decimal | None] = {
             p.id: (
-                p.snapshot.tco_result.grand_total if p.snapshot and p.snapshot.tco_result else None
+                p.current_snapshot.tco_result.grand_total
+                if p.current_snapshot and p.current_snapshot.tco_result
+                else None
             )
             for p in submitted
         }
@@ -450,10 +511,14 @@ class ScoringService:
         weights = evaluation.economic_criteria_weights
         subtotals: dict[str, EconomicSubtotalResult] = {}
         for proposal in submitted:
-            assessment_doc = self._economic_assessments.find_by_evaluation_and_proposal(
-                tenant_id, evaluation.id, proposal.id
-            )
             commercial_pct = risk_pct = None
+            assessment_doc = (
+                self._economic_assessments.find_by_evaluation_and_proposal(
+                    tenant_id, evaluation.id, proposal.id, proposal.current_snapshot.snapshot_id
+                )
+                if proposal.current_snapshot is not None
+                else None
+            )
             if assessment_doc is not None:
                 assessment = EconomicAssessment.from_document(assessment_doc)
                 commercial_pct = calculate_rubric_pct(
@@ -482,10 +547,9 @@ class ScoringService:
 
         proposal_results = []
         for proposal in submitted:
-            assert proposal.snapshot is not None
-            score_docs = self._scores.find_by_proposal(tenant_id, proposal.id)
-            scores = [Score.from_document(d) for d in score_docs]
-            requirements_by_id = {r.id: r for r in proposal.snapshot.requirements}
+            assert proposal.current_snapshot is not None
+            scores = self._scores_for_current_snapshot(tenant_id, proposal)
+            requirements_by_id = {r.id: r for r in proposal.current_snapshot.requirements}
 
             functional_points = 0.0
             technical_points = 0.0

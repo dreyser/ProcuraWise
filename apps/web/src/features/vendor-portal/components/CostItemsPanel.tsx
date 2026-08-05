@@ -27,7 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { translateCostCategory, translateCostType } from '@/lib/enumLabels'
+import { StatusBadge } from '@/components/StatusBadge'
+import { translateCostCategory, translateCostItemStatus, translateCostType } from '@/lib/enumLabels'
 
 interface CostItemsPanelProps {
   proposalId: string
@@ -182,6 +183,7 @@ export function CostItemsPanel({ proposalId, proposal, disabled }: CostItemsPane
                   <TableHead>Precio unitario</TableHead>
                   <TableHead>Moneda</TableHead>
                   <TableHead>Años</TableHead>
+                  {proposal.round > 0 && <TableHead>Estado</TableHead>}
                   {!disabled && <TableHead>Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -197,17 +199,24 @@ export function CostItemsPanel({ proposalId, proposal, disabled }: CostItemsPane
                     <TableCell>
                       {item.year_start}–{item.year_end}
                     </TableCell>
+                    {proposal.round > 0 && (
+                      <TableCell>
+                        <StatusBadge label={translateCostItemStatus(item.status)} />
+                      </TableCell>
+                    )}
                     {!disabled && (
                       <TableCell>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          disabled={removeCostItem.isPending}
-                          onClick={() => handleRemove(item)}
-                        >
-                          Eliminar
-                        </Button>
+                        {item.status !== 'removed' && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={removeCostItem.isPending}
+                            onClick={() => handleRemove(item)}
+                          >
+                            Eliminar
+                          </Button>
+                        )}
                       </TableCell>
                     )}
                   </TableRow>

@@ -470,6 +470,7 @@ def link_vendor(
         vendor_org_id=proposal.vendor_org_id,
         status=proposal.status,
         version=proposal.version,
+        round=proposal.round,
         created_at=proposal.created_at,
         updated_at=proposal.updated_at,
         submitted_at=proposal.submitted_at,

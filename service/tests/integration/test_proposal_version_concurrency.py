@@ -141,7 +141,7 @@ def test_submit_with_stale_expected_version_does_not_persist_snapshot(
         final = proposals.find_by_id(tenant.id, proposal.id)
         assert final is not None
         assert final["status"] == "draft"
-        assert final["snapshot"] is None
+        assert final["snapshots"] == []
     finally:
         mongo_test_db["tenants"].delete_one({"_id": tenant.id})
         mongo_test_db["vendor_organizations"].delete_many({"tenant_id": tenant.id})

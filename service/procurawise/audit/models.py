@@ -115,6 +115,13 @@ AuditAction = Literal[
     # written, so it never produces an audit event of its own).
     "economic_assessment_created",
     "economic_assessment_updated",
+    # Fase 21 (ADR 0013, FR-047) - resource_type "proposal" (already exists,
+    # reused - same pattern as vendor_linked/proposal_submitted). No
+    # separate action for the round closing (start-evaluation) or for an
+    # individual answer/cost-item flipping inherited->modified/removed -
+    # those reuse evaluation_scoring_started and stay unaudited
+    # respectively, exactly like every ordinary draft edit already is.
+    "proposal_reopened",
 ]
 
 

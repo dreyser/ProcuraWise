@@ -5,9 +5,9 @@ from typing import Any
 from pydantic import Field
 
 from procurawise.evaluations.models import Dimension, Priority, ResponseType
-from procurawise.proposals.models import ProposalStatus
+from procurawise.proposals.models import ProposalAnswerVersionStatus, ProposalStatus
 from procurawise.shared.api_models import APIModel
-from procurawise.tco.models import CostCategory, CostType, Currency
+from procurawise.tco.models import CostCategory, CostItemVersionStatus, CostType, Currency
 
 
 class AnswerWriteRequest(APIModel):
@@ -90,6 +90,8 @@ class CostItemResponse(APIModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+    status: CostItemVersionStatus
+    source_proposal_version: int | None
 
 
 class TcoPreviewResponse(APIModel):
@@ -130,6 +132,8 @@ class VendorAnswerResponse(APIModel):
     value: Any
     vendor_comment: str | None
     updated_at: datetime
+    status: ProposalAnswerVersionStatus
+    source_proposal_version: int | None
 
 
 class VendorProposalSummaryResponse(APIModel):
@@ -138,6 +142,7 @@ class VendorProposalSummaryResponse(APIModel):
     evaluation_name: str
     status: ProposalStatus
     version: int
+    round: int
     created_at: datetime
     updated_at: datetime
     submitted_at: datetime | None
@@ -149,9 +154,15 @@ class VendorProposalDetailResponse(APIModel):
     evaluation_name: str
     status: ProposalStatus
     version: int
+    round: int
     requirements: list[VendorRequirementResponse]
     answers: list[VendorAnswerResponse]
     cost_items: list[CostItemResponse]
+    # Fase 21 (FR-047) - only set once this proposal has been reopened for
+    # negotiation; visible to the vendor so they understand why (mirrors
+    # Evaluation.approval_comment's existing transparency precedent).
+    reopened_reason: str | None
+    reopened_at: datetime | None
     created_at: datetime
     updated_at: datetime
     submitted_at: datetime | None
