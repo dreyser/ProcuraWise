@@ -20,6 +20,7 @@ AuditResourceType = Literal[
     "qna_question",
     "economic_assessment",
     "decision",
+    "report",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -137,6 +138,19 @@ AuditAction = Literal[
     "decision_approval_withdrawn",
     "decision_approved",
     "decision_rejected",
+    # Fase 23 (reports, ADR 0023) - resource_type "report". No
+    # report_generation_running action (mirrors AIExecution: only the
+    # terminal/requested transitions are audit-worthy, not the
+    # queued->running step, same as ai_generation_* never audits a
+    # "started" event either).
+    "report_generation_requested",
+    "report_generation_succeeded",
+    "report_generation_failed",
+    "report_downloaded",
+    # resource_type "evaluation" (reused, same pattern as
+    # requirements_applied_from_template, Fase 11 - it mutates the target
+    # Evaluation's requirements, not a resource of its own).
+    "requirements_import_confirmed",
 ]
 
 
