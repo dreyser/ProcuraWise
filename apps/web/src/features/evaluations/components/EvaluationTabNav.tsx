@@ -9,6 +9,7 @@ const TABS = [
   { suffix: '/proposals', label: 'Propuestas' },
   { suffix: '/qna', label: 'Q&A' },
   { suffix: '/results', label: 'Resultados' },
+  { suffix: '/decision', label: 'Decisión' },
 ]
 
 export function EvaluationTabNav({ evaluationId }: { evaluationId: string }) {

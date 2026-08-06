@@ -19,6 +19,7 @@ AuditResourceType = Literal[
     "document",
     "qna_question",
     "economic_assessment",
+    "decision",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -122,6 +123,20 @@ AuditAction = Literal[
     # those reuse evaluation_scoring_started and stay unaudited
     # respectively, exactly like every ordinary draft edit already is.
     "proposal_reopened",
+    # Fase 22 (plan Bloqueante #1, Opcion B) - resource_type "decision". This
+    # approval act is independent from evaluation_approver_set/_requested/
+    # _withdrawn/_approved/_rejected above (Fase 12, publication) - Decision
+    # carries its own approver_membership_id, never
+    # Evaluation.approver_membership_id, so the two families of actions are
+    # deliberately never conflated even though their names/shapes mirror
+    # each other.
+    "decision_created",
+    "decision_updated",
+    "decision_approver_set",
+    "decision_approval_requested",
+    "decision_approval_withdrawn",
+    "decision_approved",
+    "decision_rejected",
 ]
 
 
