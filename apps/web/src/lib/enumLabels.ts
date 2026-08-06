@@ -147,6 +147,35 @@ export const decisionOutcomeLabels = {
   void: 'Proceso declarado desierto',
 } as const satisfies Record<string, string>
 
+// Fase 23 (ADR 0023) - matches reports.models.ReportType exactly.
+export const reportTypeLabels = {
+  rfp_document: 'Documento formal de RFP',
+  requirements_matrix: 'Matriz de requerimientos',
+  vendor_comparison: 'Comparativo de proveedores',
+  scoring_detail: 'Detalle de scoring',
+  risk_analysis: 'Análisis de riesgos',
+  tco_breakdown: 'Desglose de TCO',
+  decision_record: 'Acta de decisión',
+  qna_summary: 'Resumen de preguntas y respuestas',
+} as const satisfies Record<string, string>
+
+// Fase 23 - matches reports.models.ReportFormat exactly.
+export const reportFormatLabels = {
+  pdf: 'PDF',
+  xlsx: 'Excel (XLSX)',
+  csv: 'CSV',
+  docx: 'Word (DOCX)',
+} as const satisfies Record<string, string>
+
+// Fase 23 - matches reports.models.ReportStatus exactly (same 4-state shape
+// as an AIExecution job, ADR 0012).
+export const reportStatusLabels = {
+  queued: 'En cola',
+  running: 'Generando',
+  succeeded: 'Completado',
+  failed: 'Fallido',
+} as const satisfies Record<string, string>
+
 function translate<T extends Record<string, string>>(map: T, key: string): string {
   return key in map ? map[key as keyof T] : key
 }
@@ -179,3 +208,6 @@ export const translateDecisionStatus = (value: string): string =>
   translate(decisionStatusLabels, value)
 export const translateDecisionOutcome = (value: string): string =>
   translate(decisionOutcomeLabels, value)
+export const translateReportType = (value: string): string => translate(reportTypeLabels, value)
+export const translateReportFormat = (value: string): string => translate(reportFormatLabels, value)
+export const translateReportStatus = (value: string): string => translate(reportStatusLabels, value)

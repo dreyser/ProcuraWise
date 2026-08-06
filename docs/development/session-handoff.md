@@ -32,6 +32,44 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-06 — Fase 23 (E10, cierre Bloque 5 / inicio Bloque 6): Reportes/exports asíncronos (8 tipos) + import Excel/CSV de requerimientos
+
+**Resumen:** Sesión que comenzó en Plan Mode exclusivo: verificó el cierre formal de Fase 22 con evidencia de Git/GitHub (PR #36 fusionado a `main`, merge commit `7c166c9`, 8/8 checks verdes), identificó Fase 23 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`session-handoff.md`, y produjo un plan técnico completo con una única pregunta genuinamente bloqueante: qué librerías de generación de PDF/XLSX/DOCX adoptar (CLAUDE.md §8 exige un ADR antes de agregar cualquier dependencia pesada, y ninguna existía en el proyecto). El founder resolvió explícitamente por la Opción A (`reportlab`+`openpyxl`+`python-docx`+`csv` stdlib, documentado en ADR 0023). Tras la autorización explícita del founder ("apruebo también avanzar con la implementación de este plan"), ejecución completa en 8 bloques incrementales (dependencias+modelo+migración, job asíncrono+worker, renderers PDF/DOCX, renderers XLSX/CSV, persistencia Blob+descarga, import Excel/CSV, frontend, E2E+documentación), cada uno verificado contra Docker real antes de avanzar. Dos bugs reales detectados y corregidos durante la propia sesión de implementación (no heredados): `ReportService.list_reports()` no validaba tenant ownership de la evaluación antes de consultar (detectado por el propio test de aislamiento nuevo, devolvía 200 vacío en vez de 404), y `useReportJobStatus.ts` (calcado del hook de Fase 13) nunca comprometía el estado `succeeded` al DOM bajo React 19 con varias queries de React Query concurrentes (detectado por `ReportsPage.test.tsx`, resuelto migrando a `useSyncExternalStore` con snapshot memoizado).
+
+**Decisión bloqueante resuelta por el founder (ver plan §9, no por evidencia documental):**
+1. Generación de PDF/XLSX/DOCX vía `reportlab`+`openpyxl`+`python-docx` (Opción A, ver ADR 0023) — las tres son pure-Python (sin dependencias de sistema, a diferencia de WeasyPrint), `openpyxl` cubre a la vez exportar XLSX y leer el import de Requirements, y `python-docx` permite entregar el "Documento formal de RFP" en Word+PDF como pide la spec textualmente, sin diferir DOCX a una fase futura.
+
+**Decisiones no bloqueantes resueltas por evidencia (ver plan §10, ninguna requirió al founder):**
+1. Ningún reporte visible al proveedor en esta fase — sin evidencia que lo requiera, queda para Fase 24+.
+2. Sin `EvaluationStatus` nuevo (`closed`/`archived`) — `completed`+`Decision.status=="approved"` ya representan el cierre.
+3. `Report` es colección propia (no extensión de `Document`) — grain distinto (por evaluación, no por proposal/requirement), ciclo de vida distinto (job asíncrono vs. upload síncrono).
+4. Readiness heterogénea por tipo (matriz completa en `current-phase.md`) — `decision_record` es el único con precondición dura (`Decision.status=="approved"`).
+5. Import de Requirements restringido a `Evaluation.status=="draft"`, reutilizando `add_requirements_bulk` (Fase 11) sin un camino de escritura propio.
+6. No se exporta auditoría como noveno tipo de reporte — no es uno de los 8 entregables textuales de la spec §10.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo módulo `procurawise/reports/` (`models.py`/`exceptions.py`/`repository.py`/`service.py`/`schemas.py`/`router.py`/`worker.py`/`assembly.py`/`render_types.py`/`renderers/{pdf,docx,xlsx,csv}.py`/`dependencies.py`/`import_types.py`/`import_parsing.py`/`import_service.py`/`import_schemas.py`/`import_router.py`), `shared/worker_loop.py` (nuevo, genérico, `ai/worker.py` intacto), `shared/config.py` (+4 settings), `audit/models.py` (+1 `AuditResourceType`, +5 `AuditAction`), `api/main.py`/`worker/main.py` (routers/dispatch registrados), `migrations/0020_reports_indexes.py` (nuevo), `pyproject.toml` (+3 dependencias), ADR 0023 (nuevo); frontend: `features/reports/hooks/useReportJobStatus.ts` (nuevo), `features/reports/pages/ReportsPage.tsx` (nuevo), `features/evaluations/components/ImportRequirementsDialog.tsx` (nuevo), `features/evaluations/components/EvaluationTabNav.tsx` (+tab "Reportes"), `app/router.tsx` (+ruta), `lib/enumLabels.ts` (+`reportTypeLabels`/`reportFormatLabels`/`reportStatusLabels`); `e2e/report-generation.spec.ts`/`e2e/requirements-import.spec.ts` (nuevos); tests backend nuevos: `test_report_models.py`, `test_shared_worker_loop.py`, `test_reports_worker.py`, `test_reports_assembly.py`, `test_reports_import_parsing.py`, `test_report_generation_workflow.py`, `test_requirements_import_workflow.py`, `test_report_isolation.py`; `ReportsPage.test.tsx`/`ImportRequirementsDialog.test.tsx` (frontend).
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker"`) → 255 passed (+28 sobre la base de Fase 22).
+- Backend integración/API/seguridad Docker (`make test-integration`) → 392 passed (+18 sobre la base de Fase 22 — incluye los 8 tipos × formatos válidos generando un archivo real con firma binaria correcta, idempotencia del job ante reintento, readiness gateada por tipo, flujo HTTP completo de import, y 9 tests de aislamiento negativo dedicados nuevos).
+- Frontend (`pnpm test`) → 191 passed (+7 sobre la base de Fase 22).
+- `pnpm build` → build de producción exitoso.
+- `make test-e2e` → 17/17 specs passed (+2 nuevos: `report-generation.spec.ts`/`requirements-import.spec.ts`, tras corregir un primer intento que usaba `page.goto()` para navegar a rutas autenticadas y perdía el JWT en memoria).
+- `make contracts` corrido dos veces seguidas → sin diff.
+- No aplica `make test-integration-ai` — Fase 23 no toca `ai/`/Service Bus.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna adicional requiere ADR más allá de ADR 0023 (ya redactado y aprobado por el founder para las dependencias de generación de reportes).
+
+**Deuda técnica introducida:**
+- Ninguna material — `Report` es una entidad enteramente nueva sin backfill; ninguna evaluación pre-Fase-23 requiere migración de datos.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md` (columna "Depende de" — fuente autoritativa, no `session-handoff.md`): **Fase 24**, notificaciones reales (Azure Communication Services) + centro in-app — depende de Fase 23 (✅ cerrada).
+- No tocar todavía: adjudicación contractual/firma electrónica (fuera de alcance permanente del MVP); visibilidad del proveedor sobre reportes/decisión (no confirmada para ninguna fase concreta todavía); export de auditoría como reporte (no solicitado, puede agregarse trivialmente reusando la arquitectura de `reports/` si el founder lo pide).
+- Housekeeping pendiente heredado, sin cambios: ramas `phase-14` a `phase-22` siguen sin borrarse (requiere confirmación explícita del founder); rama local `main` sigue desactualizada (requiere `git pull`/fast-forward explícito).
+
 ### Sesión — 2026-08-06 — Fase 22 (E9, Bloque 5 "Decisión"): `decisions` — vista de aprobador + memo de cierre
 
 **Resumen:** Sesión que comenzó en Plan Mode exclusivo: verificó el cierre formal de Fase 21 con evidencia de Git/GitHub (PR #35 fusionado a `main`, merge commit `d6df0ba`, 8/8 checks verdes), identificó Fase 22 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`session-handoff.md` (sin ADR dedicado que la resolviera de antemano, a diferencia de Fase 21), y produjo un plan técnico completo con una única pregunta genuinamente bloqueante: si la aprobación de la decisión debía reutilizar `Evaluation.approver_membership_id` (Fase 12) o requerir una asignación propia e independiente. El founder resolvió explícitamente por la asignación propia (Opción B), con precisiones vinculantes sobre la UX (sugerencia no vinculante del aprobador de publicación, nunca copiado automáticamente). Tras la autorización explícita del founder ("autorizo avanzar con la implementacion de esta fase"), ejecución completa en 7 bloques incrementales (modelo+repository+readiness, borrador y selección, asignación de aprobador propio, solicitud/retiro, aprobación+snapshot inmutable, frontend, E2E+documentación), cada uno verificado contra Docker real antes de avanzar. Dos bugs reales detectados y corregidos durante la propia sesión de implementación (no heredados): un `approve()` sin recuperación ante fallo parcial (detectado por diseño, antes de escribir el test), y un ciclo de gating imposible en la UI del botón "Solicitar aprobación" (detectado por el E2E, no por los tests unitarios que mockean por endpoint).

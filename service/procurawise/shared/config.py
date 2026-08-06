@@ -173,6 +173,22 @@ class Settings(BaseSettings):
     # only bounds how long a given URL keeps working if intercepted/shared.
     documents_download_url_ttl_minutes: int = 15
 
+    # Fase 23 (reports, ADR 0023): a dedicated container, same
+    # least-privilege-SAS-scoping rationale as documents_container_name -
+    # never mixed with vendor-uploaded evidence's own retention/lifecycle.
+    reports_container_name: str = "procurawise-reports"
+    reports_download_url_ttl_minutes: int = 15
+    # Same 1-year default as audit_event_retention_days/ai_execution_
+    # retention_days (ADR 0016) - Report is its own collection with its own
+    # lifecycle, not an AuditEvent/AIExecution, even though the policy
+    # happens to match today.
+    reports_retention_days: int = 365
+    # Fase 23 (requirements import): same rationale/order-of-magnitude as
+    # documents_max_file_size_mb - a spreadsheet of requirements is
+    # intrinsically small (bounded by what a human can review in a preview
+    # step before confirming).
+    import_max_file_size_mb: int = 10
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":

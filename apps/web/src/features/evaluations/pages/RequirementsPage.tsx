@@ -33,6 +33,7 @@ import { normalizeApiError } from '@/lib/errors'
 import { AiSuggestRequirementsDialog } from '@/features/evaluations/components/AiSuggestRequirementsDialog'
 import { ApplyTemplateButton } from '@/features/evaluations/components/ApplyTemplateButton'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
+import { ImportRequirementsDialog } from '@/features/evaluations/components/ImportRequirementsDialog'
 import { WeightSummary } from '@/features/evaluations/components/WeightSummary'
 import {
   RequirementForm,
@@ -300,6 +301,14 @@ export function RequirementsPage() {
           <AiSuggestRequirementsDialog
             evaluationId={evaluation.id}
             onAccepted={invalidateEvaluation}
+          />
+          <ImportRequirementsDialog
+            evaluationId={evaluation.id}
+            existingRequirementCountByDimension={{
+              functional: byDimension('functional').length,
+              technical: byDimension('technical').length,
+            }}
+            onImported={invalidateEvaluation}
           />
         </div>
       )}

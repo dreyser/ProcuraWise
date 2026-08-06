@@ -45,6 +45,14 @@ dependencies = [
     # native/system dependency, unlike the python-magic/libmagic option
     # deliberately rejected for magic-byte sniffing, see documents/service.py).
     "python-multipart>=0.0.20",
+    # Fase 23 (reports, ADR 0023): report generation - all three are
+    # pure-Python (no apt/system packages, unlike WeasyPrint or a headless
+    # browser), confined to reports/renderers/*.py only (same import-boundary
+    # principle CLAUDE.md S5.1 already applies to `ai/`). openpyxl is also
+    # reused to *read* .xlsx uploads for the Fase 23 requirements import.
+    "reportlab>=4.2",
+    "openpyxl>=3.1",
+    "python-docx>=1.1",
 ]
 
 [dependency-groups]
@@ -99,3 +107,9 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
 disallow_untyped_defs = false
+
+# Fase 23 (ADR 0023): none of the three report-generation libraries ship
+# complete type stubs.
+[[tool.mypy.overrides]]
+module = ["reportlab.*", "openpyxl.*", "docx.*"]
+ignore_missing_imports = true
