@@ -8,6 +8,7 @@ from procurawise.ai.router import score_suggestion_router
 from procurawise.api.routers.health import router as health_router
 from procurawise.assignments.router import router as assignments_router
 from procurawise.audit.router import router as audit_router
+from procurawise.decisions.router import router as decisions_router
 from procurawise.documents.router import buyer_documents_router, vendor_documents_router
 from procurawise.evaluations.router import router as evaluations_router
 from procurawise.identity.auth_router import router as auth_router
@@ -58,6 +59,7 @@ app.include_router(proposals_router, prefix="/api/v1")
 app.include_router(buyer_documents_router, prefix="/api/v1")
 app.include_router(buyer_qna_router, prefix="/api/v1")
 app.include_router(scoring_router, prefix="/api/v1")
+app.include_router(decisions_router, prefix="/api/v1")
 app.include_router(tco_router, prefix="/api/v1")
 app.include_router(assignments_router, prefix="/api/v1")
 app.include_router(knowledge_templates_router, prefix="/api/v1")

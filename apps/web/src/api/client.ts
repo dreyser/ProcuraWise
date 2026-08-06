@@ -740,6 +740,152 @@ export interface CuratedSourceResponse {
   updated_at: string
 }
 
+export type DecisionApprovalRequestComment = string | null
+
+export interface DecisionApprovalRequest {
+  comment?: DecisionApprovalRequestComment
+}
+
+export type DecisionReadinessResponseDecisionStatus =
+  'not_requested' | 'pending' | 'approved' | 'rejected' | null
+
+export type DecisionReadinessResponseSuggestedApproverMembershipId = string | null
+
+export interface DecisionReadinessResponse {
+  evaluation_completed: boolean
+  decision_exists: boolean
+  decision_status: DecisionReadinessResponseDecisionStatus
+  can_create: boolean
+  can_edit: boolean
+  can_request_approval: boolean
+  request_approval_reasons: string[]
+  can_approve_or_reject: boolean
+  suggested_approver_membership_id: DecisionReadinessResponseSuggestedApproverMembershipId
+}
+
+export interface DecisionRejectionRequest {
+  comment: string
+}
+
+export type DecisionResponseStatus =
+  (typeof DecisionResponseStatus)[keyof typeof DecisionResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const DecisionResponseStatus = {
+  not_requested: 'not_requested',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const
+
+export type DecisionResponseOutcome = 'selected' | 'void' | null
+
+export type DecisionResponseSelectedVendorOrgId = string | null
+
+export type DecisionResponseSelectedProposalId = string | null
+
+export type DecisionResponseSelectedProposalSnapshotId = string | null
+
+export type DecisionResponseVoidReason = string | null
+
+export type DecisionResponseJustification = string | null
+
+export type DecisionResponseApproverMembershipId = string | null
+
+export type DecisionResponseApprovalRequestedAt = string | null
+
+export type DecisionResponseApprovalRequestedByMembershipId = string | null
+
+export type DecisionResponseApprovalDecidedAt = string | null
+
+export type DecisionResponseApprovalDecidedByMembershipId = string | null
+
+export type DecisionResponseApprovalComment = string | null
+
+export type DecisionResponseDecisionSnapshotId = string | null
+
+export interface DecisionResponse {
+  id: string
+  evaluation_id: string
+  status: DecisionResponseStatus
+  outcome: DecisionResponseOutcome
+  selected_vendor_org_id: DecisionResponseSelectedVendorOrgId
+  selected_proposal_id: DecisionResponseSelectedProposalId
+  selected_proposal_snapshot_id: DecisionResponseSelectedProposalSnapshotId
+  void_reason: DecisionResponseVoidReason
+  justification: DecisionResponseJustification
+  approver_membership_id: DecisionResponseApproverMembershipId
+  created_by_membership_id: string
+  created_at: string
+  updated_at: string
+  approval_requested_at: DecisionResponseApprovalRequestedAt
+  approval_requested_by_membership_id: DecisionResponseApprovalRequestedByMembershipId
+  approval_decided_at: DecisionResponseApprovalDecidedAt
+  approval_decided_by_membership_id: DecisionResponseApprovalDecidedByMembershipId
+  approval_comment: DecisionResponseApprovalComment
+  decision_snapshot_id: DecisionResponseDecisionSnapshotId
+}
+
+export type DecisionSnapshotResponseOutcome =
+  (typeof DecisionSnapshotResponseOutcome)[keyof typeof DecisionSnapshotResponseOutcome]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const DecisionSnapshotResponseOutcome = {
+  selected: 'selected',
+  void: 'void',
+} as const
+
+export type DecisionSnapshotResponseSelectedVendorOrgId = string | null
+
+export type DecisionSnapshotResponseSelectedVendorOrgName = string | null
+
+export type DecisionSnapshotResponseSelectedProposalId = string | null
+
+export type DecisionSnapshotResponseSelectedProposalSnapshotId = string | null
+
+export type DecisionSnapshotResponseVoidReason = string | null
+
+export type DecisionSnapshotResponseProposalResultsItem = { [key: string]: unknown }
+
+export interface DecisionSnapshotResponse {
+  snapshot_id: string
+  evaluation_id: string
+  outcome: DecisionSnapshotResponseOutcome
+  selected_vendor_org_id: DecisionSnapshotResponseSelectedVendorOrgId
+  selected_vendor_org_name: DecisionSnapshotResponseSelectedVendorOrgName
+  selected_proposal_id: DecisionSnapshotResponseSelectedProposalId
+  selected_proposal_snapshot_id: DecisionSnapshotResponseSelectedProposalSnapshotId
+  void_reason: DecisionSnapshotResponseVoidReason
+  justification: string
+  approver_membership_id: string
+  decided_at: string
+  decided_by_membership_id: string
+  proposal_results: DecisionSnapshotResponseProposalResultsItem[]
+  taken_at: string
+}
+
+export type DecisionUpdateRequestOutcome = 'selected' | 'void' | null
+
+export type DecisionUpdateRequestSelectedVendorOrgId = string | null
+
+export type DecisionUpdateRequestVoidReason = string | null
+
+export type DecisionUpdateRequestJustification = string | null
+
+/**
+ * Partial update (exclude_unset, same convention as
+evaluations.schemas.RequirementUpdateRequest) - only the fields the
+caller actually sends are considered "set"; the service merges them with
+the current Decision before validating the resultant selection as one
+consistent unit.
+ */
+export interface DecisionUpdateRequest {
+  outcome?: DecisionUpdateRequestOutcome
+  selected_vendor_org_id?: DecisionUpdateRequestSelectedVendorOrgId
+  void_reason?: DecisionUpdateRequestVoidReason
+  justification?: DecisionUpdateRequestJustification
+}
+
 export type DevActorSummaryVendorOrgId = string | null
 
 /**
@@ -1720,6 +1866,10 @@ export interface ScoreWriteRequest {
 }
 
 export interface SetApproverRequest {
+  approver_membership_id: string
+}
+
+export interface SetDecisionApproverRequest {
   approver_membership_id: string
 }
 
@@ -10988,6 +11138,1486 @@ export const useCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePost = <
     getCompleteEvaluationApiV1EvaluationsEvaluationIdCompletePostMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Get Decision
+ */
+export type getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponse200 = {
+  data: DecisionResponse
+  status: 200
+}
+
+export type getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponseSuccess =
+  getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponse200 & {
+    headers: Headers
+  }
+export type getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponseError =
+  getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponse422 & {
+    headers: Headers
+  }
+
+export type getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponse =
+  | getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponseSuccess
+  | getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponseError
+
+export const getGetDecisionApiV1EvaluationsEvaluationIdDecisionGetUrl = (evaluationId: string) => {
+  return `/api/v1/evaluations/${evaluationId}/decision`
+}
+
+export const getDecisionApiV1EvaluationsEvaluationIdDecisionGet = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponse> => {
+  return apiFetch<getDecisionApiV1EvaluationsEvaluationIdDecisionGetResponse>(
+    getGetDecisionApiV1EvaluationsEvaluationIdDecisionGetUrl(evaluationId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetDecisionApiV1EvaluationsEvaluationIdDecisionGetQueryKey = (
+  evaluationId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/decision`] as const
+}
+
+export const getGetDecisionApiV1EvaluationsEvaluationIdDecisionGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetDecisionApiV1EvaluationsEvaluationIdDecisionGetQueryKey(evaluationId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>
+  > = () => getDecisionApiV1EvaluationsEvaluationIdDecisionGet(evaluationId)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetDecisionApiV1EvaluationsEvaluationIdDecisionGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>
+>
+export type GetDecisionApiV1EvaluationsEvaluationIdDecisionGetQueryError = HTTPValidationError
+
+export function useGetDecisionApiV1EvaluationsEvaluationIdDecisionGet<
+  TData = Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+          TError,
+          Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDecisionApiV1EvaluationsEvaluationIdDecisionGet<
+  TData = Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+          TError,
+          Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDecisionApiV1EvaluationsEvaluationIdDecisionGet<
+  TData = Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Decision
+ */
+
+export function useGetDecisionApiV1EvaluationsEvaluationIdDecisionGet<
+  TData = Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getDecisionApiV1EvaluationsEvaluationIdDecisionGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetDecisionApiV1EvaluationsEvaluationIdDecisionGetQueryOptions(
+    evaluationId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Create Decision
+ */
+export type createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponse201 = {
+  data: DecisionResponse
+  status: 201
+}
+
+export type createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponseSuccess =
+  createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponse201 & {
+    headers: Headers
+  }
+export type createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponseError =
+  createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponse422 & {
+    headers: Headers
+  }
+
+export type createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponse =
+  | createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponseSuccess
+  | createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponseError
+
+export const getCreateDecisionApiV1EvaluationsEvaluationIdDecisionPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/decision`
+}
+
+export const createDecisionApiV1EvaluationsEvaluationIdDecisionPost = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponse> => {
+  return apiFetch<createDecisionApiV1EvaluationsEvaluationIdDecisionPostResponse>(
+    getCreateDecisionApiV1EvaluationsEvaluationIdDecisionPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+    },
+  )
+}
+
+export const getCreateDecisionApiV1EvaluationsEvaluationIdDecisionPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createDecisionApiV1EvaluationsEvaluationIdDecisionPost>>,
+    TError,
+    { evaluationId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createDecisionApiV1EvaluationsEvaluationIdDecisionPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationKey = ['createDecisionApiV1EvaluationsEvaluationIdDecisionPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createDecisionApiV1EvaluationsEvaluationIdDecisionPost>>,
+    { evaluationId: string }
+  > = (props) => {
+    const { evaluationId } = props ?? {}
+
+    return createDecisionApiV1EvaluationsEvaluationIdDecisionPost(evaluationId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateDecisionApiV1EvaluationsEvaluationIdDecisionPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createDecisionApiV1EvaluationsEvaluationIdDecisionPost>>
+>
+
+export type CreateDecisionApiV1EvaluationsEvaluationIdDecisionPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Create Decision
+ */
+export const useCreateDecisionApiV1EvaluationsEvaluationIdDecisionPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createDecisionApiV1EvaluationsEvaluationIdDecisionPost>>,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createDecisionApiV1EvaluationsEvaluationIdDecisionPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getCreateDecisionApiV1EvaluationsEvaluationIdDecisionPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Update Decision
+ */
+export type updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponse200 = {
+  data: DecisionResponse
+  status: 200
+}
+
+export type updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponseSuccess =
+  updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponse200 & {
+    headers: Headers
+  }
+export type updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponseError =
+  updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponse422 & {
+    headers: Headers
+  }
+
+export type updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponse =
+  | updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponseSuccess
+  | updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponseError
+
+export const getUpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatchUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/decision`
+}
+
+export const updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch = async (
+  evaluationId: string,
+  decisionUpdateRequest: DecisionUpdateRequest,
+  options?: RequestInit,
+): Promise<updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponse> => {
+  return apiFetch<updateDecisionApiV1EvaluationsEvaluationIdDecisionPatchResponse>(
+    getUpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatchUrl(evaluationId),
+    {
+      ...options,
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(decisionUpdateRequest),
+    },
+  )
+}
+
+export const getUpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch>>,
+    TError,
+    { evaluationId: string; data: DecisionUpdateRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch>>,
+  TError,
+  { evaluationId: string; data: DecisionUpdateRequest },
+  TContext
+> => {
+  const mutationKey = ['updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch>>,
+    { evaluationId: string; data: DecisionUpdateRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch>>
+>
+export type UpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatchMutationBody =
+  DecisionUpdateRequest
+export type UpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Update Decision
+ */
+export const useUpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch>>,
+      TError,
+      { evaluationId: string; data: DecisionUpdateRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateDecisionApiV1EvaluationsEvaluationIdDecisionPatch>>,
+  TError,
+  { evaluationId: string; data: DecisionUpdateRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getUpdateDecisionApiV1EvaluationsEvaluationIdDecisionPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Get Readiness
+ */
+export type getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponse200 = {
+  data: DecisionReadinessResponse
+  status: 200
+}
+
+export type getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponseSuccess =
+  getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponse200 & {
+    headers: Headers
+  }
+export type getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponseError =
+  getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponse422 & {
+    headers: Headers
+  }
+
+export type getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponse =
+  | getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponseSuccess
+  | getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponseError
+
+export const getGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/decision/readiness`
+}
+
+export const getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponse> => {
+  return apiFetch<getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetResponse>(
+    getGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetUrl(evaluationId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetQueryKey = (
+  evaluationId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/decision/readiness`] as const
+}
+
+export const getGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetQueryKey(evaluationId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>
+  > = () => getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet(evaluationId)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>
+>
+export type GetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetQueryError =
+  HTTPValidationError
+
+export function useGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet<
+  TData = Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+          TError,
+          Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet<
+  TData = Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+          TError,
+          Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet<
+  TData = Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Readiness
+ */
+
+export function useGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet<
+  TData = Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetReadinessApiV1EvaluationsEvaluationIdDecisionReadinessGetQueryOptions(
+    evaluationId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Set Decision Approver
+ */
+export type setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponse200 = {
+  data: DecisionResponse
+  status: 200
+}
+
+export type setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponseSuccess =
+  setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponse200 & {
+    headers: Headers
+  }
+export type setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponseError =
+  setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponse422 & {
+    headers: Headers
+  }
+
+export type setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponse =
+  | setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponseSuccess
+  | setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponseError
+
+export const getSetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/decision/approver`
+}
+
+export const setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost = async (
+  evaluationId: string,
+  setDecisionApproverRequest: SetDecisionApproverRequest,
+  options?: RequestInit,
+): Promise<setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponse> => {
+  return apiFetch<setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostResponse>(
+    getSetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(setDecisionApproverRequest),
+    },
+  )
+}
+
+export const getSetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost>
+      >,
+      TError,
+      { evaluationId: string; data: SetDecisionApproverRequest },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<ReturnType<typeof setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost>>,
+    TError,
+    { evaluationId: string; data: SetDecisionApproverRequest },
+    TContext
+  > => {
+    const mutationKey = ['setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost>
+      >,
+      { evaluationId: string; data: SetDecisionApproverRequest }
+    > = (props) => {
+      const { evaluationId, data } = props ?? {}
+
+      return setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost(evaluationId, data)
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type SetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost>>
+  >
+export type SetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostMutationBody =
+  SetDecisionApproverRequest
+export type SetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Set Decision Approver
+ */
+export const useSetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost>
+      >,
+      TError,
+      { evaluationId: string; data: SetDecisionApproverRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof setDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPost>>,
+  TError,
+  { evaluationId: string; data: SetDecisionApproverRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getSetDecisionApproverApiV1EvaluationsEvaluationIdDecisionApproverPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Request Decision Approval
+ */
+export type requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponse200 =
+  {
+    data: DecisionResponse
+    status: 200
+  }
+
+export type requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponseSuccess =
+  requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponse200 & {
+    headers: Headers
+  }
+export type requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponseError =
+  requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponse422 & {
+    headers: Headers
+  }
+
+export type requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponse =
+  | requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponseSuccess
+  | requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponseError
+
+export const getRequestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostUrl =
+  (evaluationId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/decision/request-approval`
+  }
+
+export const requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost =
+  async (
+    evaluationId: string,
+    options?: RequestInit,
+  ): Promise<requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponse> => {
+    return apiFetch<requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostResponse>(
+      getRequestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostUrl(
+        evaluationId,
+      ),
+      {
+        ...options,
+        method: 'POST',
+      },
+    )
+  }
+
+export const getRequestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost
+        >
+      >,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost
+      >
+    >,
+    TError,
+    { evaluationId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      'requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost
+        >
+      >,
+      { evaluationId: string }
+    > = (props) => {
+      const { evaluationId } = props ?? {}
+
+      return requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost(
+        evaluationId,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type RequestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost
+      >
+    >
+  >
+
+export type RequestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Request Decision Approval
+ */
+export const useRequestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost
+        >
+      >,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<
+    ReturnType<
+      typeof requestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPost
+    >
+  >,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getRequestDecisionApprovalApiV1EvaluationsEvaluationIdDecisionRequestApprovalPostMutationOptions(
+      options,
+    )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Withdraw Decision Approval Request
+ */
+export type withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponse204 =
+  {
+    data: void
+    status: 204
+  }
+
+export type withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponse422 =
+  {
+    data: HTTPValidationError
+    status: 422
+  }
+
+export type withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponseSuccess =
+  withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponse204 & {
+    headers: Headers
+  }
+export type withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponseError =
+  withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponse =
+  | withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponseSuccess
+  | withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponseError
+
+export const getWithdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteUrl =
+  (evaluationId: string) => {
+    return `/api/v1/evaluations/${evaluationId}/decision/request-approval`
+  }
+
+export const withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete =
+  async (
+    evaluationId: string,
+    options?: RequestInit,
+  ): Promise<withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponse> => {
+    return apiFetch<withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteResponse>(
+      getWithdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteUrl(
+        evaluationId,
+      ),
+      {
+        ...options,
+        method: 'DELETE',
+      },
+    )
+  }
+
+export const getWithdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<
+          typeof withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete
+        >
+      >,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<
+        typeof withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete
+      >
+    >,
+    TError,
+    { evaluationId: string },
+    TContext
+  > => {
+    const mutationKey = [
+      'withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete',
+    ]
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<
+          typeof withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete
+        >
+      >,
+      { evaluationId: string }
+    > = (props) => {
+      const { evaluationId } = props ?? {}
+
+      return withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete(
+        evaluationId,
+      )
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type WithdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<
+        typeof withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete
+      >
+    >
+  >
+
+export type WithdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Withdraw Decision Approval Request
+ */
+export const useWithdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete =
+  <TError = HTTPValidationError, TContext = unknown>(
+    options?: {
+      mutation?: UseMutationOptions<
+        Awaited<
+          ReturnType<
+            typeof withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete
+          >
+        >,
+        TError,
+        { evaluationId: string },
+        TContext
+      >
+    },
+    queryClient?: QueryClient,
+  ): UseMutationResult<
+    Awaited<
+      ReturnType<
+        typeof withdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDelete
+      >
+    >,
+    TError,
+    { evaluationId: string },
+    TContext
+  > => {
+    const mutationOptions =
+      getWithdrawDecisionApprovalRequestApiV1EvaluationsEvaluationIdDecisionRequestApprovalDeleteMutationOptions(
+        options,
+      )
+
+    return useMutation(mutationOptions, queryClient)
+  }
+
+/**
+ * @summary Approve Decision
+ */
+export type approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponse200 = {
+  data: DecisionResponse
+  status: 200
+}
+
+export type approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponseSuccess =
+  approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponse200 & {
+    headers: Headers
+  }
+export type approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponseError =
+  approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponse422 & {
+    headers: Headers
+  }
+
+export type approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponse =
+  | approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponseSuccess
+  | approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponseError
+
+export const getApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/decision/approve`
+}
+
+export const approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost = async (
+  evaluationId: string,
+  decisionApprovalRequest: DecisionApprovalRequest,
+  options?: RequestInit,
+): Promise<approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponse> => {
+  return apiFetch<approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostResponse>(
+    getApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(decisionApprovalRequest),
+    },
+  )
+}
+
+export const getApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost>>,
+    TError,
+    { evaluationId: string; data: DecisionApprovalRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost>>,
+  TError,
+  { evaluationId: string; data: DecisionApprovalRequest },
+  TContext
+> => {
+  const mutationKey = ['approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost>>,
+    { evaluationId: string; data: DecisionApprovalRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type ApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost>>
+  >
+export type ApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostMutationBody =
+  DecisionApprovalRequest
+export type ApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Approve Decision
+ */
+export const useApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost>>,
+      TError,
+      { evaluationId: string; data: DecisionApprovalRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof approveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePost>>,
+  TError,
+  { evaluationId: string; data: DecisionApprovalRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getApproveDecisionApiV1EvaluationsEvaluationIdDecisionApprovePostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Reject Decision
+ */
+export type rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponse200 = {
+  data: DecisionResponse
+  status: 200
+}
+
+export type rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponseSuccess =
+  rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponse200 & {
+    headers: Headers
+  }
+export type rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponseError =
+  rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponse422 & {
+    headers: Headers
+  }
+
+export type rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponse =
+  | rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponseSuccess
+  | rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponseError
+
+export const getRejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/decision/reject`
+}
+
+export const rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost = async (
+  evaluationId: string,
+  decisionRejectionRequest: DecisionRejectionRequest,
+  options?: RequestInit,
+): Promise<rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponse> => {
+  return apiFetch<rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostResponse>(
+    getRejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(decisionRejectionRequest),
+    },
+  )
+}
+
+export const getRejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost>>,
+    TError,
+    { evaluationId: string; data: DecisionRejectionRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost>>,
+  TError,
+  { evaluationId: string; data: DecisionRejectionRequest },
+  TContext
+> => {
+  const mutationKey = ['rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost>>,
+    { evaluationId: string; data: DecisionRejectionRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type RejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost>>
+  >
+export type RejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostMutationBody =
+  DecisionRejectionRequest
+export type RejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Reject Decision
+ */
+export const useRejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost>>,
+      TError,
+      { evaluationId: string; data: DecisionRejectionRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof rejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPost>>,
+  TError,
+  { evaluationId: string; data: DecisionRejectionRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getRejectDecisionApiV1EvaluationsEvaluationIdDecisionRejectPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Get Decision Snapshot
+ */
+export type getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponse200 = {
+  data: DecisionSnapshotResponse
+  status: 200
+}
+
+export type getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponseSuccess =
+  getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponse200 & {
+    headers: Headers
+  }
+export type getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponseError =
+  getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponse422 & {
+    headers: Headers
+  }
+
+export type getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponse =
+  | getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponseSuccess
+  | getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponseError
+
+export const getGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/decision/snapshot`
+}
+
+export const getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponse> => {
+  return apiFetch<getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetResponse>(
+    getGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetUrl(evaluationId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetQueryKey = (
+  evaluationId?: string,
+) => {
+  return [`/api/v1/evaluations/${evaluationId}/decision/snapshot`] as const
+}
+
+export const getGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetQueryOptions = <
+  TData = Awaited<
+    ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetQueryKey(evaluationId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>>
+  > = () => getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet(evaluationId)
+
+  return { queryKey, queryFn, enabled: !!evaluationId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetQueryResult =
+  NonNullable<
+    Awaited<ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>>
+  >
+export type GetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetQueryError =
+  HTTPValidationError
+
+export function useGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet<
+  TData = Awaited<
+    ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet<
+  TData = Awaited<
+    ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+        >,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<
+            ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+          >,
+          TError,
+          Awaited<
+            ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+          >
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet<
+  TData = Awaited<
+    ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Decision Snapshot
+ */
+
+export function useGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet<
+  TData = Awaited<
+    ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+  >,
+  TError = HTTPValidationError,
+>(
+  evaluationId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<
+          ReturnType<typeof getDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGet>
+        >,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getGetDecisionSnapshotApiV1EvaluationsEvaluationIdDecisionSnapshotGetQueryOptions(
+      evaluationId,
+      options,
+    )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }
 
 /**

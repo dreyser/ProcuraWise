@@ -32,6 +32,44 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-06 — Fase 22 (E9, Bloque 5 "Decisión"): `decisions` — vista de aprobador + memo de cierre
+
+**Resumen:** Sesión que comenzó en Plan Mode exclusivo: verificó el cierre formal de Fase 21 con evidencia de Git/GitHub (PR #35 fusionado a `main`, merge commit `d6df0ba`, 8/8 checks verdes), identificó Fase 22 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`session-handoff.md` (sin ADR dedicado que la resolviera de antemano, a diferencia de Fase 21), y produjo un plan técnico completo con una única pregunta genuinamente bloqueante: si la aprobación de la decisión debía reutilizar `Evaluation.approver_membership_id` (Fase 12) o requerir una asignación propia e independiente. El founder resolvió explícitamente por la asignación propia (Opción B), con precisiones vinculantes sobre la UX (sugerencia no vinculante del aprobador de publicación, nunca copiado automáticamente). Tras la autorización explícita del founder ("autorizo avanzar con la implementacion de esta fase"), ejecución completa en 7 bloques incrementales (modelo+repository+readiness, borrador y selección, asignación de aprobador propio, solicitud/retiro, aprobación+snapshot inmutable, frontend, E2E+documentación), cada uno verificado contra Docker real antes de avanzar. Dos bugs reales detectados y corregidos durante la propia sesión de implementación (no heredados): un `approve()` sin recuperación ante fallo parcial (detectado por diseño, antes de escribir el test), y un ciclo de gating imposible en la UI del botón "Solicitar aprobación" (detectado por el E2E, no por los tests unitarios que mockean por endpoint).
+
+**Decisión bloqueante resuelta por el founder (ver plan §9, no por evidencia documental):**
+1. `Decision.approver_membership_id` es un campo propio e independiente — nunca copiado de ni escrito hacia `Evaluation.approver_membership_id`. El owner puede elegir a la misma persona que aprobó la publicación o a una distinta. La UI puede sugerir el aprobador de publicación como valor inicial de formulario, pero nunca se persiste hasta una acción explícita del owner sobre `POST /decision/approver`. Motivo del founder: evita acoplar dos gates distintos del ciclo de vida y preserva la separación de funciones.
+
+**Decisiones no bloqueantes resueltas por evidencia (ver plan §10, ninguna requirió al founder):**
+1. `Decision` solo creable/editable mientras `Evaluation.status == "completed"` — evita reabrir `complete_evaluation()` (Fase 20) o `ProposalService.reopen()` (Fase 21).
+2. Un único proveedor seleccionable + opción explícita "proceso desierto" — sin selección múltiple, sin señal de producto que la pida.
+3. `Decision.status` reutiliza la forma de `ApprovalStatus` (4 valores, `rejected` no terminal) pero como tipo propio, no importado.
+4. Justificación siempre obligatoria (no condicionada a "difiere de un ranking", que el sistema deliberadamente no calcula).
+5. `Decision`/`DecisionSnapshot` como colecciones propias, no campos embebidos en `Evaluation`.
+6. `snapshot_id` de `DecisionSnapshot` determinístico = `evaluation_id`, mismo truco de idempotencia que `EvaluationSnapshot`.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: nuevo módulo `procurawise/decisions/` (`models.py`/`exceptions.py`/`repository.py`/`snapshot_repository.py`/`service.py`/`schemas.py`/`router.py`), `audit/models.py` (+7 `AuditAction`, +`"decision"` en `AuditResourceType`), `api/main.py` (router registrado), `migrations/0019_decisions_indexes.py` (nuevo); frontend: `features/decisions/pages/DecisionPage.tsx` (nuevo), `features/evaluations/components/EvaluationTabNav.tsx` (+tab "Decisión"), `app/router.tsx` (+ruta), `lib/enumLabels.ts` (+`decisionStatusLabels`/`decisionOutcomeLabels`); `e2e/decision-approval.spec.ts` (nuevo); tests backend nuevos: `test_decision_models.py`, `test_decision_workflow.py`, `test_decisions_audit_instrumentation.py`, `test_decision_isolation.py`; `DecisionPage.test.tsx` (frontend).
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend).
+- Backend unit (`pytest -m "not docker"`) → 227 passed (+8 sobre la base de Fase 21).
+- Backend integración/API/seguridad Docker (`make test-integration`) → 374 passed (+19 sobre la base de Fase 21 — incluye flujo feliz con aprobador de decisión distinto del de publicación, recuperación ante fallo parcial simulado, rechazo→edición→reaprobación, "proceso desierto", autoaprobación bloqueada, 7 casos de aislamiento cross-tenant dedicados, auditoría sin fuga de justificación).
+- Frontend (`pnpm test`) → 184 passed (+5 sobre la base de Fase 21).
+- `pnpm build` → build de producción exitoso.
+- `make test-e2e` → 15/15 specs passed (+1 nuevo: `decision-approval.spec.ts`, tras corregir el bug de gating de UI).
+- `make contracts` corrido dos veces seguidas → sin diff.
+- No aplica `make test-integration-ai` — Fase 22 no toca `ai/`/Service Bus.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere ADR — la independencia del aprobador de decisión es una decisión de producto/autorización sobre un módulo nuevo, no una reapertura de una decisión arquitectónica ya aprobada (no toca base de datos, patrón de comunicación, ni división de servicios).
+
+**Deuda técnica introducida:**
+- Ninguna material — `Decision`/`DecisionSnapshot` son entidades enteramente nuevas sin backfill; ninguna evaluación pre-Fase-22 requiere migración de datos (la ausencia de `Decision` es un estado válido).
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md` (columna "Depende de" — fuente autoritativa, no `session-handoff.md`): **Fase 23**, reportes/exports asíncronos vía worker (8 entregables de §10 de la spec) + import Excel/CSV con preview+mapeo — depende de Fase 22 (✅ cerrada).
+- No tocar todavía: notificaciones reales (Fase 24, requiere Fase 23 primero); adjudicación contractual/firma electrónica (fuera de alcance permanente del MVP); visibilidad del proveedor sobre la decisión (no confirmada para ninguna fase concreta todavía).
+- Housekeeping pendiente heredado, sin cambios: ramas `phase-14` a `phase-21` siguen sin borrarse (requiere confirmación explícita del founder); rama local `main` sigue desactualizada (requiere `git pull`/fast-forward explícito).
+
 ### Sesión — 2026-08-05 — Fase 21 (E8, Bloque 5 "Decisión"): Ronda final de negociación — Ronda 0 + Ronda 1 opcional (BAFO), versionado, invalidación de scores, TCO por versión
 
 **Resumen:** Sesión de planeación exclusiva en Plan Mode que primero verificó el cierre formal de Fase 20 con evidencia de Git/GitHub (PR #34 fusionado a `main`, merge commit `faf5691`, 8/8 checks verdes, base correcta `80dfe68`), y después identificó Fase 21 por evidencia documental cruzada de `backlog.md`/`roadmap.md` y, sobre todo, [ADR 0013](../architecture/decisions/0013-versionado-propuestas-negociacion.md) (advertido explícitamente de no asumirla solo por la secuencia histórica esperada, aunque coincidiera con ella). A diferencia de Fase 19/20, esta fase contó con un ADR dedicado que ya resolvía la mayoría del diseño de alto nivel — **no sobrevivió ninguna pregunta genuinamente bloqueante**; todas las decisiones de diseño se resolvieron con evidencia de ADR 0013 + lectura directa del código existente, documentadas en el plan (§9) como decisiones razonadas. Tras la autorización explícita del founder ("Autorizo avanzar con la implementacion de los cambios a codigo"), ejecución completa en 7 bloques incrementales (modelo de versionado+migración, reapertura backend, submit extendido+herencia real, invalidación/herencia de scores+tests de aceptación dedicados, contratos, frontend, E2E+documentación), cada uno verificado contra Docker real antes de avanzar.

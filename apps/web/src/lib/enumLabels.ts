@@ -130,6 +130,23 @@ export const costItemStatusLabels = {
   removed: 'Eliminado',
 } as const satisfies Record<string, string>
 
+// Fase 22 (plan Bloqueante #1, Opcion B) - matches decisions.models.
+// DecisionStatus exactly. Same 4-value shape as approvalStatusLabels
+// (rejected is not terminal), but this is the decision's own, independent
+// approval act - never Evaluation.approval_status.
+export const decisionStatusLabels = {
+  not_requested: 'Sin solicitar',
+  pending: 'Aprobación pendiente',
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+} as const satisfies Record<string, string>
+
+// Fase 22 - matches decisions.models.DecisionOutcome exactly.
+export const decisionOutcomeLabels = {
+  selected: 'Proveedor seleccionado',
+  void: 'Proceso declarado desierto',
+} as const satisfies Record<string, string>
+
 function translate<T extends Record<string, string>>(map: T, key: string): string {
   return key in map ? map[key as keyof T] : key
 }
@@ -158,3 +175,7 @@ export const translateEconomicCriterion = (value: string): string =>
 export const translateAnswerStatus = (value: string): string => translate(answerStatusLabels, value)
 export const translateCostItemStatus = (value: string): string =>
   translate(costItemStatusLabels, value)
+export const translateDecisionStatus = (value: string): string =>
+  translate(decisionStatusLabels, value)
+export const translateDecisionOutcome = (value: string): string =>
+  translate(decisionOutcomeLabels, value)
