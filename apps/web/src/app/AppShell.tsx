@@ -31,6 +31,11 @@ interface AppShellProps {
   /** True only for the vendor interim mechanism (RequireActor/ActorContext) -
    * buyer sessions are real auth, no banner needed. */
   devModeNotice?: boolean
+  /** Fase 24: BuyerLayout/VendorLayout each inject their own bell
+   * (BuyerNotificationsBell/VendorNotificationsBell) - AppShell stays
+   * presentation-only and never imports useAuth/useVendorAuth itself,
+   * mirroring how exitLabel/onExit are already injected per-layout. */
+  notifications?: ReactNode
   children: ReactNode
 }
 
@@ -46,6 +51,7 @@ export function AppShell({
   exitLabel,
   onExit,
   devModeNotice = false,
+  notifications,
   children,
 }: AppShellProps) {
   return (
@@ -78,13 +84,16 @@ export function AppShell({
             </NavLink>
           ))}
         </nav>
-        <button
-          type="button"
-          onClick={onExit}
-          className="text-xs text-muted-foreground underline hover:text-foreground"
-        >
-          {exitLabel}
-        </button>
+        <div className="flex items-center gap-3">
+          {notifications}
+          <button
+            type="button"
+            onClick={onExit}
+            className="text-xs text-muted-foreground underline hover:text-foreground"
+          >
+            {exitLabel}
+          </button>
+        </div>
       </header>
       <main className="px-6 py-6">{children}</main>
     </div>

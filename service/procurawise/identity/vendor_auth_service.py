@@ -14,6 +14,7 @@ from procurawise.identity.repository import (
     VendorOrganizationRepository,
 )
 from procurawise.identity.service import IdentityService
+from procurawise.notifications.service import NotificationService
 from procurawise.shared.config import Settings
 from procurawise.shared.context import ActorContext
 
@@ -65,6 +66,7 @@ class VendorAuthService:
         invitations: VendorInvitationRepository,
         identity_service: IdentityService,
         audit: AuditEventService,
+        notifications: NotificationService,
         settings: Settings,
     ) -> None:
         self._users = users
@@ -73,6 +75,7 @@ class VendorAuthService:
         self._invitations = invitations
         self._identity_service = identity_service
         self._audit = audit
+        self._notifications = notifications
         self._settings = settings
 
     def _invite_contact(
@@ -114,6 +117,30 @@ class VendorAuthService:
             ttl_days=self._settings.vendor_invitation_ttl_days,
         )
         self._invitations.insert(tenant_id, invitation.to_document())
+
+        # Fase 24 (notifications, plan Bloqueante #1 Opcion A): the raw token
+        # exists in plaintext only here and in this call's return value -
+        # never persisted anywhere else - so the invitation link is embedded
+        # directly into the Notification's own body now, rather than passed
+        # separately for the worker to regenerate later (it structurally
+        # cannot: nothing else ever sees this raw_token again).
+        invite_url = (
+            f"{self._settings.frontend_base_url}/vendor/accept-invitation?token={raw_token}"
+        )
+        self._notifications.notify(
+            tenant_id,
+            recipient_membership_id=membership.id,
+            event="vendor_invited",
+            resource_type="vendor_organization",
+            resource_id=vendor_org_id,
+            evaluation_id=None,
+            title="Has sido invitado a ProcuraWise",
+            body=(
+                f"Fuiste invitado a colaborar en ProcuraWise. Usa este enlace para activar tu "
+                f"cuenta: {invite_url}\n\nEste enlace expira en "
+                f"{self._settings.vendor_invitation_ttl_days} días."
+            ),
+        )
         return membership, invitation, raw_token
 
     def create_vendor_organization(

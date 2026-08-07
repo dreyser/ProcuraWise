@@ -14,6 +14,7 @@ from procurawise.identity.repository import (
     TenantRepository,
     VendorOrganizationRepository,
 )
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.shared.context import ActorContext
 
@@ -43,6 +44,7 @@ def test_vendor_link_reservation_never_exceeds_limit_under_concurrency(
         memberships=memberships,
         snapshots=snapshots,
         audit=audit,
+        notifications=build_notification_service(mongo_test_settings),
     )
 
     tenant = Tenant.create(slug="vs2b-concurrency-tenant", name="Concurrency Tenant")

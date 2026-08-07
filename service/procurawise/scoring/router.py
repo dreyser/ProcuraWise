@@ -14,6 +14,7 @@ from procurawise.evaluations.schemas import (
     RequirementResponse,
 )
 from procurawise.identity.repository import VendorOrganizationRepository
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.exceptions import ProposalNotFoundError
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.scoring.exceptions import (
@@ -61,6 +62,7 @@ def get_scoring_service(settings: Settings = Depends(get_settings)) -> ScoringSe
         assignments=AssignmentRepository(db),
         ai_executions=AIExecutionRepository(db),
         economic_assessments=EconomicAssessmentRepository(db),
+        notifications=build_notification_service(settings),
     )
 
 

@@ -1266,6 +1266,10 @@ export interface LoginRequest {
   password: string
 }
 
+export interface MarkAllReadResponse {
+  marked_count: number
+}
+
 export interface MembershipOption {
   membership_id: string
   tenant_id: string
@@ -1276,6 +1280,42 @@ export interface MembershipOption {
 
 export interface MembershipsResponse {
   memberships: MembershipOption[]
+}
+
+export interface NotificationListResponse {
+  items: NotificationResponse[]
+  unread_count: number
+}
+
+export type NotificationResponseEvent =
+  (typeof NotificationResponseEvent)[keyof typeof NotificationResponseEvent]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const NotificationResponseEvent = {
+  vendor_invited: 'vendor_invited',
+  evaluation_published: 'evaluation_published',
+  qna_question_received: 'qna_question_received',
+  qna_answer_published: 'qna_answer_published',
+  proposal_submitted: 'proposal_submitted',
+  proposal_reopened: 'proposal_reopened',
+  approval_requested: 'approval_requested',
+  evaluation_completed: 'evaluation_completed',
+} as const
+
+export type NotificationResponseEvaluationId = string | null
+
+export type NotificationResponseReadAt = string | null
+
+export interface NotificationResponse {
+  id: string
+  event: NotificationResponseEvent
+  resource_type: string
+  resource_id: string
+  evaluation_id: NotificationResponseEvaluationId
+  title: string
+  body: string
+  created_at: string
+  read_at: NotificationResponseReadAt
 }
 
 export type OrgMemberSummaryVendorOrgId = string | null
@@ -19074,6 +19114,808 @@ export const useWithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQue
     getWithdrawQuestionApiV1VendorPortalProposalsProposalIdQuestionsQuestionIdDeleteMutationOptions(
       options,
     )
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Notifications As Buyer
+ */
+export type listNotificationsAsBuyerApiV1NotificationsGetResponse200 = {
+  data: NotificationListResponse
+  status: 200
+}
+
+export type listNotificationsAsBuyerApiV1NotificationsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listNotificationsAsBuyerApiV1NotificationsGetResponseSuccess =
+  listNotificationsAsBuyerApiV1NotificationsGetResponse200 & {
+    headers: Headers
+  }
+export type listNotificationsAsBuyerApiV1NotificationsGetResponseError =
+  listNotificationsAsBuyerApiV1NotificationsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listNotificationsAsBuyerApiV1NotificationsGetResponse =
+  | listNotificationsAsBuyerApiV1NotificationsGetResponseSuccess
+  | listNotificationsAsBuyerApiV1NotificationsGetResponseError
+
+export const getListNotificationsAsBuyerApiV1NotificationsGetUrl = () => {
+  return `/api/v1/notifications`
+}
+
+export const listNotificationsAsBuyerApiV1NotificationsGet = async (
+  options?: RequestInit,
+): Promise<listNotificationsAsBuyerApiV1NotificationsGetResponse> => {
+  return apiFetch<listNotificationsAsBuyerApiV1NotificationsGetResponse>(
+    getListNotificationsAsBuyerApiV1NotificationsGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListNotificationsAsBuyerApiV1NotificationsGetQueryKey = () => {
+  return [`/api/v1/notifications`] as const
+}
+
+export const getListNotificationsAsBuyerApiV1NotificationsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListNotificationsAsBuyerApiV1NotificationsGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>
+  > = () => listNotificationsAsBuyerApiV1NotificationsGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListNotificationsAsBuyerApiV1NotificationsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>
+>
+export type ListNotificationsAsBuyerApiV1NotificationsGetQueryError = HTTPValidationError
+
+export function useListNotificationsAsBuyerApiV1NotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListNotificationsAsBuyerApiV1NotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListNotificationsAsBuyerApiV1NotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Notifications As Buyer
+ */
+
+export function useListNotificationsAsBuyerApiV1NotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsBuyerApiV1NotificationsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListNotificationsAsBuyerApiV1NotificationsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Mark All Read As Buyer
+ */
+export type markAllReadAsBuyerApiV1NotificationsReadAllPatchResponse200 = {
+  data: MarkAllReadResponse
+  status: 200
+}
+
+export type markAllReadAsBuyerApiV1NotificationsReadAllPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type markAllReadAsBuyerApiV1NotificationsReadAllPatchResponseSuccess =
+  markAllReadAsBuyerApiV1NotificationsReadAllPatchResponse200 & {
+    headers: Headers
+  }
+export type markAllReadAsBuyerApiV1NotificationsReadAllPatchResponseError =
+  markAllReadAsBuyerApiV1NotificationsReadAllPatchResponse422 & {
+    headers: Headers
+  }
+
+export type markAllReadAsBuyerApiV1NotificationsReadAllPatchResponse =
+  | markAllReadAsBuyerApiV1NotificationsReadAllPatchResponseSuccess
+  | markAllReadAsBuyerApiV1NotificationsReadAllPatchResponseError
+
+export const getMarkAllReadAsBuyerApiV1NotificationsReadAllPatchUrl = () => {
+  return `/api/v1/notifications/read-all`
+}
+
+export const markAllReadAsBuyerApiV1NotificationsReadAllPatch = async (
+  options?: RequestInit,
+): Promise<markAllReadAsBuyerApiV1NotificationsReadAllPatchResponse> => {
+  return apiFetch<markAllReadAsBuyerApiV1NotificationsReadAllPatchResponse>(
+    getMarkAllReadAsBuyerApiV1NotificationsReadAllPatchUrl(),
+    {
+      ...options,
+      method: 'PATCH',
+    },
+  )
+}
+
+export const getMarkAllReadAsBuyerApiV1NotificationsReadAllPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markAllReadAsBuyerApiV1NotificationsReadAllPatch>>,
+    TError,
+    void,
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markAllReadAsBuyerApiV1NotificationsReadAllPatch>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ['markAllReadAsBuyerApiV1NotificationsReadAllPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markAllReadAsBuyerApiV1NotificationsReadAllPatch>>,
+    void
+  > = () => {
+    return markAllReadAsBuyerApiV1NotificationsReadAllPatch()
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type MarkAllReadAsBuyerApiV1NotificationsReadAllPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markAllReadAsBuyerApiV1NotificationsReadAllPatch>>
+>
+
+export type MarkAllReadAsBuyerApiV1NotificationsReadAllPatchMutationError = HTTPValidationError
+
+/**
+ * @summary Mark All Read As Buyer
+ */
+export const useMarkAllReadAsBuyerApiV1NotificationsReadAllPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof markAllReadAsBuyerApiV1NotificationsReadAllPatch>>,
+      TError,
+      void,
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof markAllReadAsBuyerApiV1NotificationsReadAllPatch>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationOptions =
+    getMarkAllReadAsBuyerApiV1NotificationsReadAllPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Mark Read As Buyer
+ */
+export type markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponse204 = {
+  data: void
+  status: 204
+}
+
+export type markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponseSuccess =
+  markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponse204 & {
+    headers: Headers
+  }
+export type markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponseError =
+  markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponse422 & {
+    headers: Headers
+  }
+
+export type markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponse =
+  | markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponseSuccess
+  | markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponseError
+
+export const getMarkReadAsBuyerApiV1NotificationsNotificationIdReadPatchUrl = (
+  notificationId: string,
+) => {
+  return `/api/v1/notifications/${notificationId}/read`
+}
+
+export const markReadAsBuyerApiV1NotificationsNotificationIdReadPatch = async (
+  notificationId: string,
+  options?: RequestInit,
+): Promise<markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponse> => {
+  return apiFetch<markReadAsBuyerApiV1NotificationsNotificationIdReadPatchResponse>(
+    getMarkReadAsBuyerApiV1NotificationsNotificationIdReadPatchUrl(notificationId),
+    {
+      ...options,
+      method: 'PATCH',
+    },
+  )
+}
+
+export const getMarkReadAsBuyerApiV1NotificationsNotificationIdReadPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markReadAsBuyerApiV1NotificationsNotificationIdReadPatch>>,
+    TError,
+    { notificationId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markReadAsBuyerApiV1NotificationsNotificationIdReadPatch>>,
+  TError,
+  { notificationId: string },
+  TContext
+> => {
+  const mutationKey = ['markReadAsBuyerApiV1NotificationsNotificationIdReadPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markReadAsBuyerApiV1NotificationsNotificationIdReadPatch>>,
+    { notificationId: string }
+  > = (props) => {
+    const { notificationId } = props ?? {}
+
+    return markReadAsBuyerApiV1NotificationsNotificationIdReadPatch(notificationId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type MarkReadAsBuyerApiV1NotificationsNotificationIdReadPatchMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markReadAsBuyerApiV1NotificationsNotificationIdReadPatch>>
+>
+
+export type MarkReadAsBuyerApiV1NotificationsNotificationIdReadPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Mark Read As Buyer
+ */
+export const useMarkReadAsBuyerApiV1NotificationsNotificationIdReadPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof markReadAsBuyerApiV1NotificationsNotificationIdReadPatch>>,
+      TError,
+      { notificationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof markReadAsBuyerApiV1NotificationsNotificationIdReadPatch>>,
+  TError,
+  { notificationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getMarkReadAsBuyerApiV1NotificationsNotificationIdReadPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Notifications As Vendor
+ */
+export type listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponse200 = {
+  data: NotificationListResponse
+  status: 200
+}
+
+export type listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponseSuccess =
+  listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponse200 & {
+    headers: Headers
+  }
+export type listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponseError =
+  listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponse422 & {
+    headers: Headers
+  }
+
+export type listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponse =
+  | listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponseSuccess
+  | listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponseError
+
+export const getListNotificationsAsVendorApiV1VendorPortalNotificationsGetUrl = () => {
+  return `/api/v1/vendor-portal/notifications`
+}
+
+export const listNotificationsAsVendorApiV1VendorPortalNotificationsGet = async (
+  options?: RequestInit,
+): Promise<listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponse> => {
+  return apiFetch<listNotificationsAsVendorApiV1VendorPortalNotificationsGetResponse>(
+    getListNotificationsAsVendorApiV1VendorPortalNotificationsGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListNotificationsAsVendorApiV1VendorPortalNotificationsGetQueryKey = () => {
+  return [`/api/v1/vendor-portal/notifications`] as const
+}
+
+export const getListNotificationsAsVendorApiV1VendorPortalNotificationsGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListNotificationsAsVendorApiV1VendorPortalNotificationsGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>
+  > = () => listNotificationsAsVendorApiV1VendorPortalNotificationsGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListNotificationsAsVendorApiV1VendorPortalNotificationsGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>
+>
+export type ListNotificationsAsVendorApiV1VendorPortalNotificationsGetQueryError =
+  HTTPValidationError
+
+export function useListNotificationsAsVendorApiV1VendorPortalNotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListNotificationsAsVendorApiV1VendorPortalNotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListNotificationsAsVendorApiV1VendorPortalNotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Notifications As Vendor
+ */
+
+export function useListNotificationsAsVendorApiV1VendorPortalNotificationsGet<
+  TData = Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listNotificationsAsVendorApiV1VendorPortalNotificationsGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions =
+    getListNotificationsAsVendorApiV1VendorPortalNotificationsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Mark All Read As Vendor
+ */
+export type markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponse200 = {
+  data: MarkAllReadResponse
+  status: 200
+}
+
+export type markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponseSuccess =
+  markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponse200 & {
+    headers: Headers
+  }
+export type markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponseError =
+  markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponse422 & {
+    headers: Headers
+  }
+
+export type markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponse =
+  | markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponseSuccess
+  | markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponseError
+
+export const getMarkAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchUrl = () => {
+  return `/api/v1/vendor-portal/notifications/read-all`
+}
+
+export const markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch = async (
+  options?: RequestInit,
+): Promise<markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponse> => {
+  return apiFetch<markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchResponse>(
+    getMarkAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchUrl(),
+    {
+      ...options,
+      method: 'PATCH',
+    },
+  )
+}
+
+export const getMarkAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch>>,
+    TError,
+    void,
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ['markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch>>,
+    void
+  > = () => {
+    return markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch()
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type MarkAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch>>
+  >
+
+export type MarkAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Mark All Read As Vendor
+ */
+export const useMarkAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch>>,
+      TError,
+      void,
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof markAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatch>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationOptions =
+    getMarkAllReadAsVendorApiV1VendorPortalNotificationsReadAllPatchMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Mark Read As Vendor
+ */
+export type markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponse204 = {
+  data: void
+  status: 204
+}
+
+export type markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponseSuccess =
+  markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponse204 & {
+    headers: Headers
+  }
+export type markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponseError =
+  markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponse422 & {
+    headers: Headers
+  }
+
+export type markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponse =
+  | markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponseSuccess
+  | markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponseError
+
+export const getMarkReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchUrl = (
+  notificationId: string,
+) => {
+  return `/api/v1/vendor-portal/notifications/${notificationId}/read`
+}
+
+export const markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch = async (
+  notificationId: string,
+  options?: RequestInit,
+): Promise<markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponse> => {
+  return apiFetch<markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchResponse>(
+    getMarkReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchUrl(notificationId),
+    {
+      ...options,
+      method: 'PATCH',
+    },
+  )
+}
+
+export const getMarkReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch>
+      >,
+      TError,
+      { notificationId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch>
+    >,
+    TError,
+    { notificationId: string },
+    TContext
+  > => {
+    const mutationKey = ['markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch>
+      >,
+      { notificationId: string }
+    > = (props) => {
+      const { notificationId } = props ?? {}
+
+      return markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch(notificationId)
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type MarkReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchMutationResult =
+  NonNullable<
+    Awaited<
+      ReturnType<typeof markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch>
+    >
+  >
+
+export type MarkReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Mark Read As Vendor
+ */
+export const useMarkReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch>
+      >,
+      TError,
+      { notificationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof markReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatch>>,
+  TError,
+  { notificationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getMarkReadAsVendorApiV1VendorPortalNotificationsNotificationIdReadPatchMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
 }

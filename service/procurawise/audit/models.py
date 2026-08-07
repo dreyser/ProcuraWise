@@ -21,6 +21,7 @@ AuditResourceType = Literal[
     "economic_assessment",
     "decision",
     "report",
+    "notification",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -151,6 +152,18 @@ AuditAction = Literal[
     # requirements_applied_from_template, Fase 11 - it mutates the target
     # Evaluation's requirements, not a resource of its own).
     "requirements_import_confirmed",
+    # Fase 24 (notifications, ADR 0024) - resource_type "notification". Only
+    # the delivery *mechanism's* own lifecycle is audited here, not the
+    # in-app Notification row's mere creation - that row is always derivative
+    # of an already-audited action (evaluation_published, proposal_submitted,
+    # etc.), so auditing its creation too would just double every existing
+    # audited action. notification_email_delivery_failed fires on a single
+    # failed attempt that will still retry; notification_email_delivery_
+    # exhausted is the terminal state once notification_email_max_attempts
+    # is reached.
+    "notification_email_delivery_succeeded",
+    "notification_email_delivery_failed",
+    "notification_email_delivery_exhausted",
 ]
 
 

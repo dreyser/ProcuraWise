@@ -33,6 +33,7 @@ from procurawise.decisions.snapshot_repository import DecisionSnapshotRepository
 from procurawise.evaluations.exceptions import EvaluationNotFoundError
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.repository import MembershipRepository, VendorOrganizationRepository
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.scoring.repository import EconomicAssessmentRepository, ScoreRepository
 from procurawise.scoring.service import ScoringService
@@ -55,6 +56,7 @@ require_approver = require_role("approver")
 def get_decision_service(settings: Settings = Depends(get_settings)) -> DecisionService:
     db = get_database(settings)
     audit = AuditEventService(AuditEventRepository(db), settings)
+    notifications = build_notification_service(settings)
     scoring = ScoringService(
         scores=ScoreRepository(db),
         proposals=ProposalRepository(db),
@@ -64,6 +66,7 @@ def get_decision_service(settings: Settings = Depends(get_settings)) -> Decision
         assignments=AssignmentRepository(db),
         ai_executions=AIExecutionRepository(db),
         economic_assessments=EconomicAssessmentRepository(db),
+        notifications=notifications,
     )
     return DecisionService(
         decisions=DecisionRepository(db),
@@ -74,6 +77,7 @@ def get_decision_service(settings: Settings = Depends(get_settings)) -> Decision
         memberships=MembershipRepository(db),
         scoring=scoring,
         audit=audit,
+        notifications=notifications,
     )
 
 

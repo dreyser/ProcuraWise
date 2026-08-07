@@ -9,7 +9,8 @@ from procurawise.documents.repository import DocumentRepository
 from procurawise.evaluations.exceptions import RequirementNotFoundError
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
-from procurawise.identity.repository import VendorOrganizationRepository
+from procurawise.identity.repository import MembershipRepository, VendorOrganizationRepository
+from procurawise.notifications.service import NotificationService
 from procurawise.proposals.exceptions import (
     AnswerValidationError,
     IncompleteRequiredAnswersError,
@@ -153,16 +154,20 @@ class ProposalService:
         proposals: ProposalRepository,
         evaluations: EvaluationRepository,
         vendor_orgs: VendorOrganizationRepository,
+        memberships: MembershipRepository,
         audit: AuditEventService,
         documents: DocumentRepository,
         fx_rates: FXRateRepository,
+        notifications: NotificationService,
     ) -> None:
         self._proposals = proposals
         self._evaluations = evaluations
         self._vendor_orgs = vendor_orgs
+        self._memberships = memberships
         self._audit = audit
         self._documents = documents
         self._fx_rates = fx_rates
+        self._notifications = notifications
         self._tco = TcoService()
 
     def get_proposal(self, tenant_id: str, proposal_id: str) -> Proposal:
@@ -601,6 +606,26 @@ class ProposalService:
             version=submitted.version,
             metadata={"requirements_answered_count": answered_count, "round": proposal.round},
         )
+        self._notifications.notify(
+            tenant_id,
+            recipient_membership_id=membership_id,
+            event="proposal_submitted",
+            resource_type="proposal",
+            resource_id=proposal_id,
+            evaluation_id=evaluation.id,
+            title="Propuesta enviada",
+            body=f'Tu propuesta para "{evaluation.name}" se envió correctamente.',
+        )
+        self._notifications.notify(
+            tenant_id,
+            recipient_membership_id=evaluation.created_by_membership_id,
+            event="proposal_submitted",
+            resource_type="proposal",
+            resource_id=proposal_id,
+            evaluation_id=evaluation.id,
+            title="Propuesta recibida",
+            body=f'Un proveedor envió su propuesta para "{evaluation.name}".',
+        )
         return submitted
 
     def reopen(
@@ -694,4 +719,27 @@ class ProposalService:
             proposal_id=proposal_id,
             metadata={"reason": reason, "from_round": proposal.round, "to_round": new_round},
         )
+        self._notifications.notify(
+            tenant_id,
+            recipient_membership_id=evaluation.created_by_membership_id,
+            event="proposal_reopened",
+            resource_type="proposal",
+            resource_id=proposal_id,
+            evaluation_id=evaluation_id,
+            title="Propuesta reabierta",
+            body=f'Reabriste la propuesta de un proveedor en "{evaluation.name}".',
+        )
+        for membership_doc in self._memberships.find_vendor_contacts_for_org(
+            tenant_id, proposal.vendor_org_id
+        ):
+            self._notifications.notify(
+                tenant_id,
+                recipient_membership_id=membership_doc["_id"],
+                event="proposal_reopened",
+                resource_type="proposal",
+                resource_id=proposal_id,
+                evaluation_id=evaluation_id,
+                title="Tu propuesta fue reabierta",
+                body=f'El comprador reabrió tu propuesta para "{evaluation.name}": {reason}',
+            )
         return reopened

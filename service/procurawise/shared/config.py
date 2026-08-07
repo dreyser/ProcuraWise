@@ -189,6 +189,30 @@ class Settings(BaseSettings):
     # step before confirming).
     import_max_file_size_mb: int = 10
 
+    # Fase 24 (notifications, ADR 0024): Azure Communication Services is the
+    # only NotificationEmailProvider implementation. False by default - no
+    # ACS emulator exists (unlike Azurite/Service Bus emulator), so local/
+    # test/CI always use LoggingNotificationEmailProvider unless a developer
+    # opts in explicitly. The production validator below requires the
+    # connection string/sender address together whenever this is true.
+    notifications_email_enabled: bool = False
+    acs_connection_string: str | None = None
+    # A verified ACS sender, e.g. "DoNotReply@<domain>.azurecomm.net" -
+    # provisioning the domain/sender is a one-time infra/ops step (documented
+    # in deployment.md), not something this adapter does at runtime.
+    acs_sender_address: str | None = None
+    # No message-bus redelivery exists anywhere in this project today
+    # (ServiceBusMessageBus.consume() completes the message before the
+    # handler runs) - retries are NotificationService's own mechanism, driven
+    # by these three fields, not the queue's.
+    notification_email_max_attempts: int = 3
+    notification_email_retry_delay_minutes_1: int = 2
+    notification_email_retry_delay_minutes_2: int = 10
+    # Own field, not audit_event_retention_days/ai_execution_retention_days -
+    # a Notification is UX ephemera (the bell dropdown's history), not a
+    # compliance record, so a shorter default is appropriate.
+    notification_retention_days: int = 90
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":
@@ -237,6 +261,36 @@ class Settings(BaseSettings):
         if missing:
             raise ValueError(
                 f"faltan credenciales de Azure OpenAI requeridas cuando environment=production: "
+                f"{', '.join(missing)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_real_notification_config_in_production(self) -> Self:
+        """Fase 24 (ADR 0024): prod-only-required (azure_openai-style), not
+        fail-closed-in-every-environment (foundry_web_search-style) - unlike
+        Foundry/Bing Grounding (ADR 0011), there is no documented legal-
+        approval gate on transactional email, and notifications fire
+        automatically off routine domain mutations every dev/CI run already
+        exercises - forcing real ACS credentials into every local .env for a
+        feature no local workflow can test against a real service anyway
+        would only add friction, not safety."""
+        if self.environment != "production":
+            return self
+        if not self.notifications_email_enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("acs_connection_string", self.acs_connection_string),
+                ("acs_sender_address", self.acs_sender_address),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                f"faltan credenciales de Azure Communication Services requeridas cuando "
+                f"environment=production y notifications_email_enabled=true: "
                 f"{', '.join(missing)}"
             )
         return self

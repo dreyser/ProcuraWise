@@ -18,6 +18,7 @@ from procurawise.identity.repository import (
     VendorOrganizationRepository,
 )
 from procurawise.identity.service import IdentityService
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.qna.repository import QuestionRepository
 from procurawise.reports.repository import ReportRepository
@@ -38,6 +39,7 @@ _provisioned_containers: set[str] = set()
 def build_report_service(settings: Settings) -> ReportService:
     db = get_database(settings)
     audit = AuditEventService(AuditEventRepository(db), settings)
+    notifications = build_notification_service(settings)
     scoring = ScoringService(
         scores=ScoreRepository(db),
         proposals=ProposalRepository(db),
@@ -47,6 +49,7 @@ def build_report_service(settings: Settings) -> ReportService:
         assignments=AssignmentRepository(db),
         ai_executions=AIExecutionRepository(db),
         economic_assessments=EconomicAssessmentRepository(db),
+        notifications=notifications,
     )
     decisions = DecisionService(
         decisions=DecisionRepository(db),
@@ -57,6 +60,7 @@ def build_report_service(settings: Settings) -> ReportService:
         memberships=MembershipRepository(db),
         scoring=scoring,
         audit=audit,
+        notifications=notifications,
     )
     identity = IdentityService(
         tenants=TenantRepository(db), users=UserRepository(db), memberships=MembershipRepository(db)

@@ -4,7 +4,8 @@ from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.documents.repository import DocumentRepository
 from procurawise.evaluations.repository import EvaluationRepository
-from procurawise.identity.repository import VendorOrganizationRepository
+from procurawise.identity.repository import MembershipRepository, VendorOrganizationRepository
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.exceptions import ProposalNotFoundError
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.proposals.service import ProposalService
@@ -27,9 +28,11 @@ def get_proposal_service(settings: Settings = Depends(get_settings)) -> Proposal
         proposals=ProposalRepository(db),
         evaluations=EvaluationRepository(db),
         vendor_orgs=VendorOrganizationRepository(db),
+        memberships=MembershipRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
         documents=DocumentRepository(db),
         fx_rates=FXRateRepository(db),
+        notifications=build_notification_service(settings),
     )
 
 

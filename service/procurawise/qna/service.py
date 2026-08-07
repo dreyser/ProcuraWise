@@ -4,6 +4,8 @@ from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import EvaluationNotFoundError, RequirementNotFoundError
 from procurawise.evaluations.models import Evaluation
 from procurawise.evaluations.repository import EvaluationRepository
+from procurawise.identity.repository import MembershipRepository
+from procurawise.notifications.service import NotificationService
 from procurawise.proposals.exceptions import ProposalNotFoundError
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
@@ -30,12 +32,16 @@ class QuestionService:
         questions: QuestionRepository,
         proposals: ProposalRepository,
         evaluations: EvaluationRepository,
+        memberships: MembershipRepository,
         audit: AuditEventService,
+        notifications: NotificationService,
     ) -> None:
         self._questions = questions
         self._proposals = proposals
         self._evaluations = evaluations
+        self._memberships = memberships
         self._audit = audit
+        self._notifications = notifications
 
     def _get_proposal(self, tenant_id: str, proposal_id: str) -> Proposal:
         doc = self._proposals.find_by_id(tenant_id, proposal_id)
@@ -115,6 +121,16 @@ class QuestionService:
             evaluation_id=evaluation.id,
             proposal_id=proposal_id,
             metadata={"scope": scope, "requirement_id": requirement_id},
+        )
+        self._notifications.notify(
+            tenant_id,
+            recipient_membership_id=evaluation.created_by_membership_id,
+            event="qna_question_received",
+            resource_type="qna_question",
+            resource_id=question.id,
+            evaluation_id=evaluation.id,
+            title="Nueva pregunta recibida",
+            body=f'Un proveedor hizo una pregunta en "{evaluation.name}".',
         )
         return question
 
@@ -229,7 +245,43 @@ class QuestionService:
             proposal_id=question.proposal_id,
             metadata={"version": next_version, "visibility": visibility},
         )
+        self._notify_answer_published(tenant_id, evaluation, question, visibility)
 
         refreshed = self._questions.find_by_id(tenant_id, question_id)
         assert refreshed is not None  # just written above, in the same tenant scope
         return Question.from_document(refreshed)
+
+    def _notify_answer_published(
+        self,
+        tenant_id: str,
+        evaluation: Evaluation,
+        question: Question,
+        visibility: AnswerVisibility,
+    ) -> None:
+        """ "Respuesta publicada -> proveedores afectados" (spec S11): private
+        stays scoped to the original asker's vendor org only;
+        published_anonymized fans out to every vendor_contact membership
+        across every vendor org with a Proposal on this evaluation (not just
+        the asker), since a published_anonymized answer is genuinely visible
+        to all of them, not only whoever asked."""
+        if visibility == "private":
+            vendor_org_ids = {question.vendor_org_id}
+        else:
+            vendor_org_ids = {
+                doc["vendor_org_id"]
+                for doc in self._proposals.find_by_evaluation(tenant_id, evaluation.id)
+            }
+        for vendor_org_id in vendor_org_ids:
+            for membership_doc in self._memberships.find_vendor_contacts_for_org(
+                tenant_id, vendor_org_id
+            ):
+                self._notifications.notify(
+                    tenant_id,
+                    recipient_membership_id=membership_doc["_id"],
+                    event="qna_answer_published",
+                    resource_type="qna_question",
+                    resource_id=question.id,
+                    evaluation_id=evaluation.id,
+                    title="Respuesta publicada",
+                    body=f'El comprador respondió una pregunta en "{evaluation.name}".',
+                )

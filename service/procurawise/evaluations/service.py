@@ -35,6 +35,7 @@ from procurawise.evaluations.models import (
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.evaluations.snapshot_repository import EvaluationSnapshotRepository
 from procurawise.identity.repository import MembershipRepository, VendorOrganizationRepository
+from procurawise.notifications.service import NotificationService
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.shared.context import ActorContext
@@ -51,6 +52,7 @@ class EvaluationService:
         memberships: MembershipRepository,
         snapshots: EvaluationSnapshotRepository,
         audit: AuditEventService,
+        notifications: NotificationService,
     ) -> None:
         self._evaluations = evaluations
         self._proposals = proposals
@@ -58,6 +60,7 @@ class EvaluationService:
         self._memberships = memberships
         self._snapshots = snapshots
         self._audit = audit
+        self._notifications = notifications
 
     def create_evaluation(
         self,
@@ -516,6 +519,20 @@ class EvaluationService:
                 ),
             },
         )
+        # Fase 24 (notifications, plan Bloqueante #1 Opcion A): readiness
+        # already guarantees an approver is assigned before this point, but
+        # the type stays Optional - guard defensively rather than assume.
+        if evaluation.approver_membership_id:
+            self._notifications.notify(
+                tenant_id,
+                recipient_membership_id=evaluation.approver_membership_id,
+                event="approval_requested",
+                resource_type="evaluation",
+                resource_id=evaluation_id,
+                evaluation_id=evaluation_id,
+                title="Aprobación de publicación pendiente",
+                body=f'La evaluación "{evaluation.name}" espera tu aprobación para publicarse.',
+            )
         return self.get_evaluation(tenant_id, evaluation_id)
 
     def withdraw_approval_request(
@@ -697,6 +714,22 @@ class EvaluationService:
                 "requirement_count": len(evaluation.requirements),
                 "linked_vendor_count": evaluation.linked_vendor_count,
             },
+        )
+        # Fase 24 (notifications, plan Bloqueante #1 Opcion A): called
+        # unwrapped, not best-effort-wrapped here - safe because Notification
+        # uses a deterministic id (tenant/event/resource/recipient), so a
+        # retry of this whole idempotent method after a crash produces the
+        # exact same id and simply no-ops on the second insert, same
+        # "idempotent by construction" property as the snapshot insert above.
+        self._notifications.notify(
+            tenant_id,
+            recipient_membership_id=evaluation.created_by_membership_id,
+            event="evaluation_published",
+            resource_type="evaluation",
+            resource_id=evaluation.id,
+            evaluation_id=evaluation.id,
+            title="Evaluación publicada",
+            body=f'Tu evaluación "{evaluation.name}" ya está publicada y recibiendo propuestas.',
         )
 
     def start_collection(

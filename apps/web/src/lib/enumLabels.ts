@@ -211,3 +211,19 @@ export const translateDecisionOutcome = (value: string): string =>
 export const translateReportType = (value: string): string => translate(reportTypeLabels, value)
 export const translateReportFormat = (value: string): string => translate(reportFormatLabels, value)
 export const translateReportStatus = (value: string): string => translate(reportStatusLabels, value)
+
+// Fase 24 - matches notifications.models.NotificationEvent exactly (the 8
+// events wired per the phase's approved plan, Bloqueante #1 Opcion A).
+export const notificationEventLabels = {
+  vendor_invited: 'Invitación de proveedor',
+  evaluation_published: 'Evaluación publicada',
+  qna_question_received: 'Pregunta recibida',
+  qna_answer_published: 'Respuesta publicada',
+  proposal_submitted: 'Propuesta enviada',
+  proposal_reopened: 'Propuesta reabierta',
+  approval_requested: 'Aprobación pendiente',
+  evaluation_completed: 'Evaluación cerrada',
+} as const satisfies Record<string, string>
+
+export const translateNotificationEvent = (value: string): string =>
+  translate(notificationEventLabels, value)

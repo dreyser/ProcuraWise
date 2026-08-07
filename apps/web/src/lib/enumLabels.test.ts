@@ -6,6 +6,7 @@ import {
   translateCostItemStatus,
   translateDimension,
   translateEvaluationStatus,
+  translateNotificationEvent,
   translatePriority,
   translateProposalStatus,
   translateResponseType,
@@ -87,6 +88,22 @@ describe('enumLabels translations', () => {
     expect(translateCostItemStatus('inherited')).toBe('Heredado')
     expect(translateCostItemStatus('modified')).toBe('Modificado')
     expect(translateCostItemStatus('removed')).toBe('Eliminado')
+  })
+
+  it('translates all 8 wired NotificationEvent values (Fase 24, Bloqueante #1 Opcion A)', () => {
+    const events = [
+      'vendor_invited',
+      'evaluation_published',
+      'qna_question_received',
+      'qna_answer_published',
+      'proposal_submitted',
+      'proposal_reopened',
+      'approval_requested',
+      'evaluation_completed',
+    ]
+    for (const event of events) {
+      expect(translateNotificationEvent(event)).not.toBe(event)
+    }
   })
 
   it('falls back to the raw value for an unknown enum (never throws)', () => {

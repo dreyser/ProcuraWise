@@ -41,6 +41,7 @@ from procurawise.evaluations.schemas import (
 from procurawise.evaluations.service import EvaluationService
 from procurawise.evaluations.snapshot_repository import EvaluationSnapshotRepository
 from procurawise.identity.repository import MembershipRepository, VendorOrganizationRepository
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.proposals.schemas import ProposalSummaryResponse
 from procurawise.shared.config import Settings, get_settings
@@ -70,6 +71,7 @@ def get_evaluation_service(settings: Settings = Depends(get_settings)) -> Evalua
         memberships=MembershipRepository(db),
         snapshots=EvaluationSnapshotRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
+        notifications=build_notification_service(settings),
     )
 
 
