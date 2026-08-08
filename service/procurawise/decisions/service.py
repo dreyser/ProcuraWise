@@ -23,6 +23,7 @@ from procurawise.decisions.snapshot_repository import DecisionSnapshotRepository
 from procurawise.evaluations.exceptions import EvaluationNotFoundError
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.repository import MembershipRepository, VendorOrganizationRepository
+from procurawise.notifications.service import NotificationService
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.scoring.service import ScoringService
@@ -42,6 +43,7 @@ class DecisionService:
         memberships: MembershipRepository,
         scoring: ScoringService,
         audit: AuditEventService,
+        notifications: NotificationService,
     ) -> None:
         self._decisions = decisions
         self._snapshots = snapshots
@@ -51,6 +53,7 @@ class DecisionService:
         self._memberships = memberships
         self._scoring = scoring
         self._audit = audit
+        self._notifications = notifications
 
     def _get_evaluation_doc(self, tenant_id: str, evaluation_id: str) -> dict[str, Any]:
         doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
@@ -303,6 +306,23 @@ class DecisionService:
             evaluation_id=evaluation_id,
             metadata={"approver_membership_id": decision.approver_membership_id},
         )
+        # Fase 24 (notifications, plan Bloqueante #1 Opcion A): readiness
+        # already guarantees an approver is assigned before this point, but
+        # the type stays Optional - guard defensively rather than assume.
+        if decision.approver_membership_id:
+            evaluation_doc = self._get_evaluation_doc(tenant_id, evaluation_id)
+            self._notifications.notify(
+                tenant_id,
+                recipient_membership_id=decision.approver_membership_id,
+                event="approval_requested",
+                resource_type="decision",
+                resource_id=decision.id,
+                evaluation_id=evaluation_id,
+                title="Aprobación de decisión pendiente",
+                body=(
+                    f'La decisión de la evaluación "{evaluation_doc["name"]}" espera tu aprobación.'
+                ),
+            )
         return self.get(tenant_id, evaluation_id)
 
     def withdraw_approval_request(

@@ -23,6 +23,7 @@ from procurawise.identity.repository import (
     UserRepository,
     VendorOrganizationRepository,
 )
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.shared.config import Settings, get_settings
@@ -237,6 +238,7 @@ def _get_or_create_evaluation_with_approval_state(
         memberships=MembershipRepository(db),
         snapshots=EvaluationSnapshotRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
+        notifications=build_notification_service(settings),
     )
     owner_actor = _dev_actor(tenant, owner)
     approver_actor = _dev_actor(tenant, approver)

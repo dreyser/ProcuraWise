@@ -9,6 +9,7 @@ from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.repository import MembershipRepository, TenantRepository, UserRepository
 from procurawise.identity.service import IdentityService
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.exceptions import ProposalNotFoundError
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
@@ -86,7 +87,9 @@ def _build_service(mongo_test_settings) -> QuestionService:
         questions=QuestionRepository(db),
         proposals=ProposalRepository(db),
         evaluations=EvaluationRepository(db),
+        memberships=MembershipRepository(db),
         audit=AuditEventService(AuditEventRepository(db), mongo_test_settings),
+        notifications=build_notification_service(mongo_test_settings),
     )
 
 

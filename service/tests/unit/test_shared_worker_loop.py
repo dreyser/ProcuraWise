@@ -39,3 +39,26 @@ def test_run_worker_loop_sleeps_when_every_topic_is_empty(monkeypatch) -> None:
 
     assert sleep_calls == [5]
     handler.assert_not_called()
+
+
+def test_run_worker_loop_runs_time_based_tasks_every_iteration() -> None:
+    bus = InMemoryMessageBus()
+    task = MagicMock()
+
+    run_worker_loop(
+        bus,
+        {},
+        poll_interval_seconds=0,
+        max_iterations=3,
+        time_based_tasks=(task,),
+    )
+
+    assert task.call_count == 3
+
+
+def test_run_worker_loop_survives_a_time_based_task_exception() -> None:
+    bus = InMemoryMessageBus()
+    task = MagicMock(side_effect=RuntimeError("boom"))
+
+    # Must not raise.
+    run_worker_loop(bus, {}, poll_interval_seconds=0, max_iterations=1, time_based_tasks=(task,))

@@ -44,6 +44,26 @@ class IdentityService:
             raise ActorNotFoundError(membership_id)
         return context
 
+    def resolve_recipient_email(self, membership_id: str) -> tuple[str, str] | None:
+        """Fase 24 (notifications): (email, display_name) for a Membership's
+        underlying User - ActorContext deliberately carries no email field
+        (it's the resolved-identity shape every buyer/vendor router already
+        depends on, no need to widen it for one new consumer), so this is a
+        narrow, separate lookup rather than a field added to
+        resolve_actor_context. Returns None (never raises) if the Membership
+        or its User no longer resolves - same "skip, don't crash" contract
+        callers already get from resolve_actor_context raising
+        ActorNotFoundError, just shaped for a caller (NotificationService)
+        that treats a missing recipient as "nothing to send", not an error."""
+        doc = self._memberships.find_by_id(membership_id)
+        if doc is None:
+            return None
+        membership = Membership.from_document(doc)
+        user_doc = self._users.find_by_id(membership.user_id)
+        if user_doc is None:
+            return None
+        return user_doc["email"], user_doc["display_name"]
+
     def list_dev_actors(self) -> list[ActorContext]:
         contexts = (
             self._build_context(Membership.from_document(doc))

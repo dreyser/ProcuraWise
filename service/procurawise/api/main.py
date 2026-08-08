@@ -16,6 +16,10 @@ from procurawise.identity.router import router as identity_router
 from procurawise.identity.vendor_auth_router import vendor_auth_router, vendor_organizations_router
 from procurawise.knowledge_templates.router import apply_router as knowledge_template_apply_router
 from procurawise.knowledge_templates.router import router as knowledge_templates_router
+from procurawise.notifications.router import (
+    buyer_notifications_router,
+    vendor_notifications_router,
+)
 from procurawise.proposals.router import router as proposals_router
 from procurawise.qna.router import buyer_qna_router, vendor_qna_router
 from procurawise.reports.import_router import router as requirements_import_router
@@ -72,4 +76,6 @@ app.include_router(vendor_portal_agreements_router, prefix="/api/v1")
 app.include_router(vendor_portal_router, prefix="/api/v1")
 app.include_router(vendor_documents_router, prefix="/api/v1")
 app.include_router(vendor_qna_router, prefix="/api/v1")
+app.include_router(buyer_notifications_router, prefix="/api/v1")
+app.include_router(vendor_notifications_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")

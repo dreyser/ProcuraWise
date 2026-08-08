@@ -94,6 +94,20 @@ class MembershipRepository:
     def list_all_for_dev(self) -> list[dict[str, Any]]:
         return list(self._collection.find({}))
 
+    def find_vendor_contacts_for_org(
+        self, tenant_id: str, vendor_org_id: str
+    ) -> list[dict[str, Any]]:
+        """Every vendor_contact Membership under one VendorOrganization -
+        Fase 24 (notifications): backs fan-out for events where a whole
+        vendor org's collaborators are the "affected" party (qna_answer_
+        published when published_anonymized, proposal_submitted/reopened),
+        not just the single contact who happened to trigger the action."""
+        return list(
+            self._collection.find(
+                {"tenant_id": tenant_id, "vendor_org_id": vendor_org_id, "role": "vendor_contact"}
+            )
+        )
+
     def find_all_for_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
         """Every Membership row within a single tenant - unlike
         `find_all_for_user`/`list_all_for_dev`, this one *is* naturally

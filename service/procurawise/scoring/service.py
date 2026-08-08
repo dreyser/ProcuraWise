@@ -22,6 +22,7 @@ from procurawise.evaluations.models import (
 )
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.repository import VendorOrganizationRepository
+from procurawise.notifications.service import NotificationService
 from procurawise.proposals.exceptions import ProposalNotFoundError
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
@@ -96,6 +97,7 @@ class ScoringService:
         assignments: AssignmentRepository,
         ai_executions: AIExecutionRepository,
         economic_assessments: EconomicAssessmentRepository,
+        notifications: NotificationService,
     ) -> None:
         self._scores = scores
         self._proposals = proposals
@@ -105,6 +107,7 @@ class ScoringService:
         self._assignments = assignments
         self._ai_executions = ai_executions
         self._economic_assessments = economic_assessments
+        self._notifications = notifications
 
     def _enforce_section_assignment(
         self, tenant_id: str, evaluation_id: str, dimension: str, section: str, actor: ActorContext
@@ -692,6 +695,16 @@ class ScoringService:
             resource_id=evaluation_id,
             evaluation_id=evaluation_id,
             metadata={"from_status": "evaluating", "to_status": "completed"},
+        )
+        self._notifications.notify(
+            tenant_id,
+            recipient_membership_id=evaluation.created_by_membership_id,
+            event="evaluation_completed",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            title="Evaluación completada",
+            body=f'Tu evaluación "{evaluation.name}" está completada y lista para decisión.',
         )
         updated_doc = self._evaluations.find_by_id(tenant_id, evaluation_id)
         assert updated_doc is not None

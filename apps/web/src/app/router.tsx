@@ -33,6 +33,8 @@ import { EvaluationApprovalPage } from '@/features/evaluations/pages/EvaluationA
 import { KnowledgeTemplatesPage } from '@/features/evaluations/pages/KnowledgeTemplatesPage'
 import { KnowledgeTemplateDetailPage } from '@/features/evaluations/pages/KnowledgeTemplateDetailPage'
 import { QnaPage } from '@/features/evaluations/pages/QnaPage'
+import { BuyerNotificationsBell } from '@/features/notifications/components/BuyerNotificationsBell'
+import { VendorNotificationsBell } from '@/features/notifications/components/VendorNotificationsBell'
 
 // Fase 9 (RBAC completo, spec §4): tenant_admin/platform_admin are real,
 // backend-enforced roles that can authenticate, but have no dedicated UI
@@ -63,6 +65,7 @@ function BuyerLayout({ children }: { children: ReactElement }) {
               logout()
               navigate('/login', { replace: true })
             }}
+            notifications={<BuyerNotificationsBell />}
           >
             {children}
           </AppShell>
@@ -89,6 +92,7 @@ function VendorLayout({ children }: { children: ReactElement }) {
               logout()
               navigate('/vendor/login', { replace: true })
             }}
+            notifications={<VendorNotificationsBell />}
           >
             <RequireAgreementsAccepted>{children}</RequireAgreementsAccepted>
           </AppShell>

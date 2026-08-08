@@ -67,6 +67,19 @@ class TenantCollection:
         replacement = self._forced_tenant_document(update)
         return self._collection.replace_one(scoped_filter, replacement, **kwargs)
 
+    def update_many(
+        self, filter_: dict[str, Any], update: dict[str, Any], **kwargs: Any
+    ) -> UpdateResult:
+        """Operator-only bulk update (no full-document-replace variant, unlike
+        update_one) - Notification.mark_all_read (Fase 24) is the first
+        caller. Deliberately narrower than update_one: a bulk replace-many
+        has no legitimate use case yet, so it is not supported until one
+        exists."""
+        if not update or not all(key.startswith("$") for key in update):
+            raise TenantScopeError("update_many only supports non-empty $ operator updates")
+        safe_update = self._rejecting_tenant_mutation(update)
+        return self._collection.update_many(self._scoped_filter(filter_), safe_update, **kwargs)
+
     def delete_one(self, filter_: dict[str, Any], **kwargs: Any) -> DeleteResult:
         return self._collection.delete_one(self._scoped_filter(filter_), **kwargs)
 

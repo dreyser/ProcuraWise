@@ -4,6 +4,8 @@ from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import EvaluationNotFoundError, RequirementNotFoundError
 from procurawise.evaluations.repository import EvaluationRepository
+from procurawise.identity.repository import MembershipRepository
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.exceptions import ProposalNotFoundError
 from procurawise.proposals.repository import ProposalRepository
 from procurawise.qna.exceptions import (
@@ -49,7 +51,9 @@ def get_question_service(settings: Settings = Depends(get_settings)) -> Question
         questions=QuestionRepository(db),
         proposals=ProposalRepository(db),
         evaluations=EvaluationRepository(db),
+        memberships=MembershipRepository(db),
         audit=AuditEventService(AuditEventRepository(db), settings),
+        notifications=build_notification_service(settings),
     )
 
 

@@ -53,6 +53,10 @@ dependencies = [
     "reportlab>=4.2",
     "openpyxl>=3.1",
     "python-docx>=1.1",
+    # Fase 24 (notifications, ADR 0024): official ACS email SDK, confined to
+    # notifications/azure_acs_email_provider.py only (same import-boundary
+    # principle as ai/ and reports/).
+    "azure-communication-email>=1.0",
 ]
 
 [dependency-groups]
@@ -112,4 +116,9 @@ disallow_untyped_defs = false
 # complete type stubs.
 [[tool.mypy.overrides]]
 module = ["reportlab.*", "openpyxl.*", "docx.*"]
+ignore_missing_imports = true
+
+# Fase 24 (ADR 0024): azure-communication-email ships no type stubs.
+[[tool.mypy.overrides]]
+module = ["azure.communication.email.*"]
 ignore_missing_imports = true

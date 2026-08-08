@@ -32,6 +32,7 @@ from procurawise.identity.vendor_auth_service import (
     VendorInvitationNotRevocableError,
     VendorOrganizationNotFoundError,
 )
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
 from procurawise.shared.mongo import get_database
@@ -67,6 +68,7 @@ def get_vendor_auth_service(settings: Settings = Depends(get_settings)) -> Vendo
         invitations=VendorInvitationRepository(db),
         identity_service=identity_service,
         audit=AuditEventService(AuditEventRepository(db), settings),
+        notifications=build_notification_service(settings),
         settings=settings,
     )
 

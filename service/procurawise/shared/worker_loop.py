@@ -16,6 +16,7 @@ def run_worker_loop(
     *,
     poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
     max_iterations: int | None = None,
+    time_based_tasks: tuple[Callable[[], None], ...] = (),
 ) -> None:
     """Fase 23: generic version of ai.worker.run_worker_loop's body (kept
     byte-for-byte behaviorally identical, extracted so worker/main.py can
@@ -24,7 +25,15 @@ def run_worker_loop(
     just no longer the production entrypoint once a second job family
     (reports) exists. Each iteration checks every registered topic once -
     only sleeps if none of them yielded a message, so a burst of jobs on one
-    topic never starves another."""
+    topic never starves another.
+
+    Fase 24: `time_based_tasks` is additive and defaults to an empty tuple,
+    so every existing caller (ai/reports) is unaffected. It runs once per
+    iteration, after the dispatch pass - each registered callable is expected
+    to be a narrow, self-contained, cheap query (see
+    notifications.service.NotificationService.requeue_due_email_retries) -
+    never something that blocks the loop for long. One bad task must never
+    kill the worker loop, same guarantee as one bad message."""
     iterations = 0
     while max_iterations is None or iterations < max_iterations:
         processed_any = False
@@ -39,6 +48,11 @@ def run_worker_loop(
                 logger.error(
                     "worker_message_processing_failed", exc_info=True, extra={"topic": topic}
                 )
+        for task in time_based_tasks:
+            try:
+                task()
+            except Exception:  # noqa: BLE001 - one bad task must never kill the worker loop
+                logger.error("worker_time_based_task_failed", exc_info=True)
         if not processed_any:
             time.sleep(poll_interval_seconds)
         iterations += 1

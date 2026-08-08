@@ -3,6 +3,10 @@ import logging
 from procurawise.ai.provider import resolve_ai_provider
 from procurawise.ai.service import build_ai_service
 from procurawise.ai.worker import build_dispatch_table as build_ai_dispatch_table
+from procurawise.notifications.dependencies import build_notification_service
+from procurawise.notifications.worker import (
+    build_dispatch_table as build_notifications_dispatch_table,
+)
 from procurawise.reports.dependencies import build_report_service
 from procurawise.reports.worker import build_dispatch_table as build_reports_dispatch_table
 from procurawise.shared.config import get_settings
@@ -34,9 +38,11 @@ def main() -> None:
     message_bus = get_message_bus(settings)
     ai_service = build_ai_service(settings, resolve_ai_provider(settings))
     report_service = build_report_service(settings)
+    notification_service = build_notification_service(settings)
     dispatch = {
         **build_ai_dispatch_table(ai_service),
         **build_reports_dispatch_table(report_service),
+        **build_notifications_dispatch_table(notification_service),
     }
     logger.info(
         "worker ready (environment=%s, queue_backend=%s) - dispatching topics: %s",
@@ -44,7 +50,11 @@ def main() -> None:
         settings.queue_backend,
         sorted(dispatch),
     )
-    run_worker_loop(message_bus, dispatch)
+    run_worker_loop(
+        message_bus,
+        dispatch,
+        time_based_tasks=(notification_service.requeue_due_email_retries,),
+    )
 
 
 if __name__ == "__main__":

@@ -8,7 +8,12 @@ from procurawise.documents.repository import DocumentRepository
 from procurawise.evaluations.models import Evaluation, Requirement
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.models import Tenant, VendorOrganization
-from procurawise.identity.repository import TenantRepository, VendorOrganizationRepository
+from procurawise.identity.repository import (
+    MembershipRepository,
+    TenantRepository,
+    VendorOrganizationRepository,
+)
+from procurawise.notifications.dependencies import build_notification_service
 from procurawise.proposals.exceptions import StaleVersionError
 from procurawise.proposals.models import Proposal
 from procurawise.proposals.repository import ProposalRepository
@@ -29,9 +34,11 @@ def _setup(mongo_test_db, mongo_test_settings):
         proposals=proposals,
         evaluations=evaluations,
         vendor_orgs=vendor_orgs,
+        memberships=MembershipRepository(mongo_test_db),
         audit=audit,
         documents=DocumentRepository(mongo_test_db),
         fx_rates=FXRateRepository(mongo_test_db),
+        notifications=build_notification_service(mongo_test_settings),
     )
 
     tenant = Tenant.create(slug="vs2b-proposal-concurrency", name="Proposal Concurrency Tenant")
