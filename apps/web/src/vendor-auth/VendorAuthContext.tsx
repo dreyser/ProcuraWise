@@ -5,7 +5,12 @@ import {
   vendorLoginApiV1VendorAuthLoginPost,
   type ActorContextResponse,
 } from '@/api/client'
-import { setActiveVendorAccessToken, setActiveAccessToken, ApiError } from '@/lib/http'
+import {
+  setActiveVendorAccessToken,
+  setActiveAccessToken,
+  setActiveAdminAccessToken,
+  ApiError,
+} from '@/lib/http'
 
 export type VendorAuthStatus = 'anonymous' | 'ready'
 
@@ -48,9 +53,10 @@ export function VendorAuthProvider({ children }: { children: ReactNode }) {
   const applySuccessfulToken = useCallback(
     (accessToken: string, nextActor: ActorContextResponse) => {
       setActiveVendorAccessToken(accessToken)
-      // Fase 15: defensive - a vendor login always wins over any buyer
-      // session that might still be active in this same tab.
+      // Fase 15/25: defensive - a vendor login always wins over any buyer
+      // or admin session that might still be active in this same tab.
       setActiveAccessToken(null)
+      setActiveAdminAccessToken(null)
       setActor(nextActor)
       setStatus('ready')
       queryClient.clear()

@@ -8,6 +8,8 @@ from procurawise.ai.router import score_suggestion_router
 from procurawise.api.routers.health import router as health_router
 from procurawise.assignments.router import router as assignments_router
 from procurawise.audit.router import router as audit_router
+from procurawise.billing.router import router as billing_router
+from procurawise.billing.webhook_router import router as billing_webhook_router
 from procurawise.decisions.router import router as decisions_router
 from procurawise.documents.router import buyer_documents_router, vendor_documents_router
 from procurawise.evaluations.router import router as evaluations_router
@@ -79,3 +81,5 @@ app.include_router(vendor_qna_router, prefix="/api/v1")
 app.include_router(buyer_notifications_router, prefix="/api/v1")
 app.include_router(vendor_notifications_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(billing_router, prefix="/api/v1")
+app.include_router(billing_webhook_router, prefix="/api/v1")

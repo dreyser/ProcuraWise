@@ -52,6 +52,13 @@ describe('AppShell - role-aware navigation', () => {
     expect(screen.queryByRole('link', { name: 'Evaluaciones' })).not.toBeInTheDocument()
   })
 
+  it('shows only Facturación for tenant_admin (Fase 25) - no access to evaluations', () => {
+    renderShell({ role: 'tenant_admin', display_name: 'Tenant Admin A' })
+    expect(screen.getByRole('link', { name: 'Facturación' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Evaluaciones' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Mis propuestas' })).not.toBeInTheDocument()
+  })
+
   it('always shows the active actor (tenant, name, role)', () => {
     renderShell({ role: 'evaluation_owner' })
     expect(screen.getByText(/Acme Compradora \(dev\)/)).toBeInTheDocument()

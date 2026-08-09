@@ -36,16 +36,19 @@ export function LoginPage() {
       setSubmitError(result.message ?? 'No se pudo iniciar sesión.')
       return
     }
+    // Fase 25: result.role is only set once a single Membership actually
+    // resolved (AuthContext.switchTenant) - falls back to the generic buyer
+    // home (a safe default, never wrong for the roles that share it) when
+    // login instead lands on awaiting_workspace, which AppRouter's
+    // RequireAuth redirects to /auth/select-workspace on its own regardless
+    // of what this navigate() below targets.
+    const role = result.role ?? 'evaluation_owner'
     const next = searchParams.get('next')
-    if (next && isNextPathAllowedForRole(next, 'evaluation_owner')) {
+    if (next && isNextPathAllowedForRole(next, role)) {
       navigate(next, { replace: true })
       return
     }
-    // Role isn't known yet if there was more than one workspace to choose
-    // from (auth.status === 'awaiting_workspace') - AppRouter's RequireAuth
-    // redirects to /auth/select-workspace on its own in that case, so a
-    // plain buyer home is a safe default destination here either way.
-    navigate(roleHomePath('evaluation_owner'), { replace: true })
+    navigate(roleHomePath(role), { replace: true })
   }
 
   return (

@@ -15,6 +15,11 @@ NotificationEvent = Literal[
     "proposal_reopened",
     "approval_requested",
     "evaluation_completed",
+    # Fase 25 (billing/admin, ADR 0025, plan Bloqueante #1 Opcion A): the
+    # only billing notification - "payment_failed" is deliberately absent, a
+    # declined card never completes the Checkout Session (Stripe's own
+    # hosted page handles that), so no webhook event maps to it.
+    "payment_succeeded",
 ]
 
 # "pending" covers both "not yet attempted" (email_next_attempt_at is None)

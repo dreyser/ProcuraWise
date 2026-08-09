@@ -15,7 +15,7 @@ dev:
 test: test-backend test-frontend
 
 test-backend:
-	cd service && uv run pytest -m "not docker and not docker_servicebus"
+	cd service && uv run pytest -m "not docker and not docker_servicebus and not stripe_sandbox"
 
 test-frontend:
 	cd apps/web && pnpm test

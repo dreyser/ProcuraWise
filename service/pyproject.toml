@@ -57,6 +57,10 @@ dependencies = [
     # notifications/azure_acs_email_provider.py only (same import-boundary
     # principle as ai/ and reports/).
     "azure-communication-email>=1.0",
+    # Fase 25 (billing/admin, ADR 0025): official Stripe SDK, confined to
+    # billing/stripe_payment_provider.py only (same import-boundary
+    # principle as ai/, reports/, and notifications/).
+    "stripe>=13.0",
 ]
 
 [dependency-groups]
@@ -87,6 +91,12 @@ markers = [
     # default `make dev-up` set (ADR 0020) - `make test-integration` must not
     # start failing for everyone just because this profile isn't running.
     "docker_servicebus: requires the Service Bus emulator profile via `make dev-up-servicebus`",
+    # Fase 25 (billing, ADR 0025): opt-in only, real network call to Stripe
+    # test mode - requires STRIPE_SECRET_KEY/STRIPE_PRICE_ID_EVALUATION
+    # exported manually (see docs/operations/deployment.md). Never selected
+    # by `make test`/`make test-integration` - run explicitly with
+    # `pytest -m stripe_sandbox`.
+    "stripe_sandbox: opt-in, requires a real Stripe test-mode account (never runs in CI)",
 ]
 
 [tool.coverage.run]

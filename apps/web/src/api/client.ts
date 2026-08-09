@@ -158,6 +158,7 @@ export interface AdminEvaluationListResponse {
 export interface AdminEvaluationSummary {
   id: string
   tenant_id: string
+  tenant_name: string
   name: string
   status: string
   created_at: string
@@ -166,6 +167,31 @@ export interface AdminEvaluationSummary {
 export interface AdminLoginRequest {
   email: string
   password: string
+}
+
+export type AdminPurchaseListResponseNextCursor = string | null
+
+export interface AdminPurchaseListResponse {
+  items: AdminPurchaseSummary[]
+  next_cursor: AdminPurchaseListResponseNextCursor
+}
+
+export type AdminPurchaseSummaryAmountTotal = number | null
+
+export type AdminPurchaseSummaryCurrency = string | null
+
+export type AdminPurchaseSummaryPaidAt = string | null
+
+export interface AdminPurchaseSummary {
+  id: string
+  tenant_id: string
+  tenant_name: string
+  evaluation_id: string
+  status: string
+  amount_total: AdminPurchaseSummaryAmountTotal
+  currency: AdminPurchaseSummaryCurrency
+  created_at: string
+  paid_at: AdminPurchaseSummaryPaidAt
 }
 
 export interface AdminTokenResponse {
@@ -667,6 +693,16 @@ export interface CostItemWriteRequest {
   cost_type: CostItemWriteRequestCostType
   notes?: CostItemWriteRequestNotes
   expected_version: number
+}
+
+/**
+ * Deliberately only `evaluation_id` - `extra="forbid"` (APIModel) turns
+any client-sent `amount`/`price_id`/`currency`/`tenant_id` into a 422.
+The Price is always resolved server-side from configuration
+(billing/service.py), never accepted from a client.
+ */
+export interface CreateCheckoutSessionRequest {
+  evaluation_id: string
 }
 
 export interface CreateCuratedSourceRequest {
@@ -1300,6 +1336,7 @@ export const NotificationResponseEvent = {
   proposal_reopened: 'proposal_reopened',
   approval_requested: 'approval_requested',
   evaluation_completed: 'evaluation_completed',
+  payment_succeeded: 'payment_succeeded',
 } as const
 
 export type NotificationResponseEvaluationId = string | null
@@ -1500,6 +1537,37 @@ export interface PublishAnswerRequest {
   body: string
   visibility: PublishAnswerRequestVisibility
   expected_version: number
+}
+
+export interface PurchaseListResponse {
+  items: PurchaseResponse[]
+}
+
+export type PurchaseResponseStatus =
+  (typeof PurchaseResponseStatus)[keyof typeof PurchaseResponseStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PurchaseResponseStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  expired: 'expired',
+} as const
+
+export type PurchaseResponseAmountTotal = number | null
+
+export type PurchaseResponseCurrency = string | null
+
+export type PurchaseResponsePaidAt = string | null
+
+export interface PurchaseResponse {
+  id: string
+  evaluation_id: string
+  status: PurchaseResponseStatus
+  checkout_url: string
+  amount_total: PurchaseResponseAmountTotal
+  currency: PurchaseResponseCurrency
+  created_at: string
+  paid_at: PurchaseResponsePaidAt
 }
 
 export type QuestionCreateRequestScope =
@@ -2661,6 +2729,23 @@ export type ListEvaluationsAcrossTenantsApiV1AdminEvaluationsGetParams = {
    */
   limit?: number
   cursor?: string | null
+}
+
+export type ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams = {
+  /**
+   * @minLength 3
+   */
+  reason: string
+  /**
+   * @minimum 1
+   * @maximum 100
+   */
+  limit?: number
+  cursor?: string | null
+}
+
+export type ListPurchasesApiV1BillingPurchasesGetParams = {
+  evaluation_id?: string | null
 }
 
 /**
@@ -20231,6 +20316,203 @@ export function useListEvaluationsAcrossTenantsApiV1AdminEvaluationsGet<
 }
 
 /**
+ * @summary List Purchases Across Tenants
+ */
+export type listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponse200 = {
+  data: AdminPurchaseListResponse
+  status: 200
+}
+
+export type listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponseSuccess =
+  listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponse200 & {
+    headers: Headers
+  }
+export type listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponseError =
+  listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponse422 & {
+    headers: Headers
+  }
+
+export type listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponse =
+  | listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponseSuccess
+  | listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponseError
+
+export const getListPurchasesAcrossTenantsApiV1AdminPurchasesGetUrl = (
+  params: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+) => {
+  const normalizedParams = new URLSearchParams()
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  })
+
+  const stringifiedParams = normalizedParams.toString()
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/admin/purchases?${stringifiedParams}`
+    : `/api/v1/admin/purchases`
+}
+
+export const listPurchasesAcrossTenantsApiV1AdminPurchasesGet = async (
+  params: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+  options?: RequestInit,
+): Promise<listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponse> => {
+  return apiFetch<listPurchasesAcrossTenantsApiV1AdminPurchasesGetResponse>(
+    getListPurchasesAcrossTenantsApiV1AdminPurchasesGetUrl(params),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListPurchasesAcrossTenantsApiV1AdminPurchasesGetQueryKey = (
+  params?: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+) => {
+  return [`/api/v1/admin/purchases`, ...(params ? [params] : [])] as const
+}
+
+export const getListPurchasesAcrossTenantsApiV1AdminPurchasesGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPurchasesAcrossTenantsApiV1AdminPurchasesGetQueryKey(params)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>
+  > = () => listPurchasesAcrossTenantsApiV1AdminPurchasesGet(params)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListPurchasesAcrossTenantsApiV1AdminPurchasesGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>
+>
+export type ListPurchasesAcrossTenantsApiV1AdminPurchasesGetQueryError = HTTPValidationError
+
+export function useListPurchasesAcrossTenantsApiV1AdminPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPurchasesAcrossTenantsApiV1AdminPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPurchasesAcrossTenantsApiV1AdminPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Purchases Across Tenants
+ */
+
+export function useListPurchasesAcrossTenantsApiV1AdminPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params: ListPurchasesAcrossTenantsApiV1AdminPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesAcrossTenantsApiV1AdminPurchasesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListPurchasesAcrossTenantsApiV1AdminPurchasesGetQueryOptions(
+    params,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
  * @summary Create Curated Source
  */
 export type createCuratedSourceApiV1AdminCuratedSourcesPostResponse201 = {
@@ -21129,4 +21411,494 @@ export const useDeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivat
     getDeactivateCuratedSourceApiV1AdminCuratedSourcesSourceIdDeactivatePostMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Create Checkout Session
+ */
+export type createCheckoutSessionApiV1BillingCheckoutSessionsPostResponse201 = {
+  data: PurchaseResponse
+  status: 201
+}
+
+export type createCheckoutSessionApiV1BillingCheckoutSessionsPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type createCheckoutSessionApiV1BillingCheckoutSessionsPostResponseSuccess =
+  createCheckoutSessionApiV1BillingCheckoutSessionsPostResponse201 & {
+    headers: Headers
+  }
+export type createCheckoutSessionApiV1BillingCheckoutSessionsPostResponseError =
+  createCheckoutSessionApiV1BillingCheckoutSessionsPostResponse422 & {
+    headers: Headers
+  }
+
+export type createCheckoutSessionApiV1BillingCheckoutSessionsPostResponse =
+  | createCheckoutSessionApiV1BillingCheckoutSessionsPostResponseSuccess
+  | createCheckoutSessionApiV1BillingCheckoutSessionsPostResponseError
+
+export const getCreateCheckoutSessionApiV1BillingCheckoutSessionsPostUrl = () => {
+  return `/api/v1/billing/checkout-sessions`
+}
+
+export const createCheckoutSessionApiV1BillingCheckoutSessionsPost = async (
+  createCheckoutSessionRequest: CreateCheckoutSessionRequest,
+  options?: RequestInit,
+): Promise<createCheckoutSessionApiV1BillingCheckoutSessionsPostResponse> => {
+  return apiFetch<createCheckoutSessionApiV1BillingCheckoutSessionsPostResponse>(
+    getCreateCheckoutSessionApiV1BillingCheckoutSessionsPostUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(createCheckoutSessionRequest),
+    },
+  )
+}
+
+export const getCreateCheckoutSessionApiV1BillingCheckoutSessionsPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCheckoutSessionApiV1BillingCheckoutSessionsPost>>,
+    TError,
+    { data: CreateCheckoutSessionRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createCheckoutSessionApiV1BillingCheckoutSessionsPost>>,
+  TError,
+  { data: CreateCheckoutSessionRequest },
+  TContext
+> => {
+  const mutationKey = ['createCheckoutSessionApiV1BillingCheckoutSessionsPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createCheckoutSessionApiV1BillingCheckoutSessionsPost>>,
+    { data: CreateCheckoutSessionRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return createCheckoutSessionApiV1BillingCheckoutSessionsPost(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type CreateCheckoutSessionApiV1BillingCheckoutSessionsPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createCheckoutSessionApiV1BillingCheckoutSessionsPost>>
+>
+export type CreateCheckoutSessionApiV1BillingCheckoutSessionsPostMutationBody =
+  CreateCheckoutSessionRequest
+export type CreateCheckoutSessionApiV1BillingCheckoutSessionsPostMutationError = HTTPValidationError
+
+/**
+ * @summary Create Checkout Session
+ */
+export const useCreateCheckoutSessionApiV1BillingCheckoutSessionsPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof createCheckoutSessionApiV1BillingCheckoutSessionsPost>>,
+      TError,
+      { data: CreateCheckoutSessionRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof createCheckoutSessionApiV1BillingCheckoutSessionsPost>>,
+  TError,
+  { data: CreateCheckoutSessionRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getCreateCheckoutSessionApiV1BillingCheckoutSessionsPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary List Purchases
+ */
+export type listPurchasesApiV1BillingPurchasesGetResponse200 = {
+  data: PurchaseListResponse
+  status: 200
+}
+
+export type listPurchasesApiV1BillingPurchasesGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type listPurchasesApiV1BillingPurchasesGetResponseSuccess =
+  listPurchasesApiV1BillingPurchasesGetResponse200 & {
+    headers: Headers
+  }
+export type listPurchasesApiV1BillingPurchasesGetResponseError =
+  listPurchasesApiV1BillingPurchasesGetResponse422 & {
+    headers: Headers
+  }
+
+export type listPurchasesApiV1BillingPurchasesGetResponse =
+  | listPurchasesApiV1BillingPurchasesGetResponseSuccess
+  | listPurchasesApiV1BillingPurchasesGetResponseError
+
+export const getListPurchasesApiV1BillingPurchasesGetUrl = (
+  params?: ListPurchasesApiV1BillingPurchasesGetParams,
+) => {
+  const normalizedParams = new URLSearchParams()
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  })
+
+  const stringifiedParams = normalizedParams.toString()
+
+  return stringifiedParams.length > 0
+    ? `/api/v1/billing/purchases?${stringifiedParams}`
+    : `/api/v1/billing/purchases`
+}
+
+export const listPurchasesApiV1BillingPurchasesGet = async (
+  params?: ListPurchasesApiV1BillingPurchasesGetParams,
+  options?: RequestInit,
+): Promise<listPurchasesApiV1BillingPurchasesGetResponse> => {
+  return apiFetch<listPurchasesApiV1BillingPurchasesGetResponse>(
+    getListPurchasesApiV1BillingPurchasesGetUrl(params),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getListPurchasesApiV1BillingPurchasesGetQueryKey = (
+  params?: ListPurchasesApiV1BillingPurchasesGetParams,
+) => {
+  return [`/api/v1/billing/purchases`, ...(params ? [params] : [])] as const
+}
+
+export const getListPurchasesApiV1BillingPurchasesGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListPurchasesApiV1BillingPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListPurchasesApiV1BillingPurchasesGetQueryKey(params)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>
+  > = () => listPurchasesApiV1BillingPurchasesGet(params)
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListPurchasesApiV1BillingPurchasesGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>
+>
+export type ListPurchasesApiV1BillingPurchasesGetQueryError = HTTPValidationError
+
+export function useListPurchasesApiV1BillingPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params: undefined | ListPurchasesApiV1BillingPurchasesGetParams,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPurchasesApiV1BillingPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListPurchasesApiV1BillingPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPurchasesApiV1BillingPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListPurchasesApiV1BillingPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Purchases
+ */
+
+export function useListPurchasesApiV1BillingPurchasesGet<
+  TData = Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+  TError = HTTPValidationError,
+>(
+  params?: ListPurchasesApiV1BillingPurchasesGetParams,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof listPurchasesApiV1BillingPurchasesGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getListPurchasesApiV1BillingPurchasesGetQueryOptions(params, options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Get Purchase
+ */
+export type getPurchaseApiV1BillingPurchasesPurchaseIdGetResponse200 = {
+  data: PurchaseResponse
+  status: 200
+}
+
+export type getPurchaseApiV1BillingPurchasesPurchaseIdGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getPurchaseApiV1BillingPurchasesPurchaseIdGetResponseSuccess =
+  getPurchaseApiV1BillingPurchasesPurchaseIdGetResponse200 & {
+    headers: Headers
+  }
+export type getPurchaseApiV1BillingPurchasesPurchaseIdGetResponseError =
+  getPurchaseApiV1BillingPurchasesPurchaseIdGetResponse422 & {
+    headers: Headers
+  }
+
+export type getPurchaseApiV1BillingPurchasesPurchaseIdGetResponse =
+  | getPurchaseApiV1BillingPurchasesPurchaseIdGetResponseSuccess
+  | getPurchaseApiV1BillingPurchasesPurchaseIdGetResponseError
+
+export const getGetPurchaseApiV1BillingPurchasesPurchaseIdGetUrl = (purchaseId: string) => {
+  return `/api/v1/billing/purchases/${purchaseId}`
+}
+
+export const getPurchaseApiV1BillingPurchasesPurchaseIdGet = async (
+  purchaseId: string,
+  options?: RequestInit,
+): Promise<getPurchaseApiV1BillingPurchasesPurchaseIdGetResponse> => {
+  return apiFetch<getPurchaseApiV1BillingPurchasesPurchaseIdGetResponse>(
+    getGetPurchaseApiV1BillingPurchasesPurchaseIdGetUrl(purchaseId),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetPurchaseApiV1BillingPurchasesPurchaseIdGetQueryKey = (purchaseId?: string) => {
+  return [`/api/v1/billing/purchases/${purchaseId}`] as const
+}
+
+export const getGetPurchaseApiV1BillingPurchasesPurchaseIdGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+  TError = HTTPValidationError,
+>(
+  purchaseId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPurchaseApiV1BillingPurchasesPurchaseIdGetQueryKey(purchaseId)
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>
+  > = () => getPurchaseApiV1BillingPurchasesPurchaseIdGet(purchaseId)
+
+  return { queryKey, queryFn, enabled: !!purchaseId, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPurchaseApiV1BillingPurchasesPurchaseIdGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>
+>
+export type GetPurchaseApiV1BillingPurchasesPurchaseIdGetQueryError = HTTPValidationError
+
+export function useGetPurchaseApiV1BillingPurchasesPurchaseIdGet<
+  TData = Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+  TError = HTTPValidationError,
+>(
+  purchaseId: string,
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPurchaseApiV1BillingPurchasesPurchaseIdGet<
+  TData = Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+  TError = HTTPValidationError,
+>(
+  purchaseId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPurchaseApiV1BillingPurchasesPurchaseIdGet<
+  TData = Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+  TError = HTTPValidationError,
+>(
+  purchaseId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Purchase
+ */
+
+export function useGetPurchaseApiV1BillingPurchasesPurchaseIdGet<
+  TData = Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+  TError = HTTPValidationError,
+>(
+  purchaseId: string,
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getPurchaseApiV1BillingPurchasesPurchaseIdGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetPurchaseApiV1BillingPurchasesPurchaseIdGetQueryOptions(
+    purchaseId,
+    options,
+  )
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
 }

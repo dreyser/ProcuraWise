@@ -23,6 +23,37 @@ Este documento describe el diseño de despliegue aprobado. **Ninguna infraestruc
 - **Azure OpenAI / Foundry**: `AIProvider` implementado desde Fase 13 (`AzureOpenAIProvider`, sobre el SDK oficial `openai`). Config requerida en producción (`Settings._require_real_ai_config_in_production`): `azure_openai_endpoint`, `azure_openai_api_key`, `azure_openai_deployment` — ninguno tiene default fuera de `production`, así que el despliegue falla explícitamente si falta alguno en vez de arrancar con IA silenciosamente deshabilitada. Desde Fase 18, el mismo `AzureOpenAIProvider` sirve también la evaluación asistida (`ai_score_suggestion_enabled: bool = True`, `shared/config.py`) — un booleano simple, sin validador de precondiciones fail-closed como el de Foundry (ver [ADR 0022](../architecture/decisions/0022-politica-datos-evaluacion-asistida-ia.md)).
 - **Foundry Web Search** (`FoundryWebSearchProvider`, Fase 14, ADR 0011): adaptador implementado (REST directo vía `httpx` + `azure-identity` para el token Entra ID de `POST {endpoint}/openai/v1/responses` — sin SDK `azure-ai-projects`/`azure-ai-agents`), pero **desactivado en todo ambiente**, incluida producción, hasta aprobación legal documentada. Config: `FOUNDRY_WEB_SEARCH_ENABLED` (default `false`), `FOUNDRY_WEB_SEARCH_ENDPOINT`, `FOUNDRY_WEB_SEARCH_AGENT_NAME`, `FOUNDRY_WEB_SEARCH_API_VERSION` (pinned `v1`), `FOUNDRY_LEGAL_APPROVAL_REFERENCE`. Fail-closed en `Settings._require_foundry_preconditions_when_enabled`: si el flag es `true`, los otros tres valores (menos la API version, que siempre tiene default) deben estar presentes o el proceso no arranca — en cualquier ambiente, no solo producción. **Provisión de infraestructura pendiente y fuera del alcance de esta fase**: crear el proyecto Foundry, el recurso "Grounding with Bing Search" (recurso pago, requiere rol Contributor/Owner), la conexión del proyecto al recurso Bing, y el agente pre-provisionado (`FOUNDRY_WEB_SEARCH_AGENT_NAME`) con la tool `web_search` adjunta — son pasos de infraestructura/ops de una sola vez (vía `azure-ai-projects` SDK, CLI, o el portal Foundry), no algo que el adaptador haga en runtime; se documentan aquí cuando efectivamente se aprovisionen, cerca del piloto (Fase 28), no antes.
 
+## Stripe (billing, Fase 25)
+
+`PaymentProvider` (`service/procurawise/billing/provider.py`) sigue el mismo patrón de frontera que Azure OpenAI/ACS: `LocalPaymentProvider` (sin red) es el default en todo ambiente no-producción y en CI; `StripePaymentProvider` (`service/procurawise/billing/stripe_payment_provider.py`, único archivo autorizado a importar el SDK `stripe`, ver [ADR 0025](../architecture/decisions/0025-pagos-stripe-checkout-hospedado.md) y CLAUDE.md S5.1) solo se usa si `billing_enabled=true` y la configuración de Stripe está completa. `billing_enabled=false` por defecto — el feature se puede desplegar a producción apagado.
+
+**Config** (`shared/config.py`): `billing_enabled`, `stripe_secret_key`, `stripe_webhook_secret`, `stripe_price_id_evaluation`, `stripe_request_timeout_seconds`, `billing_webhook_event_retention_days`. `stripe_secret_key`/`stripe_webhook_secret` van a Key Vault en producción (mismo mecanismo que `acs_connection_string`); `stripe_price_id_evaluation` no es secreto pero sí específico de ambiente. Fuera de `environment=production`, el validador de arranque rechaza cualquier `stripe_secret_key` que no empiece con `sk_test_` — una clave `sk_live_...` nunca puede terminar en un `.env` de desarrollo por accidente.
+
+**Webhook**: endpoint público `POST /api/v1/billing/stripe/webhook`, sin JWT (la firma HMAC es la única autenticación), `include_in_schema=False`. Nunca se agrega a `/health/ready` — un incidente del lado de Stripe no debe tumbar el readiness probe del servicio.
+
+### Provisionar una cuenta Stripe de prueba (Test Mode)
+
+Prerequisito para el criterio de aceptación de la fase ("cobro de prueba exitoso en modo sandbox"). Ningún paso de esta sección toca dinero real ni requiere una cuenta Stripe verificada para cobros reales — Test Mode no necesita verificación de negocio.
+
+1. Crear (o reutilizar) una cuenta en <https://dashboard.stripe.com>, confirmar que el toggle **Test mode** está activo (esquina superior derecha del dashboard).
+2. **API Keys**: Developers → API keys → copiar la *Secret key* (`sk_test_...`) → exportar como `STRIPE_SECRET_KEY`.
+3. **Product + Price**: Product catalog → Add product (p. ej. "Evaluación ProcuraWise") → agregar un Price de tipo *One time* (no recurring — este diseño es `mode="payment"`, sin suscripción) → copiar el Price ID (`price_...`) → configurar como `stripe_price_id_evaluation` (o exportar como `STRIPE_PRICE_ID_EVALUATION` para el test opt-in, ver abajo).
+4. **Webhook secret** (dos opciones, elegir una):
+   - **Local vía Stripe CLI** (recomendado para la demo manual): `stripe login`, luego `stripe listen --forward-to localhost:8000/api/v1/billing/stripe/webhook` — el CLI imprime un `whsec_...` de sesión, exportarlo como `STRIPE_WEBHOOK_SECRET` antes de levantar la API.
+   - **Dashboard**: Developers → Webhooks → Add endpoint, URL pública, eventos `checkout.session.completed` y `checkout.session.expired` → copiar el *Signing secret* resultante.
+
+### Demo manual del flujo completo (Checkout + webhook)
+
+1. Exportar `billing_enabled=true`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `stripe_price_id_evaluation` y levantar la API (`make dev` o `uv run uvicorn ...`).
+2. En otra terminal: `stripe listen --forward-to localhost:8000/api/v1/billing/stripe/webhook` (deja corriendo).
+3. Iniciar sesión como `tenant_admin`, ir a Facturación, pegar un `evaluation_id` real y pulsar "Pagar" — el navegador es redirigido al Checkout hospedado real de Stripe (no al simulador local, con `billing_enabled=true`).
+4. Completar el pago con una [tarjeta de prueba de Stripe](https://stripe.com/docs/testing) (p. ej. `4242 4242 4242 4242`, cualquier fecha futura/CVC/código postal).
+5. Confirmar en la terminal del Stripe CLI que `checkout.session.completed` se reenvió con `200`, y en el navegador que la página de éxito muestra "Pago confirmado" tras el polling.
+6. Verificar en Mongo (`purchases`) que el `Purchase` correspondiente quedó `status="paid"` con `stripe_payment_intent_id`/`amount_total`/`currency` poblados, y en `audit_events` que se registró `billing_payment_succeeded`.
+7. Registrar la evidencia (IDs de Stripe test-mode: `cs_test_...`/`pi_test_...`, e IDs internos: `purchase_id`) en [`docs/development/current-phase.md`](../development/current-phase.md) al cerrar la fase, junto con la fecha de la demo — mismo mecanismo que CLAUDE.md S7 exige para cualquier demo manual de cierre de fase.
+
+CI nunca depende de esta cuenta: `tests/integration/test_stripe_sandbox_checkout.py` (marcador `stripe_sandbox`) crea una Sesión real (sin cobro) para verificación opcional del adaptador, pero se auto-salta sin `STRIPE_SECRET_KEY`/`STRIPE_PRICE_ID_EVALUATION` y `make test`/`make test-integration` lo excluyen explícitamente — solo corre con `pytest -m stripe_sandbox` invocado a mano.
+
 ## Pipeline CI/CD
 
 - **IaC**: Bicep (ver [ADR 0004](../architecture/decisions/0004-bicep-vs-terraform.md)), carpetas `/infra/{bicep,params,scripts}` — a partir de Fase 27.

@@ -213,6 +213,24 @@ class Settings(BaseSettings):
     # compliance record, so a shorter default is appropriate.
     notification_retention_days: int = 90
 
+    # Fase 25 (billing/admin, ADR 0025, plan Bloqueante #1 Opcion A): Stripe
+    # Checkout (mode="payment", one-time per-evaluation purchase only - no
+    # subscription in this phase). Same flag-gated shape as
+    # notifications_email_enabled above, for the same reason: no Stripe
+    # sandbox emulator exists (unlike Azurite/Service Bus emulator), so
+    # local/test/CI always use LocalPaymentProvider unless a developer opts
+    # in explicitly. stripe_price_id_evaluation is a Stripe Price id
+    # (`price_...`) created in the Stripe dashboard, never an amount/currency
+    # this codebase computes itself.
+    billing_enabled: bool = False
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_price_id_evaluation: str | None = None
+    stripe_request_timeout_seconds: int = 20
+    # Comfortably longer than Stripe's own webhook-retry window (~3 days) -
+    # a late retry must still find its event_id in the idempotency ledger.
+    billing_webhook_event_retention_days: int = 30
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":
@@ -292,6 +310,49 @@ class Settings(BaseSettings):
                 f"faltan credenciales de Azure Communication Services requeridas cuando "
                 f"environment=production y notifications_email_enabled=true: "
                 f"{', '.join(missing)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_real_billing_config_in_production(self) -> Self:
+        """Fase 25 (ADR 0025): prod-only-required (azure_openai/notifications-
+        style), not fail-closed-in-every-environment (foundry-style) - no
+        documented legal-approval gate exists for Stripe (unlike Foundry/Bing
+        Grounding, ADR 0011), and no local Stripe sandbox emulator exists for
+        any environment to meaningfully test against anyway."""
+        if self.environment != "production":
+            return self
+        if not self.billing_enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("stripe_secret_key", self.stripe_secret_key),
+                ("stripe_webhook_secret", self.stripe_webhook_secret),
+                ("stripe_price_id_evaluation", self.stripe_price_id_evaluation),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                f"faltan credenciales de Stripe requeridas cuando environment=production y "
+                f"billing_enabled=true: {', '.join(missing)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _reject_live_stripe_key_outside_production(self) -> Self:
+        """Cheap, high-value guard (plan §11 recomendacion #2): a live
+        secret key (`sk_live_...`) configured outside production is almost
+        certainly a mistake (a real key leaked into a dev .env), not a
+        deliberate choice - fail closed on it in every non-production
+        environment, unlike the rest of this file's prod-only validators."""
+        if self.environment == "production":
+            return self
+        if self.stripe_secret_key and not self.stripe_secret_key.startswith("sk_test_"):
+            raise ValueError(
+                "stripe_secret_key debe empezar con 'sk_test_' fuera de environment=production "
+                "(una clave live nunca debe configurarse en desarrollo/test/CI)"
             )
         return self
 

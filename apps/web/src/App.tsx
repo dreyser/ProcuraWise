@@ -4,11 +4,13 @@ import { createAppQueryClient } from '@/lib/queryClient'
 import { AuthProvider } from '@/auth/AuthContext'
 import { ActorProvider } from '@/actor/ActorContext'
 import { VendorAuthProvider } from '@/vendor-auth/VendorAuthContext'
+import { AdminAuthProvider } from '@/admin-auth/AdminAuthContext'
 import { AppRouter } from '@/app/router'
 
 function App() {
   // Single app-wide QueryClient, created once - AuthProvider (buyer, real
-  // JWT), VendorAuthProvider (vendor_contact, real JWT - Fase 15), and
+  // JWT), VendorAuthProvider (vendor_contact, real JWT - Fase 15),
+  // AdminAuthProvider (platform_admin, real JWT - Fase 25), and
   // ActorProvider (interim dev header, kept only for /dev/select-actor
   // devtools exploration - no longer wired into any production route) all
   // share it via useQueryClient() and each call .clear() on their own
@@ -22,9 +24,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <VendorAuthProvider>
-          <ActorProvider>
-            <AppRouter />
-          </ActorProvider>
+          <AdminAuthProvider>
+            <ActorProvider>
+              <AppRouter />
+            </ActorProvider>
+          </AdminAuthProvider>
         </VendorAuthProvider>
       </AuthProvider>
     </QueryClientProvider>

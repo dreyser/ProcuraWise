@@ -58,6 +58,17 @@ BUYER_LOGIN_ROLES: tuple[str, ...] = (
 # defines "functional"/"technical" (VS-2B scope note) - "economic" arrives
 # with real economic scoring in Fase 19-20, so evaluator_economic cannot be
 # assigned to anything yet even though the role itself already exists.
+# Fase 25 (billing/admin, ADR 0025, plan Bloqueante #1 Opcion A): write is
+# tenant_admin-only (least privilege - an evaluator must never be able to
+# create a real charge); evaluation_owner additionally gets read, so the
+# person running the RFP can see its own payment state without needing
+# tenant_admin themselves. Neither role is named explicitly for "pagos" by
+# spec S4 (which assigns "planes/límites" to platform_admin and "usuarios/
+# roles/configuración" to tenant_admin) - tenant_admin is the only
+# defensible tenant-side choice for initiating a real charge.
+BILLING_WRITE_ROLES: tuple[str, ...] = ("tenant_admin",)
+BILLING_READ_ROLES: tuple[str, ...] = ("tenant_admin", "evaluation_owner")
+
 EVALUATOR_ROLE_BY_DIMENSION: dict[str, str] = {
     "functional": "evaluator_functional",
     "technical": "evaluator_technical",

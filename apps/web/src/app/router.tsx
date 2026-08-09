@@ -2,7 +2,8 @@ import { type ReactElement } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { useVendorAuth } from '@/vendor-auth/VendorAuthContext'
-import { RequireAuth, RequireRole, RequireVendorAuth } from '@/app/guards'
+import { useAdminAuth } from '@/admin-auth/AdminAuthContext'
+import { RequireAdminAuth, RequireAuth, RequireRole, RequireVendorAuth } from '@/app/guards'
 import { AppShell } from '@/app/AppShell'
 import { roleHomePath } from '@/app/roleHomePath'
 import { SelectActorPage } from '@/actor/SelectActorPage'
@@ -35,11 +36,20 @@ import { KnowledgeTemplateDetailPage } from '@/features/evaluations/pages/Knowle
 import { QnaPage } from '@/features/evaluations/pages/QnaPage'
 import { BuyerNotificationsBell } from '@/features/notifications/components/BuyerNotificationsBell'
 import { VendorNotificationsBell } from '@/features/notifications/components/VendorNotificationsBell'
+import { BillingPage } from '@/features/billing/pages/BillingPage'
+import { CheckoutSuccessPage } from '@/features/billing/pages/CheckoutSuccessPage'
+import { CheckoutCancelledPage } from '@/features/billing/pages/CheckoutCancelledPage'
+import { AdminLoginPage } from '@/admin-auth/AdminLoginPage'
+import { AdminEvaluationsPage } from '@/features/admin/pages/AdminEvaluationsPage'
+import { AdminBillingPage } from '@/features/admin/pages/AdminBillingPage'
 
-// Fase 9 (RBAC completo, spec §4): tenant_admin/platform_admin are real,
-// backend-enforced roles that can authenticate, but have no dedicated UI
-// area yet (that's the admin console, Fase 25) - reaching this app with
-// either lands on /unauthorized, same as any other unrecognized role.
+// Fase 9 (RBAC completo, spec §4): platform_admin is a real, backend-
+// enforced role that can authenticate, but has no dedicated UI area yet
+// (that's the admin console, Fase 25 Bloque 4) - reaching this app lands on
+// /unauthorized, same as any other unrecognized role. tenant_admin gained
+// its first area in Fase 25 Bloque 3 (billing, see TENANT_ADMIN_ROLES below)
+// - it is deliberately still excluded here, since it has no access to
+// /evaluations (GET /evaluations 403s for it on the backend too).
 const BUYER_ROLES = [
   'evaluation_owner',
   'evaluator_functional',
@@ -50,13 +60,26 @@ const BUYER_ROLES = [
 ]
 const VENDOR_ROLES = ['vendor_contact']
 
-function BuyerLayout({ children }: { children: ReactElement }) {
+// Fase 25 (billing/admin, ADR 0025): tenant_admin's only area this phase -
+// kept separate from BUYER_ROLES (not merged into it) so every other buyer
+// route stays exactly as restricted as before.
+const TENANT_ADMIN_ROLES = ['tenant_admin']
+
+function BuyerLayout({
+  children,
+  roles = BUYER_ROLES,
+}: {
+  children: ReactElement
+  /** Fase 25: billing routes pass TENANT_ADMIN_ROLES here instead of the
+   * default - same AppShell/RequireAuth wiring, a narrower role gate. */
+  roles?: string[]
+}) {
   const { actor, logout } = useAuth()
   const navigate = useNavigate()
 
   return (
     <RequireAuth>
-      <RequireRole roles={BUYER_ROLES} actor={actor}>
+      <RequireRole roles={roles} actor={actor}>
         {actor ? (
           <AppShell
             actor={actor}
@@ -101,6 +124,37 @@ function VendorLayout({ children }: { children: ReactElement }) {
         )}
       </RequireRole>
     </RequireVendorAuth>
+  )
+}
+
+/** Fase 25 (billing/admin, ADR 0025 Bloque 4): platform_admin's first
+ * frontend layout - third layout alongside BuyerLayout/VendorLayout, backed
+ * by its own auth mechanism (admin-auth/AdminAuthContext, real JWT,
+ * token_use=admin_access) and its own RequireAdminAuth guard. No
+ * notifications bell (platform_admin is not a Membership and can never be
+ * a Notification recipient, see notifications/service.py). No
+ * RequireAgreementsAccepted (that gate is vendor-only). */
+function AdminLayout({ children }: { children: ReactElement }) {
+  const { actor, logout } = useAdminAuth()
+  const navigate = useNavigate()
+
+  return (
+    <RequireAdminAuth>
+      {actor ? (
+        <AppShell
+          actor={actor}
+          exitLabel="Cerrar sesión"
+          onExit={() => {
+            logout()
+            navigate('/admin/login', { replace: true })
+          }}
+        >
+          {children}
+        </AppShell>
+      ) : (
+        <></>
+      )}
+    </RequireAdminAuth>
   )
 }
 
@@ -280,6 +334,49 @@ export function AppRouter() {
             <BuyerLayout>
               <ReportsPage />
             </BuyerLayout>
+          }
+        />
+
+        <Route
+          path="/billing"
+          element={
+            <BuyerLayout roles={TENANT_ADMIN_ROLES}>
+              <BillingPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/billing/checkout/success"
+          element={
+            <BuyerLayout roles={TENANT_ADMIN_ROLES}>
+              <CheckoutSuccessPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/billing/checkout/cancelled"
+          element={
+            <BuyerLayout roles={TENANT_ADMIN_ROLES}>
+              <CheckoutCancelledPage />
+            </BuyerLayout>
+          }
+        />
+
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route
+          path="/admin/evaluations"
+          element={
+            <AdminLayout>
+              <AdminEvaluationsPage />
+            </AdminLayout>
+          }
+        />
+        <Route
+          path="/admin/billing"
+          element={
+            <AdminLayout>
+              <AdminBillingPage />
+            </AdminLayout>
           }
         />
 

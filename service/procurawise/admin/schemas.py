@@ -18,6 +18,11 @@ class AdminTokenResponse(APIModel):
 class AdminEvaluationSummary(APIModel):
     id: str
     tenant_id: str
+    # Fase 25 (billing/admin, ADR 0025): server-resolved display join, not a
+    # new cross-tenant capability - the console would otherwise be a wall of
+    # raw tenant UUIDs. Never a new AuditEvent of its own; the tenant_id was
+    # already returned (and already audited) before this field existed.
+    tenant_name: str
     name: str
     status: str
     created_at: datetime
@@ -25,4 +30,21 @@ class AdminEvaluationSummary(APIModel):
 
 class AdminEvaluationListResponse(APIModel):
     items: list[AdminEvaluationSummary]
+    next_cursor: str | None
+
+
+class AdminPurchaseSummary(APIModel):
+    id: str
+    tenant_id: str
+    tenant_name: str
+    evaluation_id: str
+    status: str
+    amount_total: int | None
+    currency: str | None
+    created_at: datetime
+    paid_at: datetime | None
+
+
+class AdminPurchaseListResponse(APIModel):
+    items: list[AdminPurchaseSummary]
     next_cursor: str | None

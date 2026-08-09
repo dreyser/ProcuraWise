@@ -14,12 +14,30 @@ const BUYER_NAV: NavItem[] = [
 
 const VENDOR_NAV: NavItem[] = [{ to: '/vendor/proposals', label: 'Mis propuestas' }]
 
+// Fase 25 (billing/admin, ADR 0025): tenant_admin's only area this phase -
+// deliberately not merged into BUYER_NAV, since tenant_admin has no access
+// to /evaluations or /knowledge-templates (BUYER_ROLES in app/router.tsx).
+const TENANT_ADMIN_NAV: NavItem[] = [{ to: '/billing', label: 'Facturación' }]
+
+// Fase 25 Bloque 4: platform_admin's console - read-only cross-tenant pages
+// (plan Bloqueante #2 Opcion b), no dashboard/tenant-management/write
+// actions in this phase.
+const PLATFORM_ADMIN_NAV: NavItem[] = [
+  { to: '/admin/evaluations', label: 'Evaluaciones' },
+  { to: '/admin/billing', label: 'Facturación' },
+]
+
 function navItemsForRole(role: string): NavItem[] {
-  return role === 'vendor_contact' ? VENDOR_NAV : BUYER_NAV
+  if (role === 'vendor_contact') return VENDOR_NAV
+  if (role === 'tenant_admin') return TENANT_ADMIN_NAV
+  if (role === 'platform_admin') return PLATFORM_ADMIN_NAV
+  return BUYER_NAV
 }
 
 interface AppShellActor {
-  tenant_name: string
+  /** Fase 25: optional - platform_admin has no tenant at all (see
+   * admin-auth/AdminAuthContext.tsx's AdminActor). */
+  tenant_name?: string
   display_name: string
   role: string
 }
@@ -68,7 +86,8 @@ export function AppShell({
         <div>
           <p className="text-sm font-semibold text-foreground">ProcuraWise</p>
           <p className="text-xs text-muted-foreground">
-            {actor.tenant_name} · {actor.display_name} · {translateRole(actor.role)}
+            {actor.tenant_name ? `${actor.tenant_name} · ` : ''}
+            {actor.display_name} · {translateRole(actor.role)}
           </p>
         </div>
         <nav aria-label="Navegación principal" className="flex gap-4">

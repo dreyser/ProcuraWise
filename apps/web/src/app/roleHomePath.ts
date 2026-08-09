@@ -1,5 +1,11 @@
 export function roleHomePath(role: string): string {
-  return role === 'vendor_contact' ? '/vendor/proposals' : '/evaluations'
+  if (role === 'vendor_contact') return '/vendor/proposals'
+  // Fase 25 (billing/admin, ADR 0025): tenant_admin has no access to
+  // /evaluations (BUYER_ROLES in app/router.tsx deliberately excludes it -
+  // GET /evaluations 403s for this role on the backend too) - its only area
+  // this phase is billing.
+  if (role === 'tenant_admin') return '/billing'
+  return '/evaluations'
 }
 
 /**
