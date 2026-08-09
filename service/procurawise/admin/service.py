@@ -5,6 +5,8 @@ from datetime import datetime
 from procurawise.admin.models import PlatformAdminAccount
 from procurawise.admin.repository import PlatformAdminAccountRepository
 from procurawise.audit.service import AuditEventService
+from procurawise.billing.models import Purchase
+from procurawise.billing.repository import PurchaseRepository
 from procurawise.evaluations.models import Evaluation
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.passwords import verify_password
@@ -124,3 +126,52 @@ class AdminEvaluationService:
             else None
         )
         return evaluations, next_cursor
+
+
+class AdminPurchaseService:
+    """Fase 25 (billing/admin, ADR 0025, plan Bloqueante #2 Opcion b): the
+    one new cross-tenant capability this phase adds, following
+    AdminEvaluationService's pattern exactly (same cursor helpers, same
+    synthetic-actor audit, same "reason required, one AuditEvent per record
+    touched" discipline) - deliberately not a new find_across_tenants()
+    twin on a different repository shape, so the two admin read endpoints
+    stay structurally identical for a future reader."""
+
+    def __init__(self, purchases: PurchaseRepository, audit: AuditEventService) -> None:
+        self._purchases = purchases
+        self._audit = audit
+
+    def list_purchases_across_tenants(
+        self,
+        *,
+        reason: str,
+        limit: int,
+        cursor: str | None,
+        admin_id: str,
+        display_name: str,
+    ) -> tuple[list[Purchase], str | None]:
+        decoded_cursor = _decode_cursor(cursor) if cursor else None
+        docs = self._purchases.find_across_tenants(limit=limit, cursor=decoded_cursor)
+        page_docs = docs[:limit]
+        purchases = [Purchase.from_document(doc) for doc in page_docs]
+
+        # Same rationale as AdminEvaluationService above: evaluation_id is
+        # set so the read surfaces on that evaluation's own audit trail, not
+        # just in a tenant-wide feed that doesn't exist yet.
+        for purchase in purchases:
+            self._audit.record(
+                tenant_id=purchase.tenant_id,
+                actor=_synthetic_actor_for_audit(admin_id, display_name, purchase.tenant_id),
+                action="platform_admin_cross_tenant_read",
+                resource_type="purchase",
+                resource_id=purchase.id,
+                evaluation_id=purchase.evaluation_id,
+                metadata={"reason": reason},
+            )
+
+        next_cursor = (
+            _encode_cursor(purchases[-1].created_at, purchases[-1].id)
+            if len(docs) > limit
+            else None
+        )
+        return purchases, next_cursor

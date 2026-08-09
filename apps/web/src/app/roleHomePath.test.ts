@@ -10,6 +10,10 @@ describe('roleHomePath', () => {
     expect(roleHomePath('evaluation_owner')).toBe('/evaluations')
     expect(roleHomePath('evaluator_functional')).toBe('/evaluations')
   })
+
+  it('sends tenant_admin to billing (Fase 25) - it has no access to /evaluations', () => {
+    expect(roleHomePath('tenant_admin')).toBe('/billing')
+  })
 })
 
 describe('isNextPathAllowedForRole', () => {

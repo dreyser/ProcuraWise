@@ -22,6 +22,7 @@ AuditResourceType = Literal[
     "decision",
     "report",
     "notification",
+    "purchase",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -164,6 +165,18 @@ AuditAction = Literal[
     "notification_email_delivery_succeeded",
     "notification_email_delivery_failed",
     "notification_email_delivery_exhausted",
+    # Fase 25 (billing/admin, ADR 0025) - resource_type "purchase". The
+    # platform_admin cross-tenant billing read (admin/service.py) reuses the
+    # existing platform_admin_cross_tenant_read action (Fase 9) rather than
+    # adding a billing-specific twin - that action is resource-agnostic by
+    # design, and resource_type="purchase" already distinguishes it. No
+    # action exists for a rejected webhook signature: an unauthenticated,
+    # tenant-less request has neither a tenant_id nor an ActorContext, the
+    # two things AuditEvent.create() structurally requires - that case is
+    # structured-logged (billing/service.py), not audited.
+    "billing_checkout_session_created",
+    "billing_payment_succeeded",
+    "billing_checkout_expired",
 ]
 
 

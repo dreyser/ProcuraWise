@@ -7,13 +7,26 @@ import {
   type ActorContextResponse,
   type MembershipOption,
 } from '@/api/client'
-import { setActiveAccessToken, setActiveVendorAccessToken, ApiError } from '@/lib/http'
+import {
+  setActiveAccessToken,
+  setActiveAdminAccessToken,
+  setActiveVendorAccessToken,
+  ApiError,
+} from '@/lib/http'
 
 export type AuthStatus = 'anonymous' | 'awaiting_workspace' | 'ready'
 
 export interface AuthResult {
   ok: boolean
   message?: string
+  /** Fase 25: set only once a single Membership has actually resolved
+   * (switchTenant's success path) - absent when login instead lands on
+   * `awaiting_workspace` (RequireAuth redirects to /auth/select-workspace
+   * on its own in that case, so callers don't need a role yet). Lets
+   * LoginPage.tsx route to this actor's real home instead of assuming
+   * every buyer role shares one (no longer true since tenant_admin,
+   * Fase 25, has its own home at /billing). */
+  role?: string
 }
 
 interface AuthContextValue {
@@ -99,15 +112,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.status !== 200) return { ok: false, message: GENERIC_ERROR }
 
       setActiveAccessToken(response.data.access_token)
-      // Fase 15: defensive - a buyer login always wins over any vendor
-      // session that might still be active in this same tab.
+      // Fase 15/25: defensive - a buyer login always wins over any vendor
+      // or admin session that might still be active in this same tab.
       setActiveVendorAccessToken(null)
+      setActiveAdminAccessToken(null)
       setActor(response.data.actor)
       setPreSessionToken(null)
       setMemberships([])
       setStatus('ready')
       queryClient.clear()
-      return { ok: true }
+      return { ok: true, role: response.data.actor.role }
     },
     [queryClient],
   )

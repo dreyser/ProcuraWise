@@ -15,6 +15,7 @@ function renderLoginPage() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/evaluations" element={<p>Página de evaluaciones</p>} />
+            <Route path="/billing" element={<p>Página de facturación</p>} />
           </Routes>
         </MemoryRouter>
       </AuthProvider>
@@ -125,6 +126,63 @@ describe('LoginPage', () => {
     await user.click(screen.getByRole('button', { name: 'Entrar' }))
 
     await waitFor(() => expect(screen.getByText('Página de evaluaciones')).toBeInTheDocument())
+  })
+
+  it('regression (Fase 25): a tenant_admin single-membership login lands on /billing, not /evaluations', async () => {
+    // Bug found while E2E-testing Bloque 5: the single-membership fast path
+    // used to hardcode roleHomePath('evaluation_owner') regardless of the
+    // actor's real role - harmless before Fase 25 (every buyer role shared
+    // /evaluations), but tenant_admin now has its own home and has no
+    // access to /evaluations at all (backend 403s it too).
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/auth/login')) {
+        return jsonResponse(200, {
+          pre_session_token: 'pre-1',
+          token_type: 'bearer',
+          expires_in: 300,
+        })
+      }
+      if (url.includes('/auth/memberships')) {
+        return jsonResponse(200, {
+          memberships: [
+            {
+              membership_id: 'm-1',
+              tenant_id: 't-1',
+              tenant_name: 'Acme',
+              role: 'tenant_admin',
+              display_name: 'Tenant Admin A',
+            },
+          ],
+        })
+      }
+      if (url.includes('/auth/switch-tenant')) {
+        return jsonResponse(200, {
+          access_token: 'access-1',
+          token_type: 'bearer',
+          expires_in: 1800,
+          actor: {
+            membership_id: 'm-1',
+            user_id: 'u-1',
+            tenant_id: 't-1',
+            tenant_name: 'Acme',
+            role: 'tenant_admin',
+            vendor_org_id: null,
+            display_name: 'Tenant Admin A',
+          },
+        })
+      }
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderLoginPage()
+    await user.type(screen.getByLabelText('Correo'), 'tenant-admin.a@dev.procurawise.local')
+    await user.type(screen.getByLabelText('Contraseña'), 'dev-password-2026')
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+
+    await waitFor(() => expect(screen.getByText('Página de facturación')).toBeInTheDocument())
   })
 
   describe('OIDC buttons', () => {

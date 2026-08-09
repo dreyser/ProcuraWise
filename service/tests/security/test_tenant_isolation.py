@@ -200,6 +200,68 @@ def test_evaluation_approval_routes_are_tenant_isolated(
     )
 
 
+# Fase 25 (billing/admin, ADR 0025) - dedicated negative isolation coverage
+# for the new billing/* routes, per CLAUDE.md S4 ("toda ruta nueva que toque
+# datos de negocio requiere su test de aislamiento negativo"). Overlaps
+# partially with tests/api/test_billing_router.py's own isolation cases by
+# design - that file proves the happy/tampering/role paths, this file is the
+# canonical place a future reader checks for "is this new route covered".
+
+
+def test_billing_checkout_for_another_tenants_evaluation_is_404(
+    client, seeded_actors, mongo_test_settings
+) -> None:
+    tenant_a, tenant_admin_membership_id = _unique_actor_by_role(seeded_actors, "tenant_admin")
+    tenant_admin_headers = _bearer_headers_for(tenant_admin_membership_id, mongo_test_settings)
+    tenant_b = next(t for t in _tenant_ids(seeded_actors) if t != tenant_a)
+    owner_b_headers = _bearer_headers_for(
+        seeded_actors[(tenant_b, "evaluation_owner")], mongo_test_settings
+    )
+    other_tenant_evaluation_id = client.post(
+        "/api/v1/evaluations",
+        json={"name": "Tenant B isolation RFP", "description": ""},
+        headers=owner_b_headers,
+    ).json()["id"]
+
+    response = client.post(
+        "/api/v1/billing/checkout-sessions",
+        json={"evaluation_id": other_tenant_evaluation_id},
+        headers=tenant_admin_headers,
+    )
+    assert response.status_code == 404
+
+
+def test_billing_purchase_read_for_another_tenant_is_404(
+    client, seeded_actors, mongo_test_settings
+) -> None:
+    tenant_a, tenant_admin_membership_id = _unique_actor_by_role(seeded_actors, "tenant_admin")
+    tenant_admin_headers = _bearer_headers_for(tenant_admin_membership_id, mongo_test_settings)
+    owner_a_headers = _bearer_headers_for(
+        seeded_actors[(tenant_a, "evaluation_owner")], mongo_test_settings
+    )
+    evaluation_id = client.post(
+        "/api/v1/evaluations",
+        json={"name": "Tenant A billing isolation RFP", "description": ""},
+        headers=owner_a_headers,
+    ).json()["id"]
+    purchase_id = client.post(
+        "/api/v1/billing/checkout-sessions",
+        json={"evaluation_id": evaluation_id},
+        headers=tenant_admin_headers,
+    ).json()["id"]
+
+    tenant_b = next(t for t in _tenant_ids(seeded_actors) if t != tenant_a)
+    owner_b_headers = _bearer_headers_for(
+        seeded_actors[(tenant_b, "evaluation_owner")], mongo_test_settings
+    )
+    response = client.get(f"/api/v1/billing/purchases/{purchase_id}", headers=owner_b_headers)
+    assert response.status_code == 404
+
+    list_response = client.get("/api/v1/billing/purchases", headers=owner_b_headers)
+    assert list_response.status_code == 200
+    assert all(item["id"] != purchase_id for item in list_response.json()["items"])
+
+
 def test_seed_dev_is_idempotent(mongo_test_settings: Settings, mongo_test_db) -> None:
     first = seed(mongo_test_settings)
     second = seed(mongo_test_settings)

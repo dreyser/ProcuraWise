@@ -54,6 +54,9 @@ export const roleLabels = {
   approver: 'Aprobador',
   tenant_admin: 'Administrador del cliente',
   vendor_contact: 'Contacto de proveedor',
+  // Fase 25 (billing/admin, ADR 0025) - previously absent, would have
+  // rendered as the raw string "platform_admin" (translate()'s fallback).
+  platform_admin: 'Administrador de plataforma',
 } as const satisfies Record<string, string>
 
 export const assignmentStatusLabels = {
@@ -227,3 +230,15 @@ export const notificationEventLabels = {
 
 export const translateNotificationEvent = (value: string): string =>
   translate(notificationEventLabels, value)
+
+// Fase 25 (billing/admin, ADR 0025) - matches billing.models.PurchaseStatus
+// exactly (plan Bloqueante #1 Opcion A: one-time per-evaluation purchase
+// only, no subscription lifecycle).
+export const purchaseStatusLabels = {
+  pending: 'Pendiente',
+  paid: 'Pagada',
+  expired: 'Expirada',
+} as const satisfies Record<string, string>
+
+export const translatePurchaseStatus = (value: string): string =>
+  translate(purchaseStatusLabels, value)

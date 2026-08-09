@@ -6,16 +6,20 @@ from procurawise.admin.schemas import (
     AdminEvaluationListResponse,
     AdminEvaluationSummary,
     AdminLoginRequest,
+    AdminPurchaseListResponse,
+    AdminPurchaseSummary,
     AdminTokenResponse,
 )
 from procurawise.admin.service import (
     AdminAuthService,
     AdminEvaluationService,
+    AdminPurchaseService,
     InvalidAdminCredentialsError,
     InvalidAdminCursorError,
 )
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
+from procurawise.billing.repository import PurchaseRepository
 from procurawise.curated_sources.models import CuratedSource
 from procurawise.curated_sources.repository import CuratedSourceRepository
 from procurawise.curated_sources.schemas import (
@@ -27,6 +31,7 @@ from procurawise.curated_sources.schemas import (
 from procurawise.curated_sources.service import CuratedSourceNotFoundError, CuratedSourceService
 from procurawise.evaluations.repository import EvaluationRepository
 from procurawise.identity.jwt_provider import create_admin_access_token
+from procurawise.identity.repository import TenantRepository
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.mongo import get_database
 from procurawise.tco.models import FXRate
@@ -91,6 +96,33 @@ def get_admin_evaluation_service(
     )
 
 
+def get_admin_purchase_service(
+    settings: Settings = Depends(get_settings),
+) -> AdminPurchaseService:
+    db = get_database(settings)
+    return AdminPurchaseService(
+        purchases=PurchaseRepository(db),
+        audit=AuditEventService(AuditEventRepository(db), settings),
+    )
+
+
+def get_tenant_repository(settings: Settings = Depends(get_settings)) -> TenantRepository:
+    return TenantRepository(get_database(settings))
+
+
+def _resolve_tenant_names(tenants: TenantRepository, tenant_ids: set[str]) -> dict[str, str]:
+    """Fase 25 (billing/admin, ADR 0025): a simple per-unique-tenant lookup,
+    not a new batch-fetch method on TenantRepository - a cross-tenant admin
+    page is capped at `limit<=100` results, so the number of distinct
+    tenants touched per request is small in practice, and this is the only
+    consumer of a "many tenants at once" read today."""
+    names: dict[str, str] = {}
+    for tenant_id in tenant_ids:
+        doc = tenants.find_by_id(tenant_id)
+        names[tenant_id] = doc["name"] if doc is not None else tenant_id
+    return names
+
+
 @router.post("/auth/login", response_model=AdminTokenResponse)
 def admin_login(
     body: AdminLoginRequest,
@@ -117,6 +149,7 @@ def list_evaluations_across_tenants(
     cursor: str | None = None,
     admin: PlatformAdminContext = Depends(require_admin),
     service: AdminEvaluationService = Depends(get_admin_evaluation_service),
+    tenants: TenantRepository = Depends(get_tenant_repository),
 ) -> AdminEvaluationListResponse:
     try:
         evaluations, next_cursor = service.list_evaluations_across_tenants(
@@ -128,16 +161,63 @@ def list_evaluations_across_tenants(
         )
     except InvalidAdminCursorError:
         raise HTTPException(status_code=422, detail="invalid cursor") from None
+    tenant_names = _resolve_tenant_names(tenants, {e.tenant_id for e in evaluations})
     return AdminEvaluationListResponse(
         items=[
             AdminEvaluationSummary(
                 id=e.id,
                 tenant_id=e.tenant_id,
+                tenant_name=tenant_names[e.tenant_id],
                 name=e.name,
                 status=e.status,
                 created_at=e.created_at,
             )
             for e in evaluations
+        ],
+        next_cursor=next_cursor,
+    )
+
+
+# Fase 25 (billing/admin, ADR 0025, plan Bloqueante #2 Opcion b): the one
+# new cross-tenant read this phase adds - same shape as
+# list_evaluations_across_tenants above (mandatory reason, cursor pagination,
+# tenant_name enrichment, one AuditEvent per record touched).
+
+
+@router.get("/purchases", response_model=AdminPurchaseListResponse)
+def list_purchases_across_tenants(
+    reason: str = Query(..., min_length=3),
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = None,
+    admin: PlatformAdminContext = Depends(require_admin),
+    service: AdminPurchaseService = Depends(get_admin_purchase_service),
+    tenants: TenantRepository = Depends(get_tenant_repository),
+) -> AdminPurchaseListResponse:
+    try:
+        purchases, next_cursor = service.list_purchases_across_tenants(
+            reason=reason,
+            limit=limit,
+            cursor=cursor,
+            admin_id=admin.admin_id,
+            display_name=admin.display_name,
+        )
+    except InvalidAdminCursorError:
+        raise HTTPException(status_code=422, detail="invalid cursor") from None
+    tenant_names = _resolve_tenant_names(tenants, {p.tenant_id for p in purchases})
+    return AdminPurchaseListResponse(
+        items=[
+            AdminPurchaseSummary(
+                id=p.id,
+                tenant_id=p.tenant_id,
+                tenant_name=tenant_names[p.tenant_id],
+                evaluation_id=p.evaluation_id,
+                status=p.status,
+                amount_total=p.amount_total,
+                currency=p.currency,
+                created_at=p.created_at,
+                paid_at=p.paid_at,
+            )
+            for p in purchases
         ],
         next_cursor=next_cursor,
     )

@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useActor } from '@/actor/ActorContext'
 import { useAuth } from '@/auth/AuthContext'
 import { useVendorAuth } from '@/vendor-auth/VendorAuthContext'
+import { useAdminAuth } from '@/admin-auth/AdminAuthContext'
 
 /** Deep link without an active vendor dev-actor: redirect to the interim
  * selector, preserving the destination via ?next=. Route guards are UX
@@ -41,6 +42,21 @@ export function RequireVendorAuth({ children }: { children: ReactElement }) {
   if (status === 'anonymous') {
     const next = encodeURIComponent(`${location.pathname}${location.search}`)
     return <Navigate to={`/vendor/login?next=${next}`} replace />
+  }
+
+  return children
+}
+
+/** Fase 25: platform_admin equivalent of RequireVendorAuth above, backed by
+ * real admin auth (admin-auth/AdminAuthContext). Redirects to /admin/login,
+ * preserving the destination via ?next=. */
+export function RequireAdminAuth({ children }: { children: ReactElement }) {
+  const { status } = useAdminAuth()
+  const location = useLocation()
+
+  if (status === 'anonymous') {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`)
+    return <Navigate to={`/admin/login?next=${next}`} replace />
   }
 
   return children

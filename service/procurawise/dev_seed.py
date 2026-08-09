@@ -67,6 +67,11 @@ SEEDED_COLLECTIONS = [
     "evaluation_snapshots",
     "vendor_invitations",
     "agreements",
+    # Fase 25 (billing/admin, ADR 0025) - purchases/billing_accounts are
+    # created on demand (no bulk seeding of their own), but must still be
+    # wiped on seed-reset like every other tenant-scoped collection.
+    "purchases",
+    "billing_accounts",
 ]
 
 
