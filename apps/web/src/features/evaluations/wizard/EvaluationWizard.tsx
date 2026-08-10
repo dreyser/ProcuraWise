@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -40,15 +40,36 @@ export function EvaluationWizard() {
   })
   const evaluation = unwrapData<EvaluationDetailResponse>(evaluationQuery.data)
 
-  const [step, setStep] = useState<WizardStep>(1)
-  const initializedForId = useRef<string | null | undefined>(undefined)
+  // Fase 26 (Hardening): "adjust state during render" instead of a
+  // `useEffect` that calls `setState` synchronously in its body
+  // (`react-hooks/set-state-in-effect`) - see EconomicWeightsForm.tsx for
+  // the same pattern applied to a simpler (synchronously-available) case.
+  // This one also has to wait for `evaluationQuery` to resolve
+  // asynchronously (`evaluation` starts `undefined`), which still works
+  // here: React just re-renders this component again once the query
+  // updates, and *that* render is where the adjustment below fires -
+  // synchronously, without waiting on a separate effect+re-render round
+  // trip the way the original version did.
+  const [wizardState, setWizardState] = useState<{
+    hasInitialized: boolean
+    initializedFor: string | null
+    step: WizardStep
+  }>(() => ({ hasInitialized: false, initializedFor: null, step: 1 }))
 
-  useEffect(() => {
-    if (initializedForId.current === (evaluationId ?? null)) return
-    if (evaluationId && evaluation === undefined) return // still loading this id
-    setStep(deriveWizardStep(evaluation))
-    initializedForId.current = evaluationId ?? null
-  }, [evaluation, evaluationId])
+  const currentEvaluationId = evaluationId ?? null
+  const stillLoadingForInit = Boolean(evaluationId) && evaluation === undefined
+  if (
+    !stillLoadingForInit &&
+    (!wizardState.hasInitialized || wizardState.initializedFor !== currentEvaluationId)
+  ) {
+    setWizardState({
+      hasInitialized: true,
+      initializedFor: currentEvaluationId,
+      step: deriveWizardStep(evaluation),
+    })
+  }
+  const step = wizardState.step
+  const setStep = (next: WizardStep) => setWizardState((prev) => ({ ...prev, step: next }))
 
   if (!isOwner) {
     return <Navigate to={evaluationId ? `/evaluations/${evaluationId}` : '/evaluations'} replace />
@@ -78,8 +99,7 @@ export function EvaluationWizard() {
   }
 
   const handleCreated = (created: EvaluationDetailResponse) => {
-    initializedForId.current = created.id
-    setStep(2)
+    setWizardState({ hasInitialized: true, initializedFor: created.id, step: 2 })
     navigate(`/evaluations/${created.id}/wizard`, { replace: true })
   }
 

@@ -24,6 +24,18 @@ export function AuthCallbackPage() {
     window.history.replaceState(null, '', window.location.pathname)
 
     if (!preSessionToken) {
+      // Fase 26 (Hardening): `react-hooks/set-state-in-effect` flags this,
+      // but there's no render-time alternative here - unlike
+      // ActorContext.tsx's equivalent fix, computing this during a
+      // useState lazy initializer isn't safe: it would have to include the
+      // `window.history.replaceState` call below (impure), which React's
+      // Strict Mode double-invokes for initializers specifically to catch
+      // this class of bug - the second invocation would read an
+      // already-cleared URL fragment. This effect already guards against
+      // re-running via `started.current`, so it behaves as a genuine
+      // "handle this exactly once on mount" case, not a per-render
+      // synchronization the rule is meant to catch.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('No se recibió una sesión válida del proveedor. Intenta de nuevo.')
       return
     }

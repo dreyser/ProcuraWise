@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import {
   getScoreSuggestionStatusApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsJobIdGet,
   type ScoreSuggestionJobStatusResponse,
@@ -14,29 +14,42 @@ function isTerminal(result: ScoreSuggestionJobStatusResponse): boolean {
   return result.status === 'succeeded' || result.status === 'failed'
 }
 
+function snapshotsAreEqual<T>(a: PollingSnapshot<T> | null, b: PollingSnapshot<T> | null): boolean {
+  if (a === b) return true
+  if (a === null || b === null) return false
+  return (
+    a.status === b.status &&
+    a.result === b.result &&
+    a.error === b.error &&
+    a.stale === b.stale &&
+    a.lastUpdatedAt?.getTime() === b.lastUpdatedAt?.getTime()
+  )
+}
+
 /** Fase 18 (ADR 0022): second real consumer of `PollingController` for a job
- * status screen. Unlike useAiSuggestionJobStatus.ts (Fase 13), which creates
- * and starts the controller directly in the render body and subscribes in a
- * separate effect afterward, this subscribes *before* starting, both inside
- * the same effect - with a fast-resolving fetch (real network latency is
- * never that fast, but a mocked one in tests can be), `controller.start()`
- * can resolve and call `notify()` before a render-body-created controller's
- * own subscribe effect has had a chance to run, silently dropping the one
- * and only update that would have flipped the UI out of "generating…". Kept
- * local to this hook rather than changing the Fase 13 one, which is already
- * shipped and tested against its current contract. */
+ * status screen.
+ *
+ * Fase 26 (Hardening): migrated from a manual `useState` synced via
+ * `setState` calls directly in the effect body (flagged by
+ * eslint-plugin-react-hooks 7's `react-hooks/set-state-in-effect` - exactly
+ * the "cascading synchronous render" pattern that rule targets) to the same
+ * `useSyncExternalStore` + memoized-snapshot shape as
+ * `useReportJobStatus.ts`/`useAiSuggestionJobStatus.ts`. This also
+ * structurally preserves the original "subscribe before start" fix this
+ * hook's history is about (`getSnapshot` always reads the controller's own
+ * current state directly - there is no separate subscribe-then-notify race
+ * to lose an update to, unlike the old setState-based version). */
 export function useAiScoreSuggestionJobStatus(
   evaluationId: string,
   proposalId: string,
   jobId: string | null,
 ): PollingSnapshot<ScoreSuggestionJobStatusResponse> | null {
-  const [snapshot, setSnapshot] =
-    useState<PollingSnapshot<ScoreSuggestionJobStatusResponse> | null>(null)
   const controllerRef = useRef<PollingController<ScoreSuggestionJobStatusResponse> | null>(null)
+  const snapshotCacheRef = useRef<PollingSnapshot<ScoreSuggestionJobStatusResponse> | null>(null)
 
   useEffect(() => {
     if (jobId === null) {
-      setSnapshot(null)
+      controllerRef.current = null
       return
     }
     const controller = new PollingController<ScoreSuggestionJobStatusResponse>({
@@ -53,16 +66,37 @@ export function useAiScoreSuggestionJobStatus(
       },
     })
     controllerRef.current = controller
-    const unsubscribe = controller.subscribe(() => setSnapshot(controller.getSnapshot()))
-    setSnapshot(controller.getSnapshot())
+    snapshotCacheRef.current = null
     controller.start()
-
     return () => {
-      unsubscribe()
       controller.dispose()
-      controllerRef.current = null
+      if (controllerRef.current === controller) controllerRef.current = null
     }
   }, [evaluationId, proposalId, jobId])
 
-  return snapshot
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const current = controllerRef.current
+      if (!current) return () => {}
+      return current.subscribe(onStoreChange)
+    },
+    // See useReportJobStatus.ts: must match the construction effect's deps
+    // (`[]` would subscribe once against a null controllerRef.current on the
+    // `jobId === null` initial mount and never re-subscribe once a real
+    // controller exists). Neither dep is read in the callback body, so
+    // exhaustive-deps sees them as "unnecessary" - they're intentionally
+    // there to drive resubscription.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [evaluationId, proposalId, jobId],
+  )
+
+  const getSnapshot = useCallback(() => {
+    const raw = controllerRef.current?.getSnapshot() ?? null
+    if (!snapshotsAreEqual(snapshotCacheRef.current, raw)) {
+      snapshotCacheRef.current = raw
+    }
+    return snapshotCacheRef.current
+  }, [])
+
+  return useSyncExternalStore(subscribe, getSnapshot)
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   getGetEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentGetQueryKey,
@@ -168,17 +168,29 @@ export function EconomicAssessmentPanel({
   const notFound = assessmentQuery.error instanceof ApiError && assessmentQuery.error.status === 404
   const assessment = unwrapData<EconomicAssessmentResponse>(assessmentQuery.data)
 
-  const [drafts, setDrafts] = useState<Record<string, CriterionDraft>>({})
-  const [initialized, setInitialized] = useState(false)
-  const [validationError, setValidationError] = useState<string | null>(null)
+  // Fase 26 (Hardening): "adjust state during render" instead of a
+  // `useEffect` that calls `setState` synchronously in its body
+  // (`react-hooks/set-state-in-effect`) - same shape as
+  // EvaluationWizard.tsx's "initialize once the async query resolves"
+  // fix. `drafts`/`initialized` live in one state object so the seed-from-
+  // server-data adjustment below sets both atomically.
+  const [assessmentState, setAssessmentState] = useState<{
+    initialized: boolean
+    drafts: Record<string, CriterionDraft>
+  }>({ initialized: false, drafts: {} })
 
-  useEffect(() => {
-    if (initialized) return
-    if (assessmentQuery.isLoading) return
-    if (!assessment && !notFound) return
-    setDrafts(draftsFromAssessment(assessment))
-    setInitialized(true)
-  }, [initialized, assessment, notFound, assessmentQuery.isLoading])
+  if (
+    !assessmentState.initialized &&
+    !assessmentQuery.isLoading &&
+    (assessment || notFound)
+  ) {
+    setAssessmentState({ initialized: true, drafts: draftsFromAssessment(assessment) })
+  }
+  const drafts = assessmentState.drafts
+  const setDrafts = (
+    updater: (prev: Record<string, CriterionDraft>) => Record<string, CriterionDraft>,
+  ) => setAssessmentState((prev) => ({ ...prev, drafts: updater(prev.drafts) }))
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   const upsert =
     useUpsertEconomicAssessmentApiV1EvaluationsEvaluationIdProposalsProposalIdEconomicAssessmentPut(

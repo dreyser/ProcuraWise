@@ -46,14 +46,21 @@ const ActorReactContext = createContext<ActorContextValue | null>(null)
 export function ActorProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [actor, setActor] = useState<ActorContextResponse | null>(null)
-  const [status, setStatus] = useState<ActorStatus>('loading')
+  // Fase 26 (Hardening): the "no stored id" case is now decided by this
+  // lazy initializer (reading sessionStorage - a synchronous browser API,
+  // safe during render) rather than by an unconditional `setStatus(...)`
+  // call at the top of the mount effect below, which
+  // `react-hooks/set-state-in-effect` flags as an avoidable synchronous
+  // render cascade. The effect below still owns the *async* half (calling
+  // /me) - setStatus calls from its `.then`/`.catch` callbacks are fine,
+  // since those aren't synchronous-within-the-effect-body calls.
+  const [status, setStatus] = useState<ActorStatus>(() =>
+    sessionStorage.getItem(STORAGE_KEY) ? 'loading' : 'anonymous',
+  )
 
   useEffect(() => {
     const storedId = sessionStorage.getItem(STORAGE_KEY)
-    if (!storedId) {
-      setStatus('anonymous')
-      return
-    }
+    if (!storedId) return
 
     setActiveMembershipId(storedId)
     getMeApiV1MeGet()

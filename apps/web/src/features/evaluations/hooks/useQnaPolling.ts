@@ -12,27 +12,38 @@ const POLL_INTERVAL_MS = 30_000
  * tab/backoff+jitter/offline-pause/manual-refresh semantics come from the
  * same controller every other async screen in the app already uses.
  * `isTerminal` is always false - a Q&A board is never "done" the way an AI
- * job is, it polls for as long as the page stays open. */
+ * job is, it polls for as long as the page stays open.
+ *
+ * Fase 26 (Hardening): the controller is built inside `useEffect`, not
+ * during render - see useReportJobStatus.ts/usePurchaseStatus.ts for the
+ * full rationale (eslint-plugin-react-hooks 7's `react-hooks/refs`). The
+ * effect itself runs once (empty deps, matching the original's "construct
+ * once for the component's lifetime" behavior) rather than being keyed on
+ * `refetch` - every caller (QnaPage.tsx) passes a fresh inline closure on
+ * every render, so keying on it would tear down and rebuild the
+ * controller (restarting the poll interval) on every unrelated re-render.
+ * `refetchRef` keeps calling whichever `refetch` is current without
+ * needing the effect to re-run - the ref is synced from its own
+ * dependency-less effect (runs after every commit), not by writing to it
+ * directly during render - `react-hooks/refs` (Fase 26) disallows *any*
+ * ref mutation during render now, including the previously-common
+ * "update every render" idiom. */
 export function useQnaPolling(refetch: () => Promise<unknown>): void {
-  const controllerRef = useRef<PollingController<null> | null>(null)
+  const refetchRef = useRef(refetch)
+  useEffect(() => {
+    refetchRef.current = refetch
+  })
 
-  if (!controllerRef.current) {
+  useEffect(() => {
     const controller = new PollingController<null>({
       intervalMs: POLL_INTERVAL_MS,
       isTerminal: () => false,
       fetchFn: async () => {
-        await refetch()
+        await refetchRef.current()
         return null
       },
     })
-    controllerRef.current = controller
     controller.start()
-  }
-
-  useEffect(() => {
-    return () => {
-      controllerRef.current?.dispose()
-      controllerRef.current = null
-    }
+    return () => controller.dispose()
   }, [])
 }
