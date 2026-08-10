@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from procurawise.identity.auth_schemas import (
@@ -32,6 +32,8 @@ from procurawise.identity.schemas import ActorContextResponse
 from procurawise.identity.service import ActorNotFoundError, IdentityService, get_identity_service
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.mongo import get_database
+from procurawise.shared.rate_limit import enforce_login_not_locked_out, record_login_failure
+from procurawise.shared.request_ip import resolve_client_ip
 from procurawise.shared.roles import BUYER_LOGIN_ROLES
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -69,9 +71,28 @@ def get_oidc_provider(
 @router.post("/login", response_model=PreSessionResponse)
 def login(
     body: LoginRequest,
+    request: Request,
     users: UserRepository = Depends(get_user_repository),
     settings: Settings = Depends(get_settings),
 ) -> PreSessionResponse:
+    # Fase 26 (Hardening, plan Bloque 2): brute-force mitigation, keyed by
+    # (IP, email) - not IP alone (a blanket per-IP counter would also block
+    # legitimate rapid logins into many *different* accounts from the same
+    # network) - and only failed attempts count toward lockout, checked
+    # here before the credential check and recorded only in the failure
+    # branch below. A successful login never counts against the same
+    # account's own budget - this app's own E2E suite logs the same small,
+    # fixed roster of dev-seeded accounts in successfully dozens of times
+    # across its 18 specs, which a "every request counts" limiter would
+    # have wrongly throttled.
+    ip = resolve_client_ip(request, settings)
+    login_rate_limit_key = f"login:{ip}:{body.email}"
+    enforce_login_not_locked_out(
+        login_rate_limit_key,
+        settings.rate_limit_login_max_attempts,
+        settings.rate_limit_login_window_seconds,
+    )
+
     doc = users.find_by_email(body.email)
     user = User.from_document(doc) if doc is not None else None
     # Never distinguish "no such email" / "OIDC-only account, no password
@@ -83,6 +104,7 @@ def login(
         or user.password_hash is None
         or not verify_password(body.password, user.password_hash)
     ):
+        record_login_failure(login_rate_limit_key, settings.rate_limit_login_window_seconds)
         raise HTTPException(status_code=401, detail="invalid credentials")
 
     token, expires_in = create_pre_session_token(user.id, settings)

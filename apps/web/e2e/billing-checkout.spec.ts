@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
@@ -77,4 +79,6 @@ test('tenant_admin pays for an evaluation end to end via the local checkout simu
   const row = page.getByRole('row', { name: new RegExp(evaluationId) })
   await expect(row).toBeVisible()
   await expect(row.getByText('Pagada')).toBeVisible()
+
+  await checkA11y(page)
 })

@@ -1,5 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 const DEV_VENDOR_PASSWORD = 'dev-vendor-password-2026'
@@ -273,4 +275,6 @@ test('qna: proveedor pregunta, comprador responde con visibilidad, y un segundo 
   await expect(page.getByText('¿Cuándo cierra el RFP?')).toHaveCount(0)
   await expect(page.getByText('Cierra el 30 de agosto.')).toHaveCount(0)
   await expect(page.getByText('Proveedor Uno (dev)')).toHaveCount(0)
+
+  await checkA11y(page)
 })

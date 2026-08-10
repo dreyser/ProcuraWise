@@ -33,6 +33,7 @@ from procurawise.scoring.exceptions import (
 )
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
+from procurawise.shared.rate_limit import rate_limit_by_tenant
 from procurawise.shared.roles import BUYER_READ_ROLES, OWNER_ONLY, SCORE_WRITE_ROLES
 
 router = APIRouter(prefix="/evaluations/{evaluation_id}/ai", tags=["ai"])
@@ -48,6 +49,23 @@ score_suggestion_router = APIRouter(
 require_buyer_read = require_role(*BUYER_READ_ROLES)
 require_owner = require_role(*OWNER_ONLY)
 require_score_write = require_role(*SCORE_WRITE_ROLES)
+
+# Fase 26 (Hardening, plan Bloque 2): cost-abuse mitigation on job *triggers*
+# only (never on the read/status endpoints below) - keyed by tenant, one
+# rate-limit dependency per trigger endpoint's own auth dependency so
+# FastAPI's per-request cache resolves each `require_*` call exactly once.
+rate_limit_requirement_suggestions = rate_limit_by_tenant(
+    "ai-requirement-suggestions",
+    lambda s: s.rate_limit_ai_max_requests,
+    lambda s: s.rate_limit_ai_window_seconds,
+    require_owner,
+)
+rate_limit_score_suggestion = rate_limit_by_tenant(
+    "ai-score-suggestion",
+    lambda s: s.rate_limit_ai_max_requests,
+    lambda s: s.rate_limit_ai_window_seconds,
+    require_score_write,
+)
 
 
 def get_ai_provider(settings: Settings = Depends(get_settings)) -> AIProvider:
@@ -131,6 +149,7 @@ def trigger_requirement_suggestions(
     body: TriggerSuggestionRequest,
     context: ActorContext = Depends(require_owner),
     service: AIService = Depends(get_ai_service),
+    _rate_limit: None = Depends(rate_limit_requirement_suggestions),
 ) -> TriggerSuggestionResponse:
     """Fase 13 (ADR 0021/0012): returns 202 immediately - the worker's
     dispatch loop processes the job asynchronously, never this request."""
@@ -226,6 +245,7 @@ def trigger_score_suggestion(
     body: TriggerScoreSuggestionRequest,
     context: ActorContext = Depends(require_score_write),
     service: AIService = Depends(get_ai_service),
+    _rate_limit: None = Depends(rate_limit_score_suggestion),
 ) -> TriggerSuggestionResponse:
     """Fase 18 (ADR 0022): returns 202 immediately, same async contract as
     trigger_requirement_suggestions - the worker's dispatch loop processes

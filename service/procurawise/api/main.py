@@ -1,6 +1,7 @@
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 
 from procurawise.admin.router import router as admin_router
 from procurawise.ai.router import router as ai_router
@@ -34,9 +35,46 @@ from procurawise.tco.router import router as tco_router
 from procurawise.vendor_portal.agreements_router import router as vendor_portal_agreements_router
 from procurawise.vendor_portal.router import router as vendor_portal_router
 
-configure_logging(get_settings())
+_settings = get_settings()
+configure_logging(_settings)
 
 app = FastAPI(title="ProcuraWise API")
+
+# Fase 26 (Hardening, plan Bloque 1): deny-all by default
+# (cors_allowed_origins=[]) - cross-origin browser calls only start
+# happening once Fase 27 deploys the SPA and API to distinct origins; local
+# dev/CI never need this (Vite's proxy in vite.config.ts makes the
+# browser's own requests same-origin). allow_credentials is False - this
+# API never relies on cookies for auth (JWT is sent via the Authorization
+# header only, see apps/web/src/lib/http.ts and threat-model.md's CSRF
+# section), so there is no session cookie to protect with credentialed CORS.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_settings.cors_allowed_origins_list,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.middleware("http")
+async def security_headers_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Fase 26 (Hardening, plan Bloque 1): baseline security headers on
+    every response. No Content-Security-Policy yet - that requires
+    inventorying every resource origin the SPA actually loads, deliberately
+    out of this phase's scope (see plan §11); candidate for a future
+    hardening pass if ever needed. HSTS only in production - it is
+    meaningless (and mildly annoying for local http:// development) without
+    HTTPS actually terminating in front of this process."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if _settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    return response
 
 
 @app.middleware("http")

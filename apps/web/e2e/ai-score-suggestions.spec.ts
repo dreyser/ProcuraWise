@@ -1,5 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 const DEV_VENDOR_PASSWORD = 'dev-vendor-password-2026'
@@ -148,4 +150,6 @@ test('AI score suggestions (Fase 18): owner triggers a suggestion job from Scori
   await expect(page.getByText('Generando sugerencias…')).toBeVisible()
   // A queued job with nothing processing it must never surface as an error.
   await expect(page.getByRole('alert')).toHaveCount(0)
+
+  await checkA11y(page)
 })

@@ -117,6 +117,13 @@ export function ProposalDocumentsPanel({ proposalId, disabled }: ProposalDocumen
             type="file"
             className="sr-only"
             id="proposal-document-upload"
+            // Not "Adjuntar documento..." - a native <input type="file">
+            // has an implicit ARIA role of "button", so an overlapping
+            // name would make this hidden input match the same
+            // getByRole('button', {name: ...}) locator as the real,
+            // visible trigger Button below (Fase 26, same issue as
+            // RequirementEvidenceUpload.tsx).
+            aria-label="Selector de archivo para documento de la propuesta"
             onChange={handleFileChange}
             disabled={actions.isUploading}
           />

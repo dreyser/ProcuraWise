@@ -1,5 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 const DEV_VENDOR_PASSWORD = 'dev-vendor-password-2026'
@@ -164,4 +166,6 @@ test('TCO (Fase 19): vendor captures a cost item and submits, owner reads the fr
 
   await expect(page.getByText(/TCO \(1 año\(s\), MXN\)/)).toBeVisible()
   await expect(page.getByText('10000.00').first()).toBeVisible()
+
+  await checkA11y(page)
 })

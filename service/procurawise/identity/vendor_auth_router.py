@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from procurawise.audit.repository import AuditEventRepository
 from procurawise.audit.service import AuditEventService
@@ -36,6 +36,8 @@ from procurawise.notifications.dependencies import build_notification_service
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
 from procurawise.shared.mongo import get_database
+from procurawise.shared.rate_limit import enforce_login_not_locked_out, record_login_failure
+from procurawise.shared.request_ip import resolve_client_ip
 from procurawise.shared.roles import OWNER_ONLY
 
 logger = logging.getLogger("procurawise.identity.vendor_auth")
@@ -226,11 +228,24 @@ def accept_invitation(
 @vendor_auth_router.post("/login", response_model=VendorTokenResponse)
 def vendor_login(
     body: VendorLoginRequest,
+    request: Request,
     service: VendorAuthService = Depends(get_vendor_auth_service),
+    settings: Settings = Depends(get_settings),
 ) -> VendorTokenResponse:
+    # Fase 26 (Hardening, plan Bloque 2): same (IP, email)-scoped,
+    # failures-only lockout as identity.auth_router.login - see that
+    # endpoint's comment for the full rationale.
+    ip = resolve_client_ip(request, settings)
+    login_rate_limit_key = f"vendor-login:{ip}:{body.email}"
+    enforce_login_not_locked_out(
+        login_rate_limit_key,
+        settings.rate_limit_login_max_attempts,
+        settings.rate_limit_login_window_seconds,
+    )
     try:
         context, access_token, expires_in = service.login(body.email, body.password)
     except InvalidVendorCredentialsError:
+        record_login_failure(login_rate_limit_key, settings.rate_limit_login_window_seconds)
         raise HTTPException(status_code=401, detail="invalid credentials") from None
     return VendorTokenResponse(
         access_token=access_token,

@@ -8,6 +8,7 @@ from procurawise.identity.repository import MembershipRepository, TenantReposito
 from procurawise.identity.service import IdentityService
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.mongo import get_database, get_mongo_client
+from procurawise.shared.rate_limit import reset_rate_limits
 from procurawise.shared.storage import AzureBlobStorage
 
 TEST_MONGO_DB_NAME = "procurawise_test"
@@ -52,6 +53,12 @@ def seeded_actors(mongo_test_settings: Settings, mongo_test_db):
 
 @pytest.fixture
 def client(mongo_test_settings: Settings, seeded_actors):
+    # Fase 26 (Hardening): the rate limiter (shared/rate_limit.py) is a
+    # process-wide singleton, not per-app/per-test - without this reset, hit
+    # counts would leak between unrelated test functions sharing this
+    # pytest session (e.g. this file alone drives /auth/login well past
+    # rate_limit_login_max_attempts across its own tests).
+    reset_rate_limits()
     app.dependency_overrides[get_settings] = lambda: mongo_test_settings
     with TestClient(app) as test_client:
         yield test_client

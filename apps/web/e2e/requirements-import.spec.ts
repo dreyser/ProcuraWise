@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
@@ -66,4 +68,6 @@ test('Import de requerimientos (Fase 23): sube un CSV, revisa el mapeo y confirm
 
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.locator('table').getByRole('cell', { name: 'Req E2E importado' })).toBeVisible()
+
+  await checkA11y(page)
 })

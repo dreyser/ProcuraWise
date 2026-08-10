@@ -75,7 +75,35 @@ A definir en detalle durante la Fase 27 (aprovisionamiento de infra real), como 
 
 ## Backup / restore
 
-Diseño aprobado, verificación programada antes del piloto (Fase 26, como parte de Hardening — ver [`docs/development/backlog.md`](../development/backlog.md)). No hay todavía una prueba de backup/restore ejecutada, porque no existe infraestructura real.
+**Estado: verificación de nivel MVP ejecutada (Fase 26, 2026-08-09).** Atlas M0 (el tier aprobado para todo el MVP, [ADR 0015](../architecture/decisions/0015-tier-mongodb-atlas-m0.md)) **no ofrece backups gestionados** — esa capacidad requiere un tier M10+, un upgrade explícitamente clasificado en ese mismo ADR como "post-MVP, sin gatillo numérico predefinido", que esta fase no reabre. Tampoco existe infraestructura real hasta la Fase 27. La verificación de esta fase queda por lo tanto acotada deliberadamente a lo demostrable hoy: un ciclo real `mongodump`→`mongorestore` contra el Mongo local de Docker Compose, **no equivalente a un backup gestionado de Atlas** — decisión del founder (plan de Fase 26, pregunta bloqueante #1, Opción A).
+
+**Script**: `scripts/backup_restore_demo.sh` (invocado vía `make backup-demo`) —
+1. Cuenta documentos por colección en `procurawise_local` (estado "antes").
+2. `mongodump` de `procurawise_local` dentro del propio contenedor `procurawise-mongo` (la imagen oficial de Mongo ya incluye `mongodump`/`mongorestore`, sin instalar tooling adicional en el host).
+3. `mongorestore` hacia una base de verificación separada (`procurawise_backup_verify`, vía `--nsFrom`/`--nsTo`) dentro del mismo `mongod` — evita levantar un segundo contenedor solo para la demo.
+4. Vuelve a contar documentos por colección en la base restaurada (estado "después") y compara exactamente contra el conteo "antes".
+5. Limpieza: borra la base de verificación y el dump temporal dentro del contenedor.
+
+**Runbook operativo** (una vez exista Mongo Atlas real, Fase 27+): mismo patrón de comandos (`mongodump`/`mongorestore`) apuntando a la URI de Atlas en vez del contenedor local — Atlas M10+ además añade snapshots automáticos gestionados por el proveedor, que este script no sustituye ni intenta reproducir, solo complementa como verificación manual adicional.
+
+**Ejecución real de esta demo** (2026-08-09, `make backup-demo`): 26 colecciones (`_migrations`, `agreements`, `ai_executions`, `assignments`, `audit_events`, `billing_accounts`, `curated_sources`, `decision_snapshots`, `decisions`, `documents`, `economic_assessments`, `evaluation_snapshots`, `evaluations`, `knowledge_templates`, `memberships`, `notifications`, `platform_admins`, `proposals`, `purchases`, `qna_questions`, `reports`, `scores`, `tenants`, `users`, `vendor_invitations`, `vendor_organizations`), 9025 documentos totales — conteo por colección idéntico entre `procurawise_local` (antes) y `procurawise_backup_verify` restaurada (después), verificado por el propio script. **Bug real encontrado y corregido durante la construcción del script**: `mongorestore --dir` apuntando directamente al subdirectorio nombrado por la base de datos (`.../procurawise_local`, en vez del directorio padre del dump) fallaba silenciosamente — cada archivo `.bson` se reportaba con "don't know what to do with file ..., skipping" y la base de verificación quedaba vacía sin ningún error fatal (el script sí detectó el fallo correctamente, comparando conteos "antes" vs. "después" — 0 documentos restaurados no coincide con ninguno de los 26 conteos originales). Corregido apuntando `--dir` al directorio padre, dejando que `mongorestore` descubra el subdirectorio `procurawise_local` él mismo junto con `--nsFrom`/`--nsTo`.
+
+## Performance (k6, Fase 26)
+
+**Estado: ejecutado (2026-08-09).** Verifica NFR-003 (50 usuarios concurrentes, global de la plataforma, no por-tenant — `approved-mvp-plan.md` §4.13) con evidencia real, no solo diseño aprobado. Script: `scripts/perf/rfp-read-load.js` (k6) — autentica una sola vez en `setup()` (nunca por VU/iteración: martillar `/auth/login` habría disparado de inmediato el rate limiter agregado en esta misma fase, `rate_limit_login_max_attempts=5/60s` por IP, y el throughput del propio login nunca fue el objetivo de NFR-003 — tiene su propio límite bajo intencional como control de seguridad, no de performance), luego ejercita el endpoint de lectura síncrono más transitado por un comprador autenticado (`GET /api/v1/evaluations`) con 50 VUs sostenidos. Deliberadamente sin escritura (crear evaluación, guardar respuesta de propuesta) en esta primera pasada — requeriría datos desechables por-corrida (invitación de proveedor, evaluación en borrador) que no es seguro fabricar 50-anchos contra la base compartida de `make seed-dev` sin contaminar las fixtures de cualquier otra sesión de desarrollo; candidato a un escenario más elaborado cuando exista una historia de seed/datos desechables por corrida (Fase 27+).
+
+**Hallazgo real durante la construcción del script**: `GET /api/v1/me` iba a ser un segundo endpoint objetivo, pero devuelve 401 contra un JWT real de comprador — sigue cableado al mecanismo de identidad pre-AUTH-PROD (`identity.dev_provider.get_current_context`, header `X-Dev-Membership-Id`), nunca migrado al JWT real que usa el resto de rutas de comprador. Descubierto por el propio script de k6, no por los tests existentes. Corregirlo queda fuera del alcance de esta fase (rate limiting/CSRF/headers/WCAG/performance/backup) — el script final solo usa `GET /api/v1/evaluations`; ver `docs/security/threat-model.md` para el registro completo del hallazgo.
+
+**Cómo correrlo**:
+```
+make dev-up && make seed-dev
+(cd service && uv run uvicorn procurawise.api.main:app --port 8000) &
+k6 run scripts/perf/rfp-read-load.js
+```
+
+**Umbral**: p95 < 500ms en los endpoints síncronos objetivo, tasa de error < 1% — endpoints de IA/reportes explícitamente excluidos (ya son asíncronos vía job, sin SLA síncrono aplicable). Sin gate en CI en esta fase (no solicitado por el criterio de aceptación textual del backlog) — ejecución manual documentada aquí.
+
+**Resultado de la corrida real** (2026-08-09, 50 VUs pico, `stages: 20s→50/40s@50/10s→0`): `http_req_duration` p95=127.46ms (umbral: <500ms, holgura amplia), `http_req_failed`=0.00% (umbral: <1%), 2610 iteraciones completas, 0 interrumpidas, 2613/2613 checks exitosos. Ambos umbrales en verde. Detalle completo, incluida la corrida fallida inicial que expuso el hallazgo de `/me` arriba (antes de corregir el script), en [`docs/development/current-phase.md`](../development/current-phase.md), entrada de Fase 26.
 
 ## Runbook
 
@@ -87,7 +115,7 @@ A construirse durante la Fase 27-28, una vez que exista infraestructura real que
 
 ## Última prueba de backup/restore
 
-Ninguna — no aplica todavía, no hay infraestructura real. Se actualizará este campo la primera vez que se ejecute, en la Fase 26.
+**2026-08-09** (Fase 26, `make backup-demo`, nivel MVP contra Mongo local — no equivale a un backup gestionado de Atlas, ver sección "Backup / restore" arriba): 26 colecciones / 9025 documentos, conteo idéntico entre origen y restaurada. Próxima actualización de este campo: cuando exista infraestructura Atlas real (Fase 27+) y, si se decide un upgrade de tier post-MVP (ADR 0015), la primera verificación contra un backup gestionado real.
 
 ## Referencias
 

@@ -32,6 +32,57 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-09 — Fase 26 (E11, Bloque 6 "Hardening y despliegue"): Hardening (rate limiting, CSRF, headers, dependency/secret scanning, WCAG 2.1 AA, performance, backup/restore) + cierre formal de `threat-model.md`
+
+**Resumen:** Sesión que comenzó en Plan Mode exclusivo de solo lectura: confirmó el cierre formal de Fase 25 con evidencia de Git/GitHub (`origin/main` en `befa5f9`, squash-merge de PR #39), identificó Fase 26 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`threat-model.md` (dependencia declarada Fase 24, no Fase 25), y produjo un plan técnico completo con 2 preguntas genuinamente bloqueantes (nivel de verificación de backup/restore dado que Atlas M0 no soporta backups gestionados; alcance de la auditoría WCAG 2.1 AA sobre 35 rutas/3 portales). El founder resolvió las 2 con la opción recomendada en cada caso. Tras la autorización ("Autorizo avanzar con la implementacion del plan"), ejecución completa en 8 bloques incrementales (CORS+headers, rate limiting, CSRF/documentación, dependency scanning+SBOM, WCAG 2.1 AA, performance k6, backup/restore, cierre de `threat-model.md`), cada uno verificado contra Docker/E2E real antes de avanzar.
+
+**Decisiones bloqueantes resueltas por el founder (plan §9):**
+1. Backup/restore: **Opción A** — verificación de nivel MVP vía `mongodump`/`mongorestore` contra Mongo local (`scripts/backup_restore_demo.sh`, `make backup-demo`), documentada explícitamente como no equivalente a un backup gestionado de Atlas (M0 no lo soporta); no reabre ADR 0015.
+2. Alcance WCAG 2.1 AA: **Opción A** — automatizado (`jsx-a11y`+`axe-core`) al 100% de la SPA + auditoría manual (Playwright-driven) en los 2 journeys core (comprador dueño de evaluación, proveedor respondiendo propuesta); consola admin con cobertura solo automatizada, deuda documentada.
+
+**5 bugs reales detectados y corregidos durante la propia sesión de implementación (expuestos por la suite E2E real y por los propios scripts nuevos, no por tests unitarios preexistentes):**
+1. **Rate limiting de login contaba también los intentos exitosos** — la primera versión (per-IP, todo intento cuenta) provocó una cascada real de hasta 11/18 specs E2E fallando en cuanto la suite superó el umbral con logins legítimos repetidos hacia el mismo roster fijo de cuentas sembradas. Corregido con keying `(IP, email)` + solo-fallos-cuentan (`enforce_login_not_locked_out`/`record_login_failure`), aplicado simétricamente a `/auth/login` y `/vendor-auth/login`.
+2. **Contraste insuficiente del badge `destructive`** (axe-core, `impact: serious`, 6 specs) — corregido en `index.css` (`--destructive` más oscuro, mismo matiz/croma).
+3. **Controles de formulario sin nombre accesible** (axe-core, `impact: critical`, 3 specs) — inputs de archivo ocultos y 6 de 10 tipos de control de `AnswerField.tsx` sin ninguna forma de label; corregido con `aria-label`/`aria-labelledby`.
+4. **Colisión de accessible name** tras el fix anterior — el `aria-label` del input de archivo oculto (rol ARIA implícito `button`) coincidía por subcadena con el botón visible de disparo, rompiendo un locator de Playwright; corregido con texto sin solapamiento.
+5. **`mongorestore --dir` apuntando al subdirectorio incorrecto** — fallaba silenciosamente (sin error fatal) restaurando 0 documentos; corregido apuntando al directorio padre del dump.
+
+**Decisiones no bloqueantes resueltas por evidencia (ninguna requirió al founder):**
+1. Rate limiting in-process, sin Redis (ADR 0020 ya lo excluyó del diseño; NFR-003 no justifica reabrirlo).
+2. CSRF mitigado estructuralmente (sin cookies de sesión en toda la app, confirmado por búsqueda exhaustiva), sin tokens anti-CSRF construidos.
+3. Dependency scanning bloqueante solo en `high`/`critical`, no todo hallazgo (evita bloquear por CVEs transitivos sin fix disponible).
+4. `k6` sobre `locust` para performance (menor huella de dependencias, sin runtime Python adicional).
+5. Único hallazgo real de `pip-audit` (`cryptography` HIGH) corregido con un bump de versión en vez de documentado como excepción — un fix disponible existía.
+
+**Archivos tocados:** ver el detalle completo por bloque en `current-phase.md` — resumen: `shared/rate_limit.py` (nuevo), `identity/auth_router.py`/`vendor_auth_router.py` (login solo-fallos), `ai/router.py`/`billing/router.py` (rate limit por tenant), `api/main.py` (CORS+headers middleware), `shared/config.py` (+7 settings), `pyproject.toml`/`uv.lock` (`cryptography` 49→50), `tests/unit/test_security_headers.py`/`test_rate_limit.py` (nuevos), `tests/security/test_rate_limiting.py` (nuevo), `tests/conftest.py` (+reset del limiter); frontend: `eslint.config.js` (+jsx-a11y), `e2e/support/a11y.ts` (nuevo), los 18 specs E2E existentes (+`checkA11y`), `index.css`, `RequirementEvidenceUpload.tsx`/`ProposalDocumentsPanel.tsx`/`AnswerField.tsx`/`VendorProposalDetailPage.tsx` (fixes de accesibilidad), `package.json`/`pnpm-lock.yaml` (+2 deps, +`pnpm.overrides` para `lodash`/`js-yaml`); CI: `.github/workflows/security.yml` (bloqueante high/critical + job `sbom`); operación: `scripts/perf/rfp-read-load.js` (nuevo), `scripts/backup_restore_demo.sh` (nuevo), `Makefile` (+`backup-demo`), `.env.example` (+variables nuevas); docs: `docs/security/threat-model.md` (cierre formal), `docs/operations/deployment.md` (+secciones Performance/Backup con evidencia real).
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend, 0 errores).
+- Backend unit (`pytest -m "not docker..."`) → 289 passed (+12 sobre la base de Fase 25).
+- Backend integración/API/seguridad Docker (`make test-integration`) → 439 passed (+6 sobre la base de Fase 25; una corrida intermedia tuvo 1 fallo transitorio de `test_documents_storage.py` no relacionado con esta fase, confirmado flaky preexistente — pasa en aislamiento y en re-corrida completa limpia).
+- Frontend (`pnpm test`) → 212 passed (sin cambio respecto a Fase 25).
+- `make test-e2e` → 20/20 tests en verde (18 specs) en la corrida final, tras corregir los 5 bugs reales descritos arriba.
+- `make contracts` corrido dos veces seguidas → sin diff (esta fase no cambia contratos OpenAPI).
+- `git diff --check` → limpio.
+- `k6 run scripts/perf/rfp-read-load.js` → p95=127.46ms (umbral <500ms), 0.00% error rate (umbral <1%), 2610 iteraciones, 50 VUs pico sostenido.
+- `make backup-demo` → 26 colecciones / 9025 documentos, conteo idéntico origen↔restaurada.
+- `shellcheck scripts/backup_restore_demo.sh` → limpio.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere ADR — todas las decisiones de esta fase son hardening/tooling sobre arquitectura ya aprobada (sin nueva infraestructura, sin nuevo bounded context, sin cambio de patrón de comunicación).
+
+**Deuda técnica introducida:**
+- `GET /api/v1/me` sigue cableado al mecanismo de identidad pre-AUTH-PROD (`X-Dev-Membership-Id`) en vez del JWT real — descubierto por el script de k6, fuera del alcance de esta fase (no es rate limiting/CSRF/headers/WCAG/performance/backup), candidato a una fase futura que toque `identity/router.py`.
+- Sin `Content-Security-Policy` — requeriría inventariar cada origen de recurso del SPA, decisión de alcance documentada, candidato a hardening posterior si se necesita.
+- Auditoría manual WCAG de la consola `platform_admin`/`tenant_admin` no realizada (cobertura solo automatizada) — decisión explícita del founder, mismo patrón "opción mínima" de Fase 25.
+- Backup/restore verificado solo a nivel MVP (Mongo local), no contra Atlas real — Atlas M0 no lo soporta; requiere upgrade de tier post-MVP sin gatillo numérico (ADR 0015) para cerrar completamente.
+- Rate limiting in-process no coordina entre réplicas múltiples de la API — irrelevante mientras no exista infraestructura real desplegada (Fase 27).
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md` (columna "Depende de"): **Fase 27**, Infra Azure real (Bicep) + CI/CD GitHub Actions OIDC staging→prod — depende de Fase 26 (✅ cerrada).
+- No tocar todavía: `GET /api/v1/me` (deuda documentada, no bloqueante); `Content-Security-Policy`; auditoría manual WCAG de la consola admin; backup/restore contra Atlas real (requiere infraestructura de Fase 27 primero, y potencialmente un upgrade de tier fuera del alcance de esa fase también).
+- Housekeeping pendiente heredado, sin cambios: ramas `phase-14` a `phase-25` siguen sin borrarse (requiere confirmación explícita del founder); rama local `main` requiere `git pull`/fast-forward tras fusionar esta fase.
+
 ### Sesión — 2026-08-08 — Fase 25 (E11, Bloque 6 "Hardening y despliegue"): Billing/Admin básico P1 (Stripe Checkout hospedado + consola `platform_admin` cross-tenant auditada)
 
 **Resumen:** Sesión que comenzó en Plan Mode exclusivo de solo-lectura: verificó el cierre formal de Fase 24 con evidencia de Git/GitHub (PR #38 fusionado a `main`, merge commit `2120553`, 8/8 checks verdes), identificó Fase 25 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`session-handoff.md` (dependencia declarada: Fase 9, no Fase 24), y produjo un plan técnico completo con 3 preguntas genuinamente bloqueantes (ver abajo). El founder resolvió las 3 explícitamente, siguiendo en los 3 casos la opción recomendada por el plan. Tras esa autorización, ejecución completa en 5 bloques incrementales (fundación de billing sin superficie HTTP, checkout+webhook+auditoría+notificación, UI `tenant_admin`, consola `platform_admin`, E2E+sandbox+documentación), cada uno verificado contra Docker real antes de avanzar.

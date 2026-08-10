@@ -73,7 +73,14 @@ body {
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Fase 26 (Hardening, plan Bloque 5): darkened from the shadcn default
+     (oklch(0.577 0.245 27.325)) - text-destructive on the destructive
+     Badge's bg-destructive/10 background measured 4.0:1 via axe-core
+     (WCAG 2.1 AA requires 4.5:1 for normal text), caught by
+     e2e/support/a11y.ts's checkA11y() across 6 specs. Same hue/chroma,
+     only lightness reduced; verified against white (--background) via a
+     canvas-based contrast probe: L=0.5 measures 4.95:1. */
+  --destructive: oklch(0.5 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);

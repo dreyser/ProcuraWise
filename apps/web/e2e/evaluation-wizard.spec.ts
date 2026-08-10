@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
@@ -148,5 +150,7 @@ test.describe('evaluation wizard (Fase 10)', () => {
     await expect(page.getByText('Gestión de flujos')).toBeVisible()
     // Still on step 2 - the vendor-linking step's own heading isn't shown.
     await expect(page.getByRole('heading', { name: 'Vincular proveedor' })).toHaveCount(0)
+
+    await checkA11y(page)
   })
 })

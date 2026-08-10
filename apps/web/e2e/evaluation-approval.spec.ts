@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
@@ -143,5 +145,7 @@ test.describe('evaluation approval and publication (Fase 12)', () => {
     await expect(page.getByText('Aprobación pendiente')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Aprobar' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Rechazar' })).toHaveCount(0)
+
+    await checkA11y(page)
   })
 })
