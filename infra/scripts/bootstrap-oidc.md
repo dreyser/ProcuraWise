@@ -95,6 +95,8 @@ az deployment group create \
 
 Tras el deploy: `curl https://<apiFqdn output>/health/ready` debe responder `200` con `mongodb`/`storage` en `true` (Atlas real y Storage Account real, no más Docker local) — esto es lo que finalmente confirma el criterio de aceptación textual de Fase 27 ("Deploy a staging exitoso vía pipeline, sin secretos de larga vida en el repo"). Registrar el resultado (fecha, `apiFqdn`, respuesta de `/health/ready`) en `docs/development/current-phase.md`, mismo mecanismo ya usado para las demos manuales de Fases 15/25.
 
+**Último paso, después de confirmar el primer deploy exitoso**: `deploy-staging.yml` corre solo manualmente (`workflow_dispatch`) hasta este punto — sin el trigger `push: branches: [main]`, deliberadamente comentado, para que no falle en rojo en cada merge a `main` mientras los secrets del paso 5 no existen. Una vez confirmado el primer deploy real, descomentar ese trigger en `.github/workflows/deploy-staging.yml` (PR normal, mismo flujo que cualquier otro cambio) para volver al despliegue continuo automático a staging en cada merge.
+
 ## MongoDB Atlas (fuera de Bicep — plan §11, decisión recomendada #1)
 
 Atlas no es un recurso Azure; Bicep no puede aprovisionarlo. Crear manualmente en <https://cloud.mongodb.com>:
