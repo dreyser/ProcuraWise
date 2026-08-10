@@ -8,9 +8,17 @@ name: Deploy Staging
 # en sí son manuales, de una sola vez - este workflow nunca crea un
 # resource group ni asigna roles (mínimo privilegio, plan §14).
 
+# Solo manual hasta que el founder complete infra/scripts/bootstrap-oidc.md
+# - AZURE_CLIENT_ID/AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID (GitHub Secrets)
+# no existen todavía, así que `push: branches: [main]` haría que este
+# workflow fallara en rojo en cada merge a main (falla en el paso de
+# `azure/login`, antes de tocar nada - confirma que el resto del pipeline
+# está bien formado, pero es ruido innecesario en cada PR mientras tanto).
+# Una vez completado el bootstrap, descomentar el trigger `push` de abajo
+# para volver al despliegue continuo automático.
 on:
-  push:
-    branches: [main]
+  # push:
+  #   branches: [main]
   workflow_dispatch: {}
 
 permissions:
