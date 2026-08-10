@@ -6,7 +6,25 @@ import { cn } from '@/lib/utils'
 
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div
+      data-slot="table-container"
+      className="relative w-full overflow-x-auto"
+      // Fase 26 (Hardening): axe-core's scrollable-region-focusable rule -
+      // this wrapper only actually overflows (and needs keyboard access at
+      // all) once a table's content is wide enough, which depends on
+      // viewport/content and didn't reproduce in every local run - CI's
+      // headless viewport did trigger it. tabIndex makes the region itself
+      // reachable/scrollable via keyboard (arrow keys) once focused; the
+      // role+label pair is what most screen readers announce for a
+      // keyboard-focusable non-interactive container like this one. This
+      // is the standard WAI-ARIA "scrollable region" technique axe-core
+      // itself expects - jsx-a11y's static no-noninteractive-tabindex rule
+      // doesn't special-case it, hence the disable below.
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+      role="region"
+      aria-label="Tabla con desplazamiento horizontal"
+    >
       <table
         data-slot="table"
         className={cn('w-full caption-bottom text-sm', className)}

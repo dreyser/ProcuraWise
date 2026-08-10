@@ -120,7 +120,12 @@ export function VendorProposalDetailPage() {
           return (
             <div key={requirement.id} className="rounded-md border border-border p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-semibold text-foreground">{requirement.title}</h2>
+                <h2
+                  id={`requirement-title-${requirement.id}`}
+                  className="text-sm font-semibold text-foreground"
+                >
+                  {requirement.title}
+                </h2>
                 <PriorityBadge priority={requirement.priority} />
                 {requirement.required && <StatusBadge label="Obligatorio" />}
                 {proposal.round > 0 && answer && (

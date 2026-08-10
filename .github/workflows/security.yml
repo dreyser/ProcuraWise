@@ -61,11 +61,53 @@ jobs:
         working-directory: service
         run: uv export --no-hashes -o requirements.txt
 
-      - name: pip-audit (informativo — no bloquea el PR en esta fase)
+      # Fase 26 (Hardening): bloqueante desde esta fase, no solo informativo.
+      # pip-audit no expone un flag propio de severidad (verificado contra
+      # 2.10.1 - su JSON no trae un campo severity), así que el umbral se
+      # aplica consultando la severidad real (GHSA/OSV) de cada hallazgo por
+      # su alias, no confiando en el propio pip-audit para decidir cuándo
+      # fallar. Cualquier hallazgo sin severidad reportada por OSV se trata
+      # como no bloqueante (queda igual de visible en el log) en vez de
+      # bloquear sobre un dato que no existe.
+      - name: pip-audit
         working-directory: service
         run: |
-          uvx pip-audit@2.10.1 -r requirements.txt || \
-            echo "::warning::pip-audit encontró hallazgos. No bloquea el PR todavía — ver docs/security/threat-model.md. Revisar el log de este job."
+          set -euo pipefail
+          uvx pip-audit@2.10.1 -r requirements.txt -f json -o pip-audit.json || true
+          python3 - <<'PYEOF'
+          import json
+          import sys
+          import urllib.request
+
+          with open("pip-audit.json") as f:
+              data = json.load(f)
+
+          blocking = []
+          for dep in data.get("dependencies", []):
+              for vuln in dep.get("vulns", []):
+                  ids = [vuln["id"], *vuln.get("aliases", [])]
+                  severity = None
+                  for vuln_id in ids:
+                      try:
+                          with urllib.request.urlopen(
+                              f"https://api.osv.dev/v1/vulns/{vuln_id}", timeout=10
+                          ) as resp:
+                              record = json.load(resp)
+                          severity = record.get("database_specific", {}).get("severity")
+                          if severity:
+                              break
+                      except Exception:
+                          continue
+                  print(f"{dep['name']} {dep.get('version')}: {vuln['id']} severity={severity}")
+                  if severity in ("HIGH", "CRITICAL"):
+                      blocking.append((dep["name"], vuln["id"], severity))
+
+          if blocking:
+              print("::error::hallazgos HIGH/CRITICAL sin resolver:")
+              for name, vuln_id, severity in blocking:
+                  print(f"::error::{name}: {vuln_id} ({severity})")
+              sys.exit(1)
+          PYEOF
 
   frontend-deps:
     name: frontend-deps
@@ -90,8 +132,67 @@ jobs:
         working-directory: apps/web
         run: pnpm install --frozen-lockfile
 
-      - name: pnpm audit (informativo — no bloquea el PR en esta fase)
+      # Fase 26 (Hardening): bloqueante desde esta fase para high/critical -
+      # `--audit-level` es un flag nativo de pnpm (a diferencia de pip-audit,
+      # que no tiene equivalente, ver el job python-deps arriba).
+      - name: pnpm audit (bloqueante en high/critical desde Fase 26)
         working-directory: apps/web
+        run: pnpm audit --audit-level=high
+
+  sbom:
+    name: sbom
+    # Fase 26 (Hardening): informativo, mismo espíritu que dependency
+    # scanning antes de esta fase - un inventario de dependencias, no un
+    # gate. No bloquea el PR.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install uv + Python 3.13
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "service/uv.lock"
+
+      - name: Generar SBOM del backend (CycloneDX)
+        working-directory: service
         run: |
-          pnpm audit || \
-            echo "::warning::pnpm audit encontró hallazgos. No bloquea el PR todavía — ver docs/security/threat-model.md. Revisar el log de este job."
+          uv export --no-hashes -o requirements.txt
+          uvx --from cyclonedx-bom@7.3.1 cyclonedx-py requirements requirements.txt -o sbom-backend.json
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: apps/web/package.json
+
+      - name: Install Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies (frozen lockfile)
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      # --ignore-npm-errors: la herramienta invoca `npm ls` internamente para
+      # recorrer el árbol de node_modules instalado por pnpm - npm reporta
+      # peer-deps opcionales/de-test faltantes de paquetes transitivos que
+      # pnpm nunca instala (comportamiento esperado de pnpm, no un problema
+      # real de esta app), verificado localmente contra el árbol real de
+      # node_modules antes de fijar este flag.
+      - name: Generar SBOM del frontend (CycloneDX)
+        working-directory: apps/web
+        run: pnpm dlx @cyclonedx/cyclonedx-npm@6.0.0 --ignore-npm-errors --output-file sbom-frontend.json
+
+      - name: Publicar SBOMs como artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom
+          path: |
+            service/sbom-backend.json
+            apps/web/sbom-frontend.json
+          retention-days: 90

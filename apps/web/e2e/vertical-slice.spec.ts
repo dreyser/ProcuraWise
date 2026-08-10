@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { assertKeyboardFocusStaysVisible, checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
@@ -71,6 +73,12 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await page.getByLabel('Fecha límite de respuesta').fill('2030-01-01')
   await page.getByRole('button', { name: 'Solicitar aprobación' }).click()
   await expect(page.getByText('Aprobación pendiente')).toBeVisible()
+  // Fase 26 (Hardening, plan Bloque 5): this spec covers both journeys the
+  // founder named as needing deeper WCAG 2.1 AA coverage - buyer owner
+  // end-to-end (this checkpoint on) and vendor answering a proposal
+  // (checked further below) - checked at multiple points along the flow,
+  // not just once at the very end.
+  await checkA11y(page)
 
   await loginAsBuyer(page, 'approver.a@dev.procurawise.local')
   await page.waitForURL('**/evaluations', wait)
@@ -108,6 +116,11 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
     .getByLabel('Cumple parcialmente', { exact: true })
     .check()
   await expect(page.getByText('Respondidos: 2 / 2')).toBeVisible()
+  // Vendor journey checkpoint - both automated axe rules and a keyboard
+  // traversal smoke check (no manual tester/screen reader is available in
+  // this environment, this is the closest automatable proxy).
+  await checkA11y(page)
+  await assertKeyboardFocusStaysVisible(page)
 
   // Fase 20: a nonzero cost item is required for the economic component's
   // TCO-normalized 70% to be "available" rather than "no_comparable" - MXN
@@ -152,6 +165,7 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await page.getByRole('link', { name: 'Calificar' }).click()
   await page.waitForURL(/\/proposals\/[a-f0-9]+\/score$/, wait)
   await expect(page.getByText('Calificados: 0 / 2')).toBeVisible()
+  await checkA11y(page)
 
   // The 0-5 radios are visually sr-only (the styled <label> is the
   // clickable surface, a legitimate accessible pattern) - force the click
@@ -213,6 +227,9 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await expect(page.getByText('35.2 / 40')).toBeVisible()
   await expect(page.getByText('95.2 / 100')).toBeVisible()
   await expect(page.getByText(/No constituye recomendacion de adjudicacion/)).toBeVisible()
+  // Owner journey final checkpoint - results page.
+  await checkA11y(page)
+  await assertKeyboardFocusStaysVisible(page)
 
   await page.getByRole('button', { name: 'Completar evaluación' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Completar evaluación' }).click()

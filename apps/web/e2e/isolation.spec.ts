@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_VENDOR_PASSWORD = 'dev-vendor-password-2026'
 
@@ -39,6 +41,7 @@ test('isolation: vendor_contact is rejected by the backend, not just redirected 
   // whose role doesn't match a route's allowed roles - see app/guards.tsx).
   await page.goto('/evaluations')
   await page.waitForURL('**/login**', wait)
+  await checkA11y(page)
 
   // Backend-level guard: the vendor's own real JWT, presented directly to a
   // buyer-only endpoint. Buyer routes only accept a token with

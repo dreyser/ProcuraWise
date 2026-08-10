@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 const DEV_ADMIN_EMAIL = 'platform-admin@dev.procurawise.local'
@@ -106,4 +108,6 @@ test('platform_admin console: reason gate blocks the query, then shows real cros
   const row = page.getByRole('row', { name: new RegExp(evaluationId) })
   await expect(row).toBeVisible()
   await expect(row.getByText('Pagada')).toBeVisible()
+
+  await checkA11y(page)
 })

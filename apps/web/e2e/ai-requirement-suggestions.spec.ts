@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
@@ -56,5 +58,7 @@ test.describe('AI requirement suggestions (Fase 13)', () => {
     // The dialog must never show an error for a queued job with nothing
     // processing it yet - only a genuinely failed AIExecution should.
     await expect(page.getByRole('alert')).toHaveCount(0)
+
+    await checkA11y(page)
   })
 })

@@ -17,12 +17,22 @@ from procurawise.billing.service import BillingService
 from procurawise.identity.dev_provider import require_dev_environment
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.context import ActorContext, require_role
+from procurawise.shared.rate_limit import rate_limit_by_tenant
 from procurawise.shared.roles import BILLING_READ_ROLES, BILLING_WRITE_ROLES
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 require_billing_write = require_role(*BILLING_WRITE_ROLES)
 require_billing_read = require_role(*BILLING_READ_ROLES)
+
+# Fase 26 (Hardening, plan Bloque 2): keyed by tenant, same require_billing_write
+# object the endpoint itself depends on (FastAPI dedupes it within one request).
+rate_limit_checkout = rate_limit_by_tenant(
+    "billing-checkout",
+    lambda s: s.rate_limit_billing_checkout_max_requests,
+    lambda s: s.rate_limit_billing_checkout_window_seconds,
+    require_billing_write,
+)
 
 
 def get_billing_service(settings: Settings = Depends(get_settings)) -> BillingService:
@@ -47,6 +57,7 @@ def create_checkout_session(
     body: CreateCheckoutSessionRequest,
     context: ActorContext = Depends(require_billing_write),
     service: BillingService = Depends(get_billing_service),
+    _rate_limit: None = Depends(rate_limit_checkout),
 ) -> PurchaseResponse:
     try:
         purchase = service.create_checkout_session(

@@ -1,5 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 const DEV_VENDOR_PASSWORD = 'dev-vendor-password-2026'
@@ -206,4 +208,6 @@ test('Negociación (Fase 21): owner reopens a submitted proposal, vendor revises
   await expect(
     page.getByText('Motivo de la reapertura: Negociación de precio y alcance.'),
   ).toBeVisible()
+
+  await checkA11y(page)
 })

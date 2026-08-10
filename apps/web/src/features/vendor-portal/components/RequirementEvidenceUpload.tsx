@@ -100,6 +100,14 @@ export function RequirementEvidenceUpload({
             type="file"
             className="sr-only"
             id={`requirement-evidence-upload-${requirementId}`}
+            // Not "Adjuntar evidencia..."/"Reemplazar evidencia..." - a
+            // native <input type="file"> has an implicit ARIA role of
+            // "button", so an overlapping name would make this hidden
+            // input match the same getByRole('button', {name: ...})
+            // locator as the real, visible trigger Button below (found by
+            // e2e/documents.spec.ts turning ambiguous after adding the
+            // label axe-core required - Fase 26).
+            aria-label="Selector de archivo para evidencia del requerimiento"
             onChange={handleFileChange}
             disabled={actions.isUploading}
           />

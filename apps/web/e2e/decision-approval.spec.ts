@@ -1,5 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 const DEV_VENDOR_PASSWORD = 'dev-vendor-password-2026'
@@ -269,10 +271,22 @@ test('Decisión (Fase 22): owner selects a vendor, approver rejects then approve
   await page.getByRole('link', { name: 'Decisión' }).click()
   await page.getByRole('button', { name: 'Aprobar' }).click()
   await expect(page.getByText('Aprobada').first()).toBeVisible()
-  await expect(page.getByText('Memo de cierre')).toBeVisible()
+  // getByRole('heading', ...), not getByText - the section's loading state
+  // ("Cargando memo de cierre…") contains "Memo de cierre" as a literal
+  // substring, so a plain getByText matches both it and the real <h2> the
+  // instant this section mounts (decision.status flips to "approved");
+  // CI's timing (slower than local) sometimes catches both still in the
+  // DOM at once, tripping Playwright's strict-mode ambiguity check - the
+  // heading itself is unconditional the moment the section renders, so
+  // this doesn't need to wait for snapshotQuery to finish loading (the
+  // "Resultado: ..." assertion below already does that implicitly, since
+  // that text only exists once the snapshot data has arrived).
+  await expect(page.getByRole('heading', { name: 'Memo de cierre' })).toBeVisible()
   // Scoped to the memo's own summary line ("Resultado: ...") - "Proveedor
   // Uno (dev)" alone also appears in the results table above, which would
   // otherwise trip Playwright's strict-mode ambiguity check.
   await expect(page.getByText(/Resultado:.*Proveedor Uno \(dev\)/)).toBeVisible()
   await expect(page.getByText(/es de solo lectura/)).toBeVisible()
+
+  await checkA11y(page)
 })

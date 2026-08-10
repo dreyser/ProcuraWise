@@ -4,7 +4,7 @@
 # below, dash alone wasn't the cause of the segfault seen there.
 SHELL := /bin/bash
 
-.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration test-e2e seed-dev seed-reset provision-user
+.PHONY: dev test test-backend test-frontend lint lint-backend lint-frontend typecheck typecheck-backend typecheck-frontend contracts migrate dev-up dev-down dev-logs dev-status dev-reset test-integration test-e2e seed-dev seed-reset provision-user backup-demo
 
 dev:
 	@trap 'kill 0' EXIT INT TERM; \
@@ -120,3 +120,10 @@ test-e2e: dev-up
 	$(MAKE) seed-reset CONFIRM=yes
 	$(MAKE) seed-dev
 	bash scripts/test-e2e.sh
+
+# Fase 26 (Hardening, plan Bloque 7): MVP-level backup/restore verification
+# (mongodump -> mongorestore round trip, verified by document counts) - see
+# scripts/backup_restore_demo.sh's own header for exactly what this does and
+# does not prove (no Atlas M0 managed backup exists to verify against).
+backup-demo: dev-up
+	bash scripts/backup_restore_demo.sh

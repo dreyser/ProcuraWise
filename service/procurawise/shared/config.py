@@ -231,6 +231,38 @@ class Settings(BaseSettings):
     # a late retry must still find its event_id in the idempotency ledger.
     billing_webhook_event_retention_days: int = 30
 
+    # Fase 26 (Hardening, plan Bloque 1): deny-all by default (empty string)
+    # - cross-origin browser calls only happen at all once Fase 27 deploys
+    # the SPA and API to distinct origins; local dev/CI never need this
+    # (Vite's proxy in vite.config.ts makes the browser's own requests
+    # same-origin). Comma-separated, not a native `list[str]` field -
+    # pydantic-settings' env source tries to JSON-decode any complex-typed
+    # field before a validator ever sees it, which rejects a plain
+    # comma-separated string outright (confirmed against the pinned
+    # pydantic-settings version); see the `cors_allowed_origins_list`
+    # property below for the parsed form every call site actually uses.
+    cors_allowed_origins: str = ""
+
+    # Fase 26 (Hardening, plan Bloque 2, Decisión recomendada #2): in-process
+    # only, no Redis (ADR 0020 retired it from the local/dev architecture and
+    # NFR-003's 50-concurrent-user target doesn't justify reopening that
+    # decision) - see shared/rate_limit.py. Does not coordinate across
+    # multiple API replicas; accepted limitation while Container Apps runs a
+    # single replica, documented in threat-model.md, revisit in Fase 27 if
+    # the real deployment scales out. Endpoints prioritized by
+    # threat-model.md: login (brute force), AI triggers (cost abuse, already
+    # named "Fase 26" in the accepted-risks table), billing checkout.
+    rate_limit_login_max_attempts: int = 5
+    rate_limit_login_window_seconds: int = 60
+    rate_limit_ai_max_requests: int = 10
+    rate_limit_ai_window_seconds: int = 3600
+    rate_limit_billing_checkout_max_requests: int = 5
+    rate_limit_billing_checkout_window_seconds: int = 3600
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
         if self.environment == "production" and self.queue_backend == "memory":

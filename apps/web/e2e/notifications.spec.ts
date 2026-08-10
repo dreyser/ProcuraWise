@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
@@ -99,4 +101,6 @@ test('vendor invitation produces a visible, markable-as-read in-app notification
   await page.getByText('Invitación de proveedor').click()
   await page.keyboard.press('Escape')
   await expect(bellButton).toHaveAccessibleName('Notificaciones')
+
+  await checkA11y(page)
 })

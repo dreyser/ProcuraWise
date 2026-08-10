@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { checkA11y } from './support/a11y'
+
 const wait = { waitUntil: 'commit' as const }
 const DEV_BUYER_PASSWORD = 'dev-password-2026'
 
@@ -92,5 +94,7 @@ test.describe('knowledge templates (Fase 11)', () => {
     // The applied weights (40 functional + 20 technical) satisfy readiness
     // without any further manual entry - "Siguiente" is enabled.
     await expect(page.getByRole('button', { name: 'Siguiente' })).toBeEnabled()
+
+    await checkA11y(page)
   })
 })

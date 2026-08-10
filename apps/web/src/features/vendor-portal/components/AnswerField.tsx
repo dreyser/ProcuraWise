@@ -97,6 +97,15 @@ export function AnswerField({
 
   const fieldId = `answer-${requirement.id}`
   const commentId = `${fieldId}-comment`
+  // The requirement's own <h2> (VendorProposalDetailPage.tsx) is this
+  // field's accessible name - `fieldset`/`legend` already gives the
+  // radio/checkbox groups below a name of their own, but the bare
+  // Textarea/Input controls (text, number, percentage, date, url,
+  // currency) have no visible <label> anywhere (only their secondary
+  // "Comentario" field does) - found by axe-core (Fase 26, checkA11y)
+  // flagging a real `<textarea id="answer-...">` with no accessible name
+  // at all.
+  const titleId = `requirement-title-${requirement.id}`
 
   /** The comment textarea commits on its own blur, independent of the main
    * control - it must resend whatever the *current local draft* value is,
@@ -208,6 +217,7 @@ export function AnswerField({
       return wrap(
         <Textarea
           id={fieldId}
+          aria-labelledby={titleId}
           value={textDraft}
           disabled={disabled}
           aria-describedby={errorId}
@@ -272,6 +282,7 @@ export function AnswerField({
       return wrap(
         <Input
           id={fieldId}
+          aria-labelledby={titleId}
           type="number"
           value={numberDraft}
           disabled={disabled}
@@ -299,6 +310,7 @@ export function AnswerField({
         <div className="flex items-center gap-2">
           <Input
             id={fieldId}
+            aria-labelledby={titleId}
             type="number"
             value={percentageDraft}
             disabled={disabled}
@@ -328,6 +340,7 @@ export function AnswerField({
       return wrap(
         <Input
           id={fieldId}
+          aria-labelledby={titleId}
           type="date"
           value={dateDraft}
           disabled={disabled}
@@ -354,6 +367,7 @@ export function AnswerField({
       return wrap(
         <Input
           id={fieldId}
+          aria-labelledby={titleId}
           type="url"
           placeholder="https://"
           value={urlDraft}
@@ -396,6 +410,7 @@ export function AnswerField({
         <div className="flex items-center gap-2">
           <Input
             id={fieldId}
+            aria-labelledby={titleId}
             type="number"
             step="0.01"
             value={amountDraft}
