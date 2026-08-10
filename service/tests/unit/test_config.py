@@ -191,10 +191,11 @@ def test_settings_allows_foundry_enabled_with_complete_config() -> None:
 
 # Fase 27 (ADR 0004/0019): `staging` is its own environment value, not a
 # reuse of `production` - `is_production_like` groups `staging`/`production`
-# for the fail-closed validators that must treat both identically (queue
-# backend, JWT secret, OIDC/AI/notifications/billing real config), while
-# `_reject_live_stripe_key_outside_production` deliberately keeps staging
-# excluded, so a live Stripe key is rejected there exactly like local/test.
+# for the fail-closed validators that must treat both identically (no
+# in-memory queue backend, no default JWT value, real OIDC/AI/notifications/
+# billing config), while `_reject_live_stripe_key_outside_production`
+# deliberately keeps staging excluded, so a live Stripe key is rejected
+# there exactly like local/test.
 
 
 def test_is_production_like_true_for_staging_and_production() -> None:
