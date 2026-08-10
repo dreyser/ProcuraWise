@@ -179,11 +179,7 @@ export function EconomicAssessmentPanel({
     drafts: Record<string, CriterionDraft>
   }>({ initialized: false, drafts: {} })
 
-  if (
-    !assessmentState.initialized &&
-    !assessmentQuery.isLoading &&
-    (assessment || notFound)
-  ) {
+  if (!assessmentState.initialized && !assessmentQuery.isLoading && (assessment || notFound)) {
     setAssessmentState({ initialized: true, drafts: draftsFromAssessment(assessment) })
   }
   const drafts = assessmentState.drafts
