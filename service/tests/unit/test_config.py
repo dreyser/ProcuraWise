@@ -187,3 +187,127 @@ def test_settings_allows_foundry_enabled_with_complete_config() -> None:
         foundry_web_search_agent_name="agent",
     )
     assert settings.foundry_web_search_enabled is True
+
+
+# Fase 27 (ADR 0004/0019): `staging` is its own environment value, not a
+# reuse of `production` - `is_production_like` groups `staging`/`production`
+# for the fail-closed validators that must treat both identically (no
+# in-memory queue backend, no default JWT value, real OIDC/AI/notifications/
+# billing config), while `_reject_live_stripe_key_outside_production`
+# deliberately keeps staging excluded, so a live Stripe key is rejected
+# there exactly like local/test.
+
+
+def test_is_production_like_true_for_staging_and_production() -> None:
+    for env in ("staging", "production"):
+        settings = Settings(
+            _env_file=None,
+            environment=env,
+            queue_backend="service_bus",
+            **_VALID_PRODUCTION_AUTH_OVERRIDES,
+        )
+        assert settings.is_production_like is True
+
+
+def test_is_production_like_false_for_local_and_test() -> None:
+    assert Settings(_env_file=None, environment="local").is_production_like is False
+    assert Settings(_env_file=None, environment="test").is_production_like is False
+
+
+def test_settings_staging_rejects_memory_queue() -> None:
+    with pytest.raises(ValidationError, match="queue_backend=memory"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            queue_backend="memory",
+            **_VALID_PRODUCTION_AUTH_OVERRIDES,
+        )
+
+
+def test_settings_staging_rejects_default_jwt_secret() -> None:
+    overrides = {**_VALID_PRODUCTION_AUTH_OVERRIDES}
+    del overrides["jwt_secret"]
+    with pytest.raises(ValidationError, match="jwt_secret"):
+        Settings(_env_file=None, environment="staging", queue_backend="service_bus", **overrides)
+
+
+def test_settings_staging_requires_oidc_credentials() -> None:
+    with pytest.raises(ValidationError, match="oidc"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            queue_backend="service_bus",
+            jwt_secret="x" * 32,
+        )
+
+
+def test_settings_staging_requires_azure_openai_config() -> None:
+    overrides = {**_VALID_PRODUCTION_AUTH_OVERRIDES}
+    del overrides["azure_openai_endpoint"]
+    del overrides["azure_openai_api_key"]
+    del overrides["azure_openai_deployment"]
+    with pytest.raises(ValidationError, match="Azure OpenAI"):
+        Settings(_env_file=None, environment="staging", queue_backend="service_bus", **overrides)
+
+
+def test_settings_staging_allows_complete_production_like_config() -> None:
+    settings = Settings(
+        _env_file=None,
+        environment="staging",
+        queue_backend="service_bus",
+        **_VALID_PRODUCTION_AUTH_OVERRIDES,
+    )
+    assert settings.environment == "staging"
+    assert settings.azure_openai_deployment == "gpt-test-deployment"
+
+
+def test_settings_staging_requires_notification_config_when_enabled() -> None:
+    with pytest.raises(ValidationError, match="Azure Communication Services"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            queue_backend="service_bus",
+            notifications_email_enabled=True,
+            **_VALID_PRODUCTION_AUTH_OVERRIDES,
+        )
+
+
+def test_settings_staging_requires_billing_config_when_enabled() -> None:
+    with pytest.raises(ValidationError, match="Stripe"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            queue_backend="service_bus",
+            billing_enabled=True,
+            **_VALID_PRODUCTION_AUTH_OVERRIDES,
+        )
+
+
+def test_settings_staging_still_rejects_live_stripe_key() -> None:
+    # The one validator `is_production_like` deliberately does NOT cover -
+    # staging must never accept a live key, same as local/test.
+    with pytest.raises(ValidationError, match="sk_test_"):
+        Settings(
+            _env_file=None,
+            environment="staging",
+            queue_backend="service_bus",
+            billing_enabled=True,
+            stripe_secret_key="sk_live_leaked",
+            stripe_webhook_secret="whsec_x",
+            stripe_price_id_evaluation="price_x",
+            **_VALID_PRODUCTION_AUTH_OVERRIDES,
+        )
+
+
+def test_settings_staging_allows_test_stripe_key() -> None:
+    settings = Settings(
+        _env_file=None,
+        environment="staging",
+        queue_backend="service_bus",
+        billing_enabled=True,
+        stripe_secret_key="sk_test_fine",
+        stripe_webhook_secret="whsec_x",
+        stripe_price_id_evaluation="price_x",
+        **_VALID_PRODUCTION_AUTH_OVERRIDES,
+    )
+    assert settings.stripe_secret_key == "sk_test_fine"

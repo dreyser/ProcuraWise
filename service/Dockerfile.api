@@ -1,0 +1,36 @@
+# Fase 27 (ADR 0004/0019): imagen de la API síncrona (FastAPI/uvicorn) para
+# Azure Container Apps. Build multi-stage con uv (mismo gestor que CI,
+# `astral-sh/setup-uv`) - runtime final no incluye uv ni herramientas de
+# build, solo el venv ya resuelto + el código de la aplicación. Ningún
+# secreto se hornea en la imagen: toda config sensible llega vía variables
+# de entorno inyectadas por Container Apps desde Key Vault (deployment.md).
+
+FROM python:3.13-slim AS builder
+COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /uvx /bin/
+WORKDIR /app
+
+# Capa de dependencias separada del código propio: cambia con mucha menor
+# frecuencia, maximiza el cache de build de Docker/ACR.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project
+
+COPY procurawise ./procurawise
+COPY migrations ./migrations
+RUN uv sync --locked --no-dev
+
+FROM python:3.13-slim
+WORKDIR /app
+RUN useradd --create-home --uid 1000 appuser
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/procurawise /app/procurawise
+COPY --from=builder /app/migrations /app/migrations
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+
+USER appuser
+EXPOSE 8000
+
+# Probes de Container Apps apuntan a /health/live (liveness) y
+# /health/ready (readiness, verifica Mongo/Blob/AI real) - ver
+# procurawise/api/routers/health.py, sin cambios en esta fase.
+CMD ["uvicorn", "procurawise.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
