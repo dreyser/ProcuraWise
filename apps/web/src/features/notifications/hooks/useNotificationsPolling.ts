@@ -10,26 +10,32 @@ import { PollingController } from '@/lib/pollingController'
 // owner of the actual list/unread-count state.
 const POLL_INTERVAL_MS = 30_000
 
+/** Fase 26 (Hardening): the controller is built inside `useEffect` (empty
+ * deps - constructed once for the component's lifetime, matching the
+ * original render-time-guard behavior), not during render - see
+ * useReportJobStatus.ts/usePurchaseStatus.ts for the full rationale
+ * (`react-hooks/refs`). `refetchRef` keeps calling whichever `refetch` is
+ * current without needing the effect to re-run (every caller passes a
+ * fresh inline closure on every render, so keying the effect on `refetch`
+ * would restart the poll interval on every unrelated re-render) - synced
+ * from its own dependency-less effect, not by writing to it during render
+ * (also disallowed now). */
 export function useNotificationsPolling(refetch: () => Promise<unknown>): void {
-  const controllerRef = useRef<PollingController<null> | null>(null)
+  const refetchRef = useRef(refetch)
+  useEffect(() => {
+    refetchRef.current = refetch
+  })
 
-  if (!controllerRef.current) {
+  useEffect(() => {
     const controller = new PollingController<null>({
       intervalMs: POLL_INTERVAL_MS,
       isTerminal: () => false,
       fetchFn: async () => {
-        await refetch()
+        await refetchRef.current()
         return null
       },
     })
-    controllerRef.current = controller
     controller.start()
-  }
-
-  useEffect(() => {
-    return () => {
-      controllerRef.current?.dispose()
-      controllerRef.current = null
-    }
+    return () => controller.dispose()
   }, [])
 }

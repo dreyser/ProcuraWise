@@ -65,11 +65,20 @@ export function usePurchaseStatus(purchaseId: string): PollingSnapshot<PurchaseR
     }
   }, [purchaseId])
 
-  const subscribe = useCallback((onStoreChange: () => void) => {
-    const current = controllerRef.current
-    if (!current) return () => {}
-    return current.subscribe(onStoreChange)
-  }, [])
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const current = controllerRef.current
+      if (!current) return () => {}
+      return current.subscribe(onStoreChange)
+    },
+    // See useReportJobStatus.ts (Fase 26): must match the construction
+    // effect's deps, or a controller rebuild (purchaseId change without a
+    // full remount) would leave this hook subscribed to nothing. Not read in
+    // the callback body, so exhaustive-deps sees it as "unnecessary" - it's
+    // intentionally there to drive resubscription.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [purchaseId],
+  )
 
   const getSnapshot = useCallback(() => {
     const raw = controllerRef.current?.getSnapshot() ?? null

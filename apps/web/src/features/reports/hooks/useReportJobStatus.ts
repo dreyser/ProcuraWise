@@ -38,23 +38,33 @@ function snapshotsAreEqual<T>(a: PollingSnapshot<T> | null, b: PollingSnapshot<T
  * (snapshotsAreEqual) - required by `useSyncExternalStore`'s contract, since
  * returning a new reference on every render when nothing actually changed
  * causes it to conclude the store is tearing and re-render in a loop.
- * Returns `null` while `reportId` is null (no generation triggered yet). */
+ * Returns `null` while `reportId` is null (no generation triggered yet).
+ *
+ * Fase 26 (Hardening): the controller is built inside `useEffect`, not
+ * during render - the previous version constructed/disposed it directly in
+ * the render body (comparing `controllerRef.current?.reportId` against the
+ * latest `reportId` on every call), which `eslint-plugin-react-hooks`
+ * 7.x's new `react-hooks/refs` rule correctly flags as unsafe (accessing/
+ * mutating a ref's `.current` during render can be silently dropped or
+ * duplicated by React, e.g. under Strict Mode's simulated remount - see
+ * `usePurchaseStatus.ts`, Fase 25, which hit the exact same class of bug for
+ * a different reason and already established this pattern). Keying the
+ * effect on `[evaluationId, reportId]` reproduces the original render-time
+ * logic correctly: React runs the previous effect's cleanup (disposing the
+ * old controller) before the new one whenever either id changes, including
+ * the `reportId: string -> null` transition. */
 export function useReportJobStatus(
   evaluationId: string,
   reportId: string | null,
 ): PollingSnapshot<ReportResponse> | null {
-  const controllerRef = useRef<{
-    reportId: string
-    controller: PollingController<ReportResponse>
-  } | null>(null)
+  const controllerRef = useRef<PollingController<ReportResponse> | null>(null)
   const snapshotCacheRef = useRef<PollingSnapshot<ReportResponse> | null>(null)
 
-  if (reportId === null && controllerRef.current) {
-    controllerRef.current.controller.dispose()
-    controllerRef.current = null
-  }
-  if (reportId !== null && controllerRef.current?.reportId !== reportId) {
-    controllerRef.current?.controller.dispose()
+  useEffect(() => {
+    if (reportId === null) {
+      controllerRef.current = null
+      return
+    }
     const controller = new PollingController<ReportResponse>({
       intervalMs: POLL_INTERVAL_MS,
       isTerminal,
@@ -66,26 +76,37 @@ export function useReportJobStatus(
         return unwrapDataOrThrow<ReportResponse>(response)
       },
     })
-    controllerRef.current = { reportId, controller }
+    controllerRef.current = controller
     snapshotCacheRef.current = null
     controller.start()
-  }
-
-  useEffect(() => {
     return () => {
-      controllerRef.current?.controller.dispose()
-      controllerRef.current = null
+      controller.dispose()
+      if (controllerRef.current === controller) controllerRef.current = null
     }
-  }, [])
+  }, [evaluationId, reportId])
 
-  const subscribe = useCallback((onStoreChange: () => void) => {
-    const current = controllerRef.current
-    if (!current) return () => {}
-    return current.controller.subscribe(onStoreChange)
-  }, [])
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const current = controllerRef.current
+      if (!current) return () => {}
+      return current.subscribe(onStoreChange)
+    },
+    // `reportId`/`evaluationId` (not `[]`) so this identity changes exactly
+    // when the effect above (re)builds the controller. useSyncExternalStore
+    // only re-subscribes when `subscribe` itself changes identity - with a
+    // `[]`-deps version, a `reportId: null -> string` transition (starting
+    // this hook with no controller yet, the common case) subscribes once at
+    // mount against a null controllerRef.current, permanently as a no-op,
+    // and never re-subscribes once the real controller exists later, so
+    // notify() calls are silently dropped and the UI never updates. Neither
+    // dep is read in the callback body, so exhaustive-deps sees them as
+    // "unnecessary" - they're intentionally there to drive resubscription.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [evaluationId, reportId],
+  )
 
   const getSnapshot = useCallback(() => {
-    const raw = controllerRef.current?.controller.getSnapshot() ?? null
+    const raw = controllerRef.current?.getSnapshot() ?? null
     if (!snapshotsAreEqual(snapshotCacheRef.current, raw)) {
       snapshotCacheRef.current = raw
     }

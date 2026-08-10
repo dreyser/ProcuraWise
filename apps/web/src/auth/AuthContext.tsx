@@ -63,38 +63,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [memberships, setMemberships] = useState<MembershipOption[]>([])
   const [preSessionToken, setPreSessionToken] = useState<string | null>(null)
 
-  const proceedFromPreSessionToken = useCallback(
-    async (token: string): Promise<AuthResult> => {
-      let membershipsResponse
-      try {
-        membershipsResponse = await listMembershipsApiV1AuthMembershipsGet({
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      } catch {
-        return { ok: false, message: GENERIC_ERROR }
-      }
-      if (membershipsResponse.status !== 200) return { ok: false, message: GENERIC_ERROR }
-
-      const options = membershipsResponse.data.memberships
-      if (options.length === 0) {
-        return {
-          ok: false,
-          message: 'Tu cuenta no tiene accesos de comprador configurados todavía.',
-        }
-      }
-      if (options.length > 1) {
-        setPreSessionToken(token)
-        setMemberships(options)
-        setStatus('awaiting_workspace')
-        return { ok: true }
-      }
-
-      return switchTenant(token, options[0].membership_id)
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  )
-
+  // Fase 26 (Hardening): switchTenant is declared *before*
+  // proceedFromPreSessionToken now (it was previously declared after, but
+  // referenced from inside proceedFromPreSessionToken's closure with an
+  // empty dependency array) - eslint-plugin-react-hooks 7 correctly flags
+  // that as a real bug, not just a style nit: with `[]` as its deps,
+  // proceedFromPreSessionToken's closure permanently freezes whichever
+  // `switchTenant` existed at the very first render, which would go stale
+  // if `switchTenant` were ever recreated (its own deps include
+  // `queryClient` - stable today, but nothing guarantees that forever).
+  // Declaring it first and listing it as a real dependency below removes
+  // the forward reference entirely instead of relying on it never
+  // mattering in practice.
   const switchTenant = useCallback(
     async (token: string, membershipId: string): Promise<AuthResult> => {
       let response
@@ -124,6 +104,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: true, role: response.data.actor.role }
     },
     [queryClient],
+  )
+
+  const proceedFromPreSessionToken = useCallback(
+    async (token: string): Promise<AuthResult> => {
+      let membershipsResponse
+      try {
+        membershipsResponse = await listMembershipsApiV1AuthMembershipsGet({
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      } catch {
+        return { ok: false, message: GENERIC_ERROR }
+      }
+      if (membershipsResponse.status !== 200) return { ok: false, message: GENERIC_ERROR }
+
+      const options = membershipsResponse.data.memberships
+      if (options.length === 0) {
+        return {
+          ok: false,
+          message: 'Tu cuenta no tiene accesos de comprador configurados todavía.',
+        }
+      }
+      if (options.length > 1) {
+        setPreSessionToken(token)
+        setMemberships(options)
+        setStatus('awaiting_workspace')
+        return { ok: true }
+      }
+
+      return switchTenant(token, options[0].membership_id)
+    },
+    [switchTenant],
   )
 
   const loginWithPassword = useCallback(

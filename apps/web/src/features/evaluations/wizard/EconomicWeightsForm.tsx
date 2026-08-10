@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   getGetEvaluationApiV1EvaluationsEvaluationIdGetQueryKey,
@@ -44,17 +44,33 @@ interface EconomicWeightsFormProps {
  * moment as dimension_weights. */
 export function EconomicWeightsForm({ evaluation }: EconomicWeightsFormProps) {
   const queryClient = useQueryClient()
-  const [commercial, setCommercial] = useState<Record<string, number>>(
-    evaluation.economic_criteria_weights.commercial,
-  )
-  const [risk, setRisk] = useState<Record<string, number>>(
-    evaluation.economic_criteria_weights.risk,
-  )
-
-  useEffect(() => {
-    setCommercial(evaluation.economic_criteria_weights.commercial)
-    setRisk(evaluation.economic_criteria_weights.risk)
-  }, [evaluation.economic_criteria_weights])
+  // Fase 26 (Hardening): "adjust state during render" (React's own
+  // sanctioned pattern for resetting local draft state when a prop
+  // changes - https://react.dev/learn/you-might-not-need-an-effect#
+  // adjusting-some-state-when-a-prop-changes), not a `useEffect` that
+  // calls `setState` synchronously in its body
+  // (`react-hooks/set-state-in-effect`). `source` tracks which
+  // `economic_criteria_weights` object this draft was last reset from -
+  // when the evaluation's weights identity changes (e.g. after a
+  // successful save updates the query cache), the draft resets to match;
+  // any other re-render leaves the user's in-progress edits alone.
+  const [weights, setWeights] = useState(() => ({
+    source: evaluation.economic_criteria_weights,
+    commercial: evaluation.economic_criteria_weights.commercial,
+    risk: evaluation.economic_criteria_weights.risk,
+  }))
+  if (weights.source !== evaluation.economic_criteria_weights) {
+    setWeights({
+      source: evaluation.economic_criteria_weights,
+      commercial: evaluation.economic_criteria_weights.commercial,
+      risk: evaluation.economic_criteria_weights.risk,
+    })
+  }
+  const { commercial, risk } = weights
+  const setCommercial = (updater: (prev: Record<string, number>) => Record<string, number>) =>
+    setWeights((prev) => ({ ...prev, commercial: updater(prev.commercial) }))
+  const setRisk = (updater: (prev: Record<string, number>) => Record<string, number>) =>
+    setWeights((prev) => ({ ...prev, risk: updater(prev.risk) }))
 
   const updateWeights =
     useUpdateEconomicCriteriaWeightsApiV1EvaluationsEvaluationIdEconomicCriteriaWeightsPatch({
