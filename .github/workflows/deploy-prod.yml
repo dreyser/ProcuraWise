@@ -66,11 +66,20 @@ jobs:
                          workerImage="$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}"
 
       - name: Run database migrations
+        # `az containerapp exec` siempre intenta asignar un pseudo-terminal
+        # local (`tty.setcbreak` sobre stdin), incluso con `--command` - el
+        # runner de GitHub Actions no le da un TTY real a stdin, así que sin
+        # `script` el paso falla con `termios.error: (25, 'Inappropriate
+        # ioctl for device')` en cada corrida (confirmado contra un redeploy
+        # real de staging, mismo step). `script -qec "<cmd>" /dev/null`
+        # (util-linux, ya presente en ubuntu-latest) asigna un
+        # pseudo-terminal real para el hijo y devuelve su código de salida
+        # real (`-e`), sin escribir el typescript de la sesión a ningún
+        # archivo (`/dev/null`) - la salida real del comando sigue
+        # apareciendo en el log del step como siempre.
         run: |
-          az containerapp exec \
-            --resource-group "$RESOURCE_GROUP" \
-            --name "$API_APP_NAME" \
-            --command "python -m procurawise.shared.migrations"
+          CMD="az containerapp exec --resource-group $RESOURCE_GROUP --name $API_APP_NAME --command \"python -m procurawise.shared.migrations\""
+          script -qec "$CMD" /dev/null
 
       - name: Health check
         run: |
