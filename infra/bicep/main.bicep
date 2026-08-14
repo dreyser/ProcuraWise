@@ -191,30 +191,21 @@ resource serviceBusConnectionStringSecret 'Microsoft.KeyVault/vaults/secrets@202
 
 // Secretos que solo el founder puede poblar (credenciales externas: Atlas,
 // OIDC, Azure OpenAI, ACS, Stripe - deployment.md "Aprovisionamiento
-// inicial") - creados vacíos aquí únicamente para que el nombre exista y el
-// Container App pueda referenciarlo desde el primer deploy; un valor vacío
-// hace que los validadores fail-closed de Settings rechacen el arranque con
-// un mensaje claro (ver shared/config.py) en vez de fallar en silencio.
-var founderPopulatedSecretNames = [
-  'mongodb-uri'
-  'jwt-secret'
-  'oidc-microsoft-client-secret'
-  'oidc-google-client-secret'
-  'azure-openai-api-key'
-  'acs-connection-string'
-  'stripe-secret-key'
-  'stripe-webhook-secret'
-]
-
-resource founderPopulatedSecrets 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = [
-  for secretName in founderPopulatedSecretNames: {
-    parent: keyVaultRef
-    name: secretName
-    properties: {
-      value: ' '
-    }
-  }
-]
+// inicial"): mongodb-uri, jwt-secret, oidc-microsoft-client-secret,
+// oidc-google-client-secret, azure-openai-api-key, acs-connection-string,
+// stripe-secret-key, stripe-webhook-secret. Este template NUNCA los crea ni
+// les escribe un valor - ni siquiera un placeholder - por el mismo motivo de
+// mínimo privilegio que ya justifica que el resource group tampoco lo cree
+// este template (comentario de arriba): la identidad recurrente del pipeline
+// no tiene, ni necesita, permiso de escritura sobre datos de Key Vault.
+// Se pueblan una sola vez, manualmente, vía infra/scripts/bootstrap-oidc.md
+// (mismo principio que ya documenta modules/key-vault.bicep), ANTES del
+// primer `az deployment group create` completo, porque el bloque `secrets:`
+// de Container Apps (modules/container-app.bicep) resuelve cada
+// `keyVaultUrl` al crear la revisión y falla si el nombre no existe todavía.
+// (Corregido: una versión anterior de este archivo sí los creaba aquí con un
+// valor placeholder de un solo espacio, sin condición - un redeploy
+// ordinario pisaba el valor real que el founder ya había poblado.)
 
 var commonKeyVaultSecrets = [
   { envName: 'MONGODB_URI', secretName: 'mongodb-uri', keyVaultUrl: '${keyVault.outputs.uri}secrets/mongodb-uri' }
@@ -243,7 +234,7 @@ module apiApp 'modules/container-app.bicep' = {
     keyVaultSecrets: commonKeyVaultSecrets
     plainEnv: plainEnv
   }
-  dependsOn: [apiAcrPull, apiKvSecretsUser, storageConnectionStringSecret, serviceBusConnectionStringSecret, founderPopulatedSecrets]
+  dependsOn: [apiAcrPull, apiKvSecretsUser, storageConnectionStringSecret, serviceBusConnectionStringSecret]
 }
 
 module workerApp 'modules/container-app.bicep' = {
@@ -259,7 +250,7 @@ module workerApp 'modules/container-app.bicep' = {
     keyVaultSecrets: commonKeyVaultSecrets
     plainEnv: plainEnv
   }
-  dependsOn: [workerAcrPull, workerKvSecretsUser, storageConnectionStringSecret, serviceBusConnectionStringSecret, founderPopulatedSecrets]
+  dependsOn: [workerAcrPull, workerKvSecretsUser, storageConnectionStringSecret, serviceBusConnectionStringSecret]
 }
 
 output apiFqdn string = apiApp.outputs.fqdn

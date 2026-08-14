@@ -22,3 +22,7 @@ coverage.xml
 
 # OS
 .DS_Store
+
+# Infra / Bicep build output (compiled by `az bicep build`/`build-params`)
+infra/bicep/*.json
+infra/params/*.json

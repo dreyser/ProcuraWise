@@ -50,7 +50,7 @@ param plainEnv = [
   { name: 'AUDIT_EVENT_RETENTION_DAYS', value: '365' }
   { name: 'AZURE_OPENAI_ENDPOINT', value: 'REPLACE_ME' }
   { name: 'AZURE_OPENAI_DEPLOYMENT', value: 'REPLACE_ME' }
-  { name: 'AZURE_OPENAI_API_VERSION', value: '2026-01-01-preview' }
+  { name: 'AZURE_OPENAI_API_VERSION', value: '2024-10-21' }
   { name: 'AI_REQUEST_TIMEOUT_SECONDS', value: '30' }
   { name: 'AI_EXECUTION_RETENTION_DAYS', value: '365' }
   { name: 'AI_SCORE_SUGGESTION_ENABLED', value: 'true' }

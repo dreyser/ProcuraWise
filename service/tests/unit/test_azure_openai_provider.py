@@ -14,7 +14,7 @@ def _provider() -> AzureOpenAIProvider:
         endpoint="https://example.openai.azure.com",
         api_key="test-key",
         deployment="gpt-test-deployment",
-        api_version="2026-01-01-preview",
+        api_version="2024-10-21",
         timeout_seconds=5,
     )
 
@@ -67,6 +67,10 @@ def test_generate_maps_sdk_response_to_ai_response() -> None:
     assert response.token_usage.total_tokens == 15
     assert response.model == "gpt-test-deployment"
     assert response.finish_reason == "stop"
+
+    call_kwargs = provider._client.chat.completions.create.call_args.kwargs
+    assert call_kwargs["max_completion_tokens"] == 100
+    assert "max_tokens" not in call_kwargs
 
 
 def test_generate_retries_once_on_rate_limit_then_succeeds(monkeypatch) -> None:
