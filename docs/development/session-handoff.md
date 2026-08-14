@@ -32,6 +32,45 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-14 — Remediation de defectos de Azure Staging (post-Fase 27, no es una fase nueva)
+
+**Resumen:** El founder ejecutó por primera vez el runbook de Fase 27 contra Azure/MongoDB Atlas reales (no solo verificación local) — la API, Mongo Atlas, Storage, Azure OpenAI, Service Bus, Key Vault RBAC y OIDC quedaron operativos, pero la validación expuso 5 defectos versionados reales. Sesión dedicada exclusivamente a corregirlos (Plan Mode de solo lectura → investigación de causa raíz con 3 agentes Explore en paralelo por dominio + 1 agente Plan para el diseño IaC + verificación web de la API version de Azure OpenAI → plan aprobado por el founder → implementación en 5 bloques), sin reabrir ninguna decisión arquitectónica ni tocar nada fuera de los 5 defectos reportados. Rama `fix/staging-integration-remediation`, sin commitear (el founder decide si comitea/abre PR, mismo patrón que fases anteriores).
+
+**Archivos tocados:**
+- `infra/bicep/main.bicep` — eliminado el recurso `founderPopulatedSecrets` (pisaba los 8 secretos del founder con un placeholder en cada redeploy, sin condición) y las 2 referencias en `dependsOn`.
+- `infra/scripts/bootstrap-oidc.md` — reescrito: nuevo paso de deploy standalone de Key Vault (paso 6), nuevo paso de asignación `Key Vault Secrets Officer` al founder (paso 7, antes ausente — causaba `Forbidden` real), renumeración de "poblar Key Vault"/"primer deploy" (pasos 8-9), notas operativas de orden de ACR y `--platform linux/amd64` en Apple Silicon.
+- `.gitignore` — patrón para artefactos compilados de Bicep (`infra/bicep/*.json`, `infra/params/*.json`), necesario porque la verificación de este bloque (`az bicep build`) los regenera.
+- `service/procurawise/shared/config.py` — `azure_openai_api_version` corregida de `2026-01-01-preview` (404 real contra el recurso) a `2024-10-21` (GA vigente, confirmado compatible con Structured Outputs vía Microsoft Learn).
+- `infra/params/staging.bicepparam`, `infra/params/production.bicepparam` — mismo valor de `AZURE_OPENAI_API_VERSION`.
+- `service/procurawise/ai/azure_openai_provider.py` — `max_tokens` → `max_completion_tokens` (el modelo real desplegado en staging rechazaba `max_tokens` con 400).
+- `service/tests/unit/test_azure_openai_provider.py` — fixture de `api_version` actualizado + nueva aserción sobre `call_args.kwargs` confirmando `max_completion_tokens` presente y `max_tokens` ausente.
+- `service/procurawise/billing/stripe_payment_provider.py` — migrado de la llamada clásica `stripe.checkout.Session.create(**kwargs)` (con `timeout` colándose como parámetro de API real, rechazado por Stripe: "Received unknown parameter: timeout") a un `stripe.StripeClient` por instancia con `http_client=stripe.RequestsClient(timeout=...)` y `client.v1.checkout.sessions.create(params=..., options=...)`; docstring de la clase actualizado para describir el aislamiento por instancia con precisión.
+- `service/tests/unit/test_stripe_checkout_session_params.py` (nuevo) — 4 tests: `timeout` nunca en `params`/`options`, el resto de los params de Checkout Session sin cambios, `customer` solo cuando corresponde, el `RequestsClient` queda configurado con el timeout de la instancia.
+- `docs/operations/deployment.md` — referencias a "paso 6" corregidas a "paso 8" (2 lugares), nueva subsección "Defectos encontrados en la primera validación real de staging... y su remediation".
+- `docs/development/current-phase.md` — nueva entrada de remediation al inicio del archivo.
+
+**Resultado de pruebas:**
+- `make lint` (ruff + eslint + prettier) → limpio.
+- `make typecheck` (mypy + tsc) → limpio (requirió tipar `params` como `stripe.params.checkout.SessionCreateParams` en vez de `dict[str, Any]` para que mypy aceptara el TypedDict que `StripeClient.v1.checkout.sessions.create` espera).
+- `make test-backend` (`pytest -m "not docker..."`) → **304 passed** (+4 sobre la base de Fase 27).
+- `make test-integration` (Docker real, Mongo+Azurite) → **439 passed**, sin regresión.
+- `make contracts` → sin diff (ningún endpoint HTTP cambió — los 5 fixes son internos a IaC/providers).
+- `az bicep build`/`az bicep lint` sobre `infra/bicep/main.bicep` y `infra/bicep/modules/key-vault.bicep` → sin errores ni warnings.
+- `git diff --check` → limpio.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere ADR nuevo — los 5 fixes son correcciones de configuración/IaC/SDK-usage dentro de límites ya aprobados (confirmado contra ADRs 0004, 0011, 0014, 0019, 0021, 0025). 3 decisiones que podrían parecer bloqueantes se resolvieron con evidencia sin reabrir arquitectura: switch incondicional a `max_completion_tokens` (sin capability flag — YAGNI + prohibición explícita de nuevos modelos de IA en esta sesión); eliminar `founderPopulatedSecrets` de Bicep en vez de parametrizarlo con un bool de bootstrap (hace cumplir el diseño que `key-vault.bicep` ya documentaba como intención original); `stripe.StripeClient` por instancia en vez de mutar `stripe.default_http_client` globalmente (evita contaminación cruzada entre instancias/tests con distinto timeout).
+
+**Deuda técnica introducida:**
+- Ninguna nueva. Riesgo residual documentado (no corregido, sin evidencia de staging que lo justifique): `temperature=0.3` (`ai/service.py`) podría ser rechazado por el mismo modelo de familia razonamiento que exige `max_completion_tokens` — candidato a un defecto adicional si el redeploy real lo confirma.
+
+**Instrucciones para la siguiente sesión:**
+- **Revalidación live pendiente**: el founder debe re-ejecutar el redeploy real a staging (chat operacional, no una sesión de código) con estos 5 fixes aplicados, siguiendo el `bootstrap-oidc.md` reescrito (nota: quien ya pobló Key Vault manualmente en el primer intento probablemente ya tiene el rol RBAC y los secretos — el paso 6/7 nuevo solo es estrictamente necesario si se reprovisiona desde cero).
+- No repetir el trabajo de Fase 27 — la infraestructura Bicep, los workflows y el resto del runbook no cambiaron salvo los 5 puntos listados arriba.
+- No tocar todavía: Redis, scaling horizontal, subscriptions, cambios de billing model, nuevos modelos de IA, Foundry Web Search, cambios de auth/UX — explícitamente fuera de alcance de esta sesión de remediation.
+
+---
+
 ### Sesión — 2026-08-10 — Fase 27 (E11, Bloque 6 "Hardening y despliegue"): Infra Azure real (Bicep) + CI/CD GitHub Actions OIDC staging→prod
 
 **Resumen:** Sesión que comenzó en Plan Mode exclusivo de solo lectura: confirmó el cierre formal de Fase 26 (`origin/main@9c44d63`, PR #43) y del hotfix posterior (`origin/main@491a27a`, PR #44) vía Git/GitHub, identificó Fase 27 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`deployment.md`/`architecture.md` (dependencia declarada Fase 26 ✅, única fase restante 100% infraestructura antes del piloto), y produjo un plan técnico completo con 2 preguntas genuinamente bloqueantes (representación de "staging" en `Settings.environment`, sin cuarto valor hasta ahora; alcance de verificación real dado que este entorno no tiene acceso a una suscripción Azure/Atlas real). El founder resolvió las 2 con la opción recomendada en cada caso vía `AskUserQuestion`. Tras la autorización ("Autorizo iniciar la implementacion"), ejecución completa en 8 bloques incrementales (housekeeping documental del hotfix, contenerización, `environment=staging`, Bicep fundación, Bicep datos, Bicep Container Apps, OIDC+workflows, documentación de cierre), cada bloque verificado al máximo nivel posible en este entorno (sin suscripción Azure real disponible).

@@ -71,6 +71,10 @@ class AzureOpenAIProvider:
         last_error: Exception | None = None
         for attempt in range(1, _MAX_ATTEMPTS + 1):
             try:
+                # max_completion_tokens, not max_tokens: the deployed model
+                # rejects max_tokens with a 400 (confirmed against the real
+                # Azure OpenAI resource in staging) - a known constraint of
+                # reasoning-family Azure OpenAI models.
                 response = self._client.chat.completions.create(
                     model=self._deployment,
                     messages=[
@@ -85,7 +89,7 @@ class AzureOpenAIProvider:
                             "strict": True,
                         },
                     },
-                    max_tokens=request.max_tokens,
+                    max_completion_tokens=request.max_tokens,
                     temperature=request.temperature,
                     timeout=request.timeout_seconds,
                 )

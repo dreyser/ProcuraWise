@@ -88,7 +88,14 @@ class Settings(BaseSettings):
     # Pinned, not left on the SDK default - same rationale as
     # storage_api_version above: an unpinned default can change under us
     # between SDK releases without a deliberate compatibility check.
-    azure_openai_api_version: str = "2026-01-01-preview"
+    # 2024-10-21 is the current GA release (Microsoft Learn) and is confirmed
+    # to support Structured Outputs (response_format: json_schema,
+    # strict=True), which azure_openai_provider.py already relies on. A
+    # preview version discovered here previously (2026-01-01-preview) 404'd
+    # against the real Azure OpenAI resource in staging - do not swap back to
+    # an unverified preview version without re-confirming against a real
+    # resource first.
+    azure_openai_api_version: str = "2024-10-21"
     ai_request_timeout_seconds: int = 30
     # Same 1-year default as audit_event_retention_days (ADR 0016) but a
     # separate field - AIExecution is its own collection with its own
