@@ -32,6 +32,32 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-16 — Validación operacional real de Azure Staging (post-Fase 27, cierre de Fase 25 pendiente)
+
+**Resumen:** Chat operacional (no de desarrollo — sin funcionalidad nueva, sin refactors, sin cambios de arquitectura) dedicado a validar con evidencia real, checkpoint por checkpoint, que el deployment producido por el pipeline real (`deploy-staging.yml` vía `workflow_dispatch`) queda completamente sano. Confirmó los 5 defectos de la sesión de remediation del 2026-08-14 corregidos en producción real, encontró y corrigió 4 defectos adicionales (#6-9, todos descubiertos únicamente por tener acceso a Azure/Stripe reales), y cerró la demo manual de Stripe Test Mode que Fase 25 dejó pendiente — incluyendo replay protection confirmado con el botón "Resend" real del Dashboard de Stripe.
+
+**Archivos tocados (PRs #48-#51, cada uno verificado localmente y contra un redeploy real antes de continuar):**
+- `.github/workflows/deploy-staging.yml`, `.github/workflows/deploy-prod.yml` — paso de migraciones envuelto en `script -qec "<cmd>" /dev/null` (PR #48; `az containerapp exec` sin TTY real fallaba solo en CI, nunca en bootstrap manual).
+- `infra/params/staging.bicepparam` — 7 valores públicos reales comiteados (`OIDC_MICROSOFT_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_ID`, `OIDC_REDIRECT_BASE_URL`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `BILLING_ENABLED=true`, `STRIPE_PRICE_ID_EVALUATION` nuevo) — decisión confirmada: `.bicepparam` es la fuente oficial de config pública por ambiente, nunca GitHub Variables ni Key Vault para lo no-secreto (PR #49). `production.bicepparam` deliberadamente sin tocar (sin recursos propios provisionados todavía).
+- `service/procurawise/ai/models.py`, `ai/service.py`, `ai/azure_openai_provider.py`, `tests/unit/test_azure_openai_provider.py` — eliminado `temperature` del contrato completo (`AIRequest`, ambos call sites, la llamada real al SDK) — el modelo real rechaza cualquier valor no-default (PR #50).
+- `service/procurawise/ai/service.py` — `_MAX_TOKENS` 2000→8000, `_SCORE_SUGGESTION_MAX_TOKENS` 3000→12000, confirmado empíricamente contra el recurso real (`finish_reason="length"`/output vacío con 2000, `finish_reason="stop"`/output válido usando solo 1929 tokens con 8000) (PR #51).
+- `docs/development/current-phase.md`, `docs/development/session-handoff.md`, `docs/operations/deployment.md`, `docs/security/threat-model.md` — cierre documental de esta validación (esta entrada + las 3 restantes).
+
+**Resultado de pruebas:** cada PR verificado localmente (`make lint-backend`/`make typecheck-backend`/`make test-backend` en verde, 304 tests) antes de commitear, y cada redeploy verificado contra un run real de `deploy-staging.yml` (`conclusion: success`, imagen desplegada = SHA del commit correcto, `/health/ready` con los 3 checks en `true`) antes de dar el siguiente paso por confirmado. Evidencia funcional real: `requirement-suggestions` (10 candidatos), `score-suggestions` (2 candidatos), Stripe Checkout completo con tarjeta de prueba + webhook firmado + idempotencia (`409`) + replay protection (confirmado con "Resend" real de Stripe, sin duplicar `Purchase` ni auditoría).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere ADR nuevo. La decisión sobre dónde vive la config pública por ambiente (`.bicepparam`, nunca GitHub Variables ni Key Vault) confirma el diseño ya implícito en Fase 27, no lo cambia.
+
+**Deuda técnica introducida:**
+- Ninguna nueva. Gaps ya conocidos, explícitamente confirmados como no bloqueantes para este hito: login OIDC real vía navegador nunca ejecutado end-to-end (redirect URIs registrados, pero el flujo de redirect en sí no se probó); rate limiting de IA/billing checkout no probado empíricamente (solo el de login); backup/restore y k6 no ejecutados contra Atlas/staging real (decisión explícita del founder — la evidencia de Fase 26 contra Mongo local sigue vigente para este hito).
+
+**Instrucciones para la siguiente sesión:**
+- Azure Staging queda operativo y validado — no repetir esta validación salvo que cambie código relevante (IA, Stripe, IaC de staging).
+- Si se retoma el login OIDC real, el frontend hosting (`FRONTEND_BASE_URL`/`CORS_ALLOWED_ORIGINS`, sin resolver deliberadamente) probablemente sea un prerequisito real, no solo cosmético.
+- No tocar todavía: producción (ningún App Registration/recurso propio provisionado, fuera de alcance de este chat por diseño), backup/restore contra Atlas real, k6 contra staging real — quedan para cuando el founder decida abrir esos hitos explícitamente.
+
+---
+
 ### Sesión — 2026-08-14 — Remediation de defectos de Azure Staging (post-Fase 27, no es una fase nueva)
 
 **Resumen:** El founder ejecutó por primera vez el runbook de Fase 27 contra Azure/MongoDB Atlas reales (no solo verificación local) — la API, Mongo Atlas, Storage, Azure OpenAI, Service Bus, Key Vault RBAC y OIDC quedaron operativos, pero la validación expuso 5 defectos versionados reales. Sesión dedicada exclusivamente a corregirlos (Plan Mode de solo lectura → investigación de causa raíz con 3 agentes Explore en paralelo por dominio + 1 agente Plan para el diseño IaC + verificación web de la API version de Azure OpenAI → plan aprobado por el founder → implementación en 5 bloques), sin reabrir ninguna decisión arquitectónica ni tocar nada fuera de los 5 defectos reportados. Rama `fix/staging-integration-remediation`, sin commitear (el founder decide si comitea/abre PR, mismo patrón que fases anteriores).

@@ -1,5 +1,36 @@
 # Fase actual
 
+## Validación operacional real de Azure Staging — cierre completo (post-Fase 27, incluye cierre de la validación pendiente de Fase 25)
+
+**Estado: ✅ Cerrado con evidencia real (2026-08-16).** Chat operacional dedicado exclusivamente a validar el deployment real de Azure Staging (sin implementar funcionalidad nueva, sin refactors, sin cambios de arquitectura) tras la sesión de remediation del 2026-08-14 (ver entrada de abajo). Confirmó con evidencia — no supuestos — que el deployment producido por el pipeline real (`deploy-staging.yml` vía `workflow_dispatch`, sin ninguna sustitución manual posterior) queda completamente sano, y cerró la validación manual de Stripe Test Mode que Fase 25 dejó pendiente.
+
+**Hallazgos reales durante la validación (además de los 5 defectos ya documentados en la entrada de remediation de abajo) — 4 más, todos corregidos, mergeados y redesplegados en este mismo chat vía PRs sucesivos:**
+
+6. **`az containerapp exec` sin TTY en GitHub Actions** (`termios.error: (25, 'Inappropriate ioctl for device')`) — solo se manifestaba corriendo el pipeline real (`workflow_dispatch`), nunca en el bootstrap manual. Corregido envolviendo el comando en `script -qec "<cmd>" /dev/null` en el paso de migraciones de `deploy-staging.yml`/`deploy-prod.yml` (PR #48).
+7. **Gap de configuración pública no comiteada** — `infra/params/staging.bicepparam` seguía con `REPLACE_ME` en `OIDC_MICROSOFT_CLIENT_ID`/`OIDC_GOOGLE_CLIENT_ID`/`AZURE_OPENAI_ENDPOINT`/`AZURE_OPENAI_DEPLOYMENT` y `BILLING_ENABLED=false` — los valores reales resueltos durante el bootstrap manual solo se habían pasado por `--parameters` ad-hoc, nunca persistidos al archivo. Cada corrida real del pipeline los revertía a placeholder silenciosamente. Decisión confirmada: `staging.bicepparam`/`production.bicepparam` son la fuente oficial de config pública por ambiente (nunca GitHub Variables, nunca Key Vault para lo no-secreto). Corregido comiteando los 7 valores públicos reales (ninguno es secreto — client IDs, endpoint, deployment name, price ID, feature flag); `FRONTEND_BASE_URL`/`CORS_ALLOWED_ORIGINS` quedan deliberadamente sin resolver (sin decisión de hosting de frontend todavía) (PR #49).
+8. **`temperature=0.3` rechazado por el modelo real** ("Unsupported value: 'temperature' does not support 0.3 with this model. Only the default (1) value is supported") — el riesgo ya anticipado en la entrada de remediation de abajo se confirmó. Corregido eliminando `temperature` de `AIRequest`/`ai/service.py`/`azure_openai_provider.py` por completo — el modelo de razonamiento solo acepta su propio default (PR #50).
+9. **Presupuesto de tokens insuficiente para modelo de razonamiento** — `_MAX_TOKENS=2000` se agotaba enteramente en razonamiento interno invisible antes de escribir el JSON de salida (`finish_reason="length"`, `raw_output="{}"`), confirmado empíricamente contra el recurso real (con `8000` el mismo prompt termina con `finish_reason="stop"` usando solo 1929 tokens en total). Corregido subiendo `_MAX_TOKENS` a `8000` y `_SCORE_SUGGESTION_MAX_TOKENS` a `12000` (PR #51).
+
+**Evidencia final (revisión `procurawise-api-staging--0000008`, imagen `93c4c0e...` = HEAD real de `main`, producida 100% por el pipeline sin parches manuales):**
+
+| Área | Resultado |
+|---|---|
+| Azure Container Apps | Revisión única, `Healthy`, 100% tráfico |
+| MongoDB Atlas | `/health/ready.mongodb: true` |
+| Azure Storage / SAS | Flujo completo comprador↔vendor real (upload/download/SAS válido-expirado-anónimo/aislamiento cross-vendor `404`) — validado en la sesión previa, sin cambios de código desde entonces |
+| Azure OpenAI | `requirement-suggestions` (10 candidatos) y `score-suggestions` (2 candidatos) exitosos end-to-end, `model: gpt-5-mini-2025-08-07`, auditoría limpia |
+| Service Bus / Worker | 4 colas, worker sano, confirmado vía jobs de IA + webhook de Stripe |
+| Stripe Test Mode | Checkout real + tarjeta de prueba + webhook firmado (`200`) + idempotencia (`409` en reintento) + **replay protection confirmado con "Resend" real del Dashboard de Stripe** (evento duplicado detectado y descartado sin reprocesar) + billing state + auditoría + notificación in-app |
+| Notificaciones in-app | Confirmadas (`approval_requested`, `payment_succeeded`) — email real vía ACS sigue sin probar (`NOTIFICATIONS_EMAIL_ENABLED=false`, fuera de alcance) |
+| Seguridad (headers/HSTS/CORS/rate limiting login/aislamiento tenant-vendor-admin) | Validado en la sesión previa, sin cambios de código desde entonces |
+
+**Gaps conocidos, no bloqueantes, explícitamente fuera de alcance de este chat:**
+- Login OIDC real vía navegador (Microsoft/Google) — los App Registrations están creados y el redirect URI real registrado, pero el flujo de redirect completo nunca se ejecutó (toda la validación usó email+password vía `provisioning_cli`).
+- Rate limiting de IA (10/hora) y de billing checkout (5/hora) — solo el de login (`5` intentos/60s) se probó empíricamente.
+- Backup/restore y performance (k6) contra Atlas/staging real — decisión explícita de no ejecutarlos en este chat (la evidencia de Fase 26 contra Mongo local sigue considerándose válida y suficiente para este hito); el objetivo era validación funcional, no caracterización de rendimiento ni un segundo ciclo de restore.
+
+**PRs de esta validación**: #48 (migraciones), #49 (Gap #7 — config pública), #50 (defecto #8 — `temperature`), #51 (defecto #9 — presupuesto de tokens), todos mergeados a `main` y redesplegados vía `deploy-staging.yml` real (`workflow_dispatch`), cada uno verificado con evidencia antes de continuar (nunca se asumió un fix funcionando sin una corrida real posterior).
+
 ## Remediation de defectos de Azure Staging (post-Fase 27, no es una fase nueva del roadmap)
 
 **Estado: ✅ Código corregido y verificado localmente (2026-08-14) — revalidación live (redeploy real a staging) pendiente.** El founder ejecutó por primera vez el runbook completo de Fase 27 contra Azure/MongoDB Atlas reales (no solo verificación local) — API, Mongo Atlas, Storage, Azure OpenAI, Service Bus (4 colas, worker AMQP), Key Vault RBAC y OIDC Microsoft/Google quedaron operativos. Esa validación expuso 5 defectos versionados reales, corregidos en esta sesión dedicada (Plan Mode → aprobación → implementación, rama `fix/staging-integration-remediation`), sin reabrir ninguna decisión arquitectónica de `CLAUDE.md` §3/§8. Detalle completo (causa raíz, versiones exactas de SDK, diseño de cada fix) en [`docs/operations/deployment.md`](../operations/deployment.md#defectos-encontrados-en-la-primera-validación-real-de-staging-post-fase-27-y-su-remediation), resumen aquí:
