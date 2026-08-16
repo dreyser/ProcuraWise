@@ -84,6 +84,17 @@ export function unwrapDataOrThrow<TSuccess>(
   return envelope.data as TSuccess
 }
 
+/** Fase 28: every orval-generated call site passes a relative URL
+ * (`/api/v1/...`) - resolved same-origin, which only works when the SPA and
+ * the API share a domain (true in dev, via the Vite proxy in
+ * vite.config.ts). Once the SPA is served from its own Container App
+ * (staging/production), it needs an absolute origin instead; empty in dev/
+ * test so local/CI behavior is unchanged. */
+function resolveUrl(url: string): string {
+  const base = import.meta.env.VITE_API_BASE_URL
+  return base ? `${base}${url}` : url
+}
+
 export async function apiFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers)
   if (activeMembershipId) {
@@ -101,7 +112,7 @@ export async function apiFetch<T>(url: string, options: RequestInit = {}): Promi
     headers.set('Authorization', `Bearer ${bearerToken}`)
   }
 
-  const response = await fetch(url, { ...options, headers })
+  const response = await fetch(resolveUrl(url), { ...options, headers })
   const contentType = response.headers.get('content-type') ?? ''
   const data = contentType.includes('application/json')
     ? await response.json().catch(() => undefined)

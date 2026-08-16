@@ -23,6 +23,13 @@ env:
   RESOURCE_GROUP: rg-procurawise-production
   ACR_NAME: procurawiseacrproduction
   API_APP_NAME: procurawise-api-production
+  WEB_APP_NAME: procurawise-web-production
+  # Fase 28: sin resolver todavía - producción no tiene Container Apps
+  # Environment real provisionado (sin recursos propios, current-phase.md).
+  # Igual que OIDC_MICROSOFT_CLIENT_ID en production.bicepparam, se resuelve
+  # durante el bootstrap de producción, con el dominio real que Azure asigne
+  # al crear el entorno (mismo patrón ya usado para resolver el de staging).
+  API_BASE_URL: https://REPLACE_ME_API_FQDN
 
 jobs:
   deploy:
@@ -56,6 +63,13 @@ jobs:
           docker build -f service/Dockerfile.worker -t "$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}" service
           docker push "$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}"
 
+      - name: Build + push web image
+        run: |
+          docker build -f apps/web/Dockerfile.web \
+            --build-arg VITE_API_BASE_URL="$API_BASE_URL" \
+            -t "$ACR_NAME.azurecr.io/procurawise-web:${{ github.sha }}" apps/web
+          docker push "$ACR_NAME.azurecr.io/procurawise-web:${{ github.sha }}"
+
       - name: Deploy infrastructure (Bicep)
         run: |
           az deployment group create \
@@ -63,7 +77,8 @@ jobs:
             --template-file infra/bicep/main.bicep \
             --parameters infra/params/production.bicepparam \
             --parameters apiImage="$ACR_NAME.azurecr.io/procurawise-api:${{ github.sha }}" \
-                         workerImage="$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}"
+                         workerImage="$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}" \
+                         webImage="$ACR_NAME.azurecr.io/procurawise-web:${{ github.sha }}"
 
       - name: Run database migrations
         # `az containerapp exec` siempre intenta asignar un pseudo-terminal
@@ -81,7 +96,7 @@ jobs:
           CMD="az containerapp exec --resource-group $RESOURCE_GROUP --name $API_APP_NAME --command \"python -m procurawise.shared.migrations\""
           script -qec "$CMD" /dev/null
 
-      - name: Health check
+      - name: Health check (api)
         run: |
           API_FQDN=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name main --query properties.outputs.apiFqdn.value -o tsv)
           for i in $(seq 1 10); do
@@ -93,6 +108,20 @@ jobs:
             sleep 10
           done
           echo "api never became healthy (last status: $STATUS)" >&2
+          exit 1
+
+      - name: Health check (web)
+        run: |
+          WEB_FQDN=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name main --query properties.outputs.webFqdn.value -o tsv)
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://$WEB_FQDN/" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "web healthy at https://$WEB_FQDN"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "web never became healthy (last status: $STATUS)" >&2
           exit 1
 
       - name: Rollback hint on failure
