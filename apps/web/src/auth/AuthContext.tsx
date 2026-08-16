@@ -12,6 +12,7 @@ import {
   setActiveAdminAccessToken,
   setActiveVendorAccessToken,
   ApiError,
+  resolveUrl,
 } from '@/lib/http'
 
 export type AuthStatus = 'anonymous' | 'awaiting_workspace' | 'ready'
@@ -155,7 +156,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const beginOidcLogin = useCallback((provider: 'microsoft' | 'google') => {
-    window.location.href = `/api/v1/auth/oidc/${provider}/login`
+    // Fase 28: full-page navigation, not a fetch - never went through
+    // apiFetch's own base-URL resolution, so it silently 404'd once the SPA
+    // moved off the API's origin (resolved same-origin against the frontend
+    // domain instead of the API's).
+    window.location.href = resolveUrl(`/api/v1/auth/oidc/${provider}/login`)
   }, [])
 
   const completeOidcCallback = useCallback(

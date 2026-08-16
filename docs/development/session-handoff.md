@@ -32,6 +32,27 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-16 — Fase 28: defecto real #1 del piloto — login OIDC resolvía contra el origen equivocado
+
+**Resumen:** Continuación operacional tras confirmar el deploy real de Bloque A (health checks en verde). El founder provisionó la primera cuenta piloto real vía `provisioning_cli.py` (`membership_id=f8c17626006149fdaeae096491022593`, `tenant_id=4d16b37eec214028be5b0e45f47648e2`, `role=evaluation_owner`) e intentó el primer login OIDC real por navegador — "Continuar con Google"/"Continuar con Microsoft" llevaban al dominio del *frontend* con el path de la API (`.../api/v1/auth/oidc/{provider}/login`) → 404 real. Causa raíz: `beginOidcLogin` (`auth/AuthContext.tsx`) navega la página completa vía `window.location.href`, que nunca pasó por `apiFetch`/`resolveUrl()` (la resolución de `VITE_API_BASE_URL` que Bloque A añadió) — Bloque A solo cubrió las llamadas `fetch` generadas por `orval`, no auditó navegaciones de página completa como clase aparte. Corregido exportando `resolveUrl()` y usándola en ese único call site (búsqueda exhaustiva confirmó que es el único caso real - `BillingPage.tsx` usa el mismo patrón pero con una URL absoluta que ya viene de Stripe, sin bug).
+
+**Archivos tocados:**
+- `apps/web/src/lib/http.ts` — `resolveUrl()` pasa de privada a exportada.
+- `apps/web/src/auth/AuthContext.tsx` — `beginOidcLogin` usa `resolveUrl()` en vez de una URL relativa cruda.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (frontend) → limpio. `pnpm test` → 212/212. `docker build --build-arg VITE_API_BASE_URL=https://fake-api-test.example` + inspección del bundle → confirmado que el build-arg y el path de OIDC quedan horneados correctamente.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar este fix (rama `fix/oidc-login-relative-url-wrong-origin`) y reintentar el login OIDC real por navegador contra la cuenta ya provisionada.
+- Confirmado el login, continuar el Bloque B (resto de tenants piloto) y empezar a usar el producto de punta a punta para cumplir el criterio de aceptación de Fase 28.
+- El founder indicó que prefiere esperar a que Bloque B esté completo antes de hacer push de las ramas pendientes (`docs/phase-28-real-deploy-confirmed`, y ahora esta) al remoto — no hacer push todavía sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-16 — Fase 28, Bloque A: frontend real (Container App) + config pública resuelta
 
 **Resumen:** Sesión de planeación (Plan Mode) para identificar la siguiente fase del roadmap tras el cierre operacional de Azure Staging, seguida de autorización explícita del founder para implementar el plan en la misma sesión ("Autorizo avanzar con la implementacion de este plan"). La investigación encontró que Fase 28 ("UAT piloto 1-3 empresas, fixes, lanzamiento controlado") era un backlog de una sola línea sin descripción expandida en ningún documento, y que el verdadero bloqueante no documentado era que el frontend nunca tuvo hosting real: `frontend_base_url`/`cors_allowed_origins` seguían en `http://localhost:5173` en staging, rompiendo 6 puntos de uso reales (redirect OIDC, invitación de proveedor ×3, Stripe Checkout success/cancel ×2). Sobrevivió 1 pregunta realmente bloqueante (hosting del frontend, sin decisión en ningún documento/ADR), resuelta por el founder en la misma sesión: tercer Container App reutilizando el módulo Bicep genérico de Fase 27. Implementado y verificado localmente el Bloque A completo (frontend real); Bloques B (onboarding piloto) y C (ciclo de fixes reactivo) quedan para cuando exista un deploy real y un piloto real usando el producto.

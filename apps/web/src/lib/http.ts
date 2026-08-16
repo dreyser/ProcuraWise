@@ -89,8 +89,11 @@ export function unwrapDataOrThrow<TSuccess>(
  * the API share a domain (true in dev, via the Vite proxy in
  * vite.config.ts). Once the SPA is served from its own Container App
  * (staging/production), it needs an absolute origin instead; empty in dev/
- * test so local/CI behavior is unchanged. */
-function resolveUrl(url: string): string {
+ * test so local/CI behavior is unchanged. Exported because not every request
+ * to the API goes through apiFetch - full-page navigations (OIDC login
+ * kickoff, AuthContext.tsx) need the same origin resolution but issue a raw
+ * `window.location.href` assignment instead of a fetch. */
+export function resolveUrl(url: string): string {
   const base = import.meta.env.VITE_API_BASE_URL
   return base ? `${base}${url}` : url
 }
