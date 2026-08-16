@@ -25,7 +25,6 @@ def _request() -> AIRequest:
         user_prompt="user",
         response_schema={"type": "object"},
         max_tokens=100,
-        temperature=0.2,
         timeout_seconds=5,
     )
 
@@ -71,6 +70,7 @@ def test_generate_maps_sdk_response_to_ai_response() -> None:
     call_kwargs = provider._client.chat.completions.create.call_args.kwargs
     assert call_kwargs["max_completion_tokens"] == 100
     assert "max_tokens" not in call_kwargs
+    assert "temperature" not in call_kwargs
 
 
 def test_generate_retries_once_on_rate_limit_then_succeeds(monkeypatch) -> None:
