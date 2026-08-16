@@ -49,7 +49,6 @@ class AIRequest:
     user_prompt: str
     response_schema: dict[str, Any]
     max_tokens: int
-    temperature: float
     timeout_seconds: int
 
 

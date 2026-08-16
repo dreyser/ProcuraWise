@@ -65,14 +65,16 @@ async def security_headers_middleware(
     every response. No Content-Security-Policy yet - that requires
     inventorying every resource origin the SPA actually loads, deliberately
     out of this phase's scope (see plan §11); candidate for a future
-    hardening pass if ever needed. HSTS only in production - it is
-    meaningless (and mildly annoying for local http:// development) without
-    HTTPS actually terminating in front of this process."""
+    hardening pass if ever needed. HSTS only in staging/production (Fase 27:
+    `is_production_like`) - it is meaningless (and mildly annoying for local
+    http:// development) without HTTPS actually terminating in front of this
+    process, which is true for both Azure environments, not only the
+    customer-facing one."""
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    if _settings.environment == "production":
+    if _settings.is_production_like:
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 

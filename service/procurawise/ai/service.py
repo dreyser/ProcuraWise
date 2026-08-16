@@ -57,7 +57,6 @@ PROMPT_VERSION = "v2"
 JOB_TOPIC = "ai-requirement-generation"
 
 _MAX_TOKENS = 2000
-_TEMPERATURE = 0.3
 _MAX_GENERATION_ATTEMPTS = 2
 
 # Fase 18 (ADR 0022): evaluacion asistida por IA - a second use_case sharing
@@ -638,7 +637,6 @@ class AIService:
                     user_prompt=rendered.user,
                     response_schema=response_schema,
                     max_tokens=_SCORE_SUGGESTION_MAX_TOKENS,
-                    temperature=_TEMPERATURE,
                     timeout_seconds=self._request_timeout_seconds,
                 )
             )
@@ -777,7 +775,6 @@ class AIService:
                     user_prompt=rendered.user,
                     response_schema=response_schema,
                     max_tokens=_MAX_TOKENS,
-                    temperature=_TEMPERATURE,
                     timeout_seconds=self._request_timeout_seconds,
                 )
             )

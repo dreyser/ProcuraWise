@@ -1,0 +1,10 @@
+# Fase 27: false positive de gitleaks (regla `generic-api-key`) contra un
+# comentario en tests/unit/test_config.py que mencionaba "JWT secret" cerca
+# de una lista separada por "/" (OIDC/AI/notifications/billing) con entropía
+# suficiente para disparar la heurística — no hay ningún secreto real en esa
+# línea, ver el commit citado abajo. El texto ya se reformuló en un commit
+# posterior para no volver a disparar la regla, pero el commit original
+# permanece en el historial (gitleaks escanea todo `git log`, no solo el
+# HEAD), así que se ignora por fingerprint exacto en vez de reescribir
+# historia ya pusheada.
+0965a2f6f55f9dec3cd90d33b84b2700330a1602:service/tests/unit/test_config.py:generic-api-key:195

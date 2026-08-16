@@ -1,6 +1,5 @@
-from typing import Any
-
 import stripe
+from stripe.params.checkout import SessionCreateParams
 
 from procurawise.billing.exceptions import InvalidWebhookSignatureError
 from procurawise.billing.models import (
@@ -16,15 +15,19 @@ class StripePaymentProvider:
     (ADR 0025) - same import-boundary discipline CLAUDE.md S5.1 already
     applies to `ai/azure_openai_provider.py` and
     `notifications/azure_acs_email_provider.py`, extended here to a third
-    external SDK family. `api_key` is passed explicitly per call (the
-    classic, version-stable resource-method style) rather than mutated onto
-    the `stripe` module globally, so multiple instances (e.g. under test)
-    never race on shared global state."""
+    external SDK family. Uses a `stripe.StripeClient` bound to its own
+    `api_key`/`http_client` per instance (never `stripe.api_key`/
+    `stripe.default_http_client` module-level state), so multiple instances
+    (e.g. under test, each with a different timeout) never race on shared
+    global state."""
 
     def __init__(self, *, api_key: str, webhook_secret: str, timeout_seconds: int) -> None:
-        self._api_key = api_key
         self._webhook_secret = webhook_secret
         self._timeout_seconds = timeout_seconds
+        self._client = stripe.StripeClient(
+            api_key=api_key,
+            http_client=stripe.RequestsClient(timeout=timeout_seconds),
+        )
 
     @staticmethod
     def from_settings(settings: Settings) -> "StripePaymentProvider":
@@ -48,20 +51,26 @@ class StripePaymentProvider:
         # Never an `amount`/`currency` here: `price` is the only value that
         # determines cost, and it is always resolved server-side from
         # configuration (billing/service.py), never accepted from a client.
-        kwargs: dict[str, Any] = {
+        params: SessionCreateParams = {
             "mode": "payment",
             "line_items": [{"price": request.price_id, "quantity": request.quantity}],
             "payment_method_types": ["card"],
             "success_url": request.success_url,
             "cancel_url": request.cancel_url,
             "metadata": request.metadata,
-            "api_key": self._api_key,
-            "idempotency_key": request.idempotency_key,
-            "timeout": self._timeout_seconds,
         }
         if request.customer_id:
-            kwargs["customer"] = request.customer_id
-        session = stripe.checkout.Session.create(**kwargs)
+            params["customer"] = request.customer_id
+        # `timeout` is deliberately never a key in `params`/`options` here -
+        # the installed stripe SDK (15.4.0) has no per-call timeout override;
+        # it serializes any unrecognized key straight into the Checkout
+        # Session API body, which Stripe rejects ("Received unknown
+        # parameter: timeout"). The transport timeout is instead bound once,
+        # per-instance, into `self._client`'s `RequestsClient` above.
+        session = self._client.v1.checkout.sessions.create(
+            params=params,
+            options={"idempotency_key": request.idempotency_key},
+        )
         if session.url is None:
             # Stripe's own type contract allows this only for a Session that
             # never reached a state with a hosted page - never observed for

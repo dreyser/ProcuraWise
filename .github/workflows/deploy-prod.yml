@@ -1,0 +1,103 @@
+name: Deploy Production
+
+# Fase 27: mismo flujo que deploy-staging.yml, gateado por el GitHub
+# Environment "production" (aprobación manual requerida - configurada en
+# Settings del repositorio, fuera de alcance de código, plan §11 decisión
+# recomendada #5) e identidad OIDC separada (AZURE_CLIENT_ID_PROD, no la
+# misma que staging - infra/scripts/bootstrap-oidc.md, paso 2). Solo
+# disparo manual en esta fase - sin auto-deploy a producción sin piloto
+# todavía (Fase 28).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: rg-procurawise-production
+  ACR_NAME: procurawiseacrproduction
+  API_APP_NAME: procurawise-api-production
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Azure login (OIDC federado, sin secreto de larga vida)
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID_PROD }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Allow az CLI to auto-install extensions (containerapp)
+        run: az config set extension.use_dynamic_install=yes_without_prompt
+
+      - name: ACR login
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build + push api image
+        run: |
+          docker build -f service/Dockerfile.api -t "$ACR_NAME.azurecr.io/procurawise-api:${{ github.sha }}" service
+          docker push "$ACR_NAME.azurecr.io/procurawise-api:${{ github.sha }}"
+
+      - name: Build + push worker image
+        run: |
+          docker build -f service/Dockerfile.worker -t "$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}" service
+          docker push "$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}"
+
+      - name: Deploy infrastructure (Bicep)
+        run: |
+          az deployment group create \
+            --resource-group "$RESOURCE_GROUP" \
+            --template-file infra/bicep/main.bicep \
+            --parameters infra/params/production.bicepparam \
+            --parameters apiImage="$ACR_NAME.azurecr.io/procurawise-api:${{ github.sha }}" \
+                         workerImage="$ACR_NAME.azurecr.io/procurawise-worker:${{ github.sha }}"
+
+      - name: Run database migrations
+        # `az containerapp exec` siempre intenta asignar un pseudo-terminal
+        # local (`tty.setcbreak` sobre stdin), incluso con `--command` - el
+        # runner de GitHub Actions no le da un TTY real a stdin, así que sin
+        # `script` el paso falla con `termios.error: (25, 'Inappropriate
+        # ioctl for device')` en cada corrida (confirmado contra un redeploy
+        # real de staging, mismo step). `script -qec "<cmd>" /dev/null`
+        # (util-linux, ya presente en ubuntu-latest) asigna un
+        # pseudo-terminal real para el hijo y devuelve su código de salida
+        # real (`-e`), sin escribir el typescript de la sesión a ningún
+        # archivo (`/dev/null`) - la salida real del comando sigue
+        # apareciendo en el log del step como siempre.
+        run: |
+          CMD="az containerapp exec --resource-group $RESOURCE_GROUP --name $API_APP_NAME --command \"python -m procurawise.shared.migrations\""
+          script -qec "$CMD" /dev/null
+
+      - name: Health check
+        run: |
+          API_FQDN=$(az deployment group show --resource-group "$RESOURCE_GROUP" --name main --query properties.outputs.apiFqdn.value -o tsv)
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://$API_FQDN/health/ready" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "api healthy at https://$API_FQDN"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "api never became healthy (last status: $STATUS)" >&2
+          exit 1
+
+      - name: Rollback hint on failure
+        if: failure()
+        run: |
+          echo "Deploy failed - revert to the previous healthy revision with:" >&2
+          echo "az containerapp revision list --resource-group $RESOURCE_GROUP --name $API_APP_NAME -o table" >&2
+          echo "az containerapp revision activate --resource-group $RESOURCE_GROUP --name $API_APP_NAME --revision <previous-revision>" >&2

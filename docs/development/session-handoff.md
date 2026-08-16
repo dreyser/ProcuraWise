@@ -32,6 +32,123 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-14 — Remediation de defectos de Azure Staging (post-Fase 27, no es una fase nueva)
+
+**Resumen:** El founder ejecutó por primera vez el runbook de Fase 27 contra Azure/MongoDB Atlas reales (no solo verificación local) — la API, Mongo Atlas, Storage, Azure OpenAI, Service Bus, Key Vault RBAC y OIDC quedaron operativos, pero la validación expuso 5 defectos versionados reales. Sesión dedicada exclusivamente a corregirlos (Plan Mode de solo lectura → investigación de causa raíz con 3 agentes Explore en paralelo por dominio + 1 agente Plan para el diseño IaC + verificación web de la API version de Azure OpenAI → plan aprobado por el founder → implementación en 5 bloques), sin reabrir ninguna decisión arquitectónica ni tocar nada fuera de los 5 defectos reportados. Rama `fix/staging-integration-remediation`, sin commitear (el founder decide si comitea/abre PR, mismo patrón que fases anteriores).
+
+**Archivos tocados:**
+- `infra/bicep/main.bicep` — eliminado el recurso `founderPopulatedSecrets` (pisaba los 8 secretos del founder con un placeholder en cada redeploy, sin condición) y las 2 referencias en `dependsOn`.
+- `infra/scripts/bootstrap-oidc.md` — reescrito: nuevo paso de deploy standalone de Key Vault (paso 6), nuevo paso de asignación `Key Vault Secrets Officer` al founder (paso 7, antes ausente — causaba `Forbidden` real), renumeración de "poblar Key Vault"/"primer deploy" (pasos 8-9), notas operativas de orden de ACR y `--platform linux/amd64` en Apple Silicon.
+- `.gitignore` — patrón para artefactos compilados de Bicep (`infra/bicep/*.json`, `infra/params/*.json`), necesario porque la verificación de este bloque (`az bicep build`) los regenera.
+- `service/procurawise/shared/config.py` — `azure_openai_api_version` corregida de `2026-01-01-preview` (404 real contra el recurso) a `2024-10-21` (GA vigente, confirmado compatible con Structured Outputs vía Microsoft Learn).
+- `infra/params/staging.bicepparam`, `infra/params/production.bicepparam` — mismo valor de `AZURE_OPENAI_API_VERSION`.
+- `service/procurawise/ai/azure_openai_provider.py` — `max_tokens` → `max_completion_tokens` (el modelo real desplegado en staging rechazaba `max_tokens` con 400).
+- `service/tests/unit/test_azure_openai_provider.py` — fixture de `api_version` actualizado + nueva aserción sobre `call_args.kwargs` confirmando `max_completion_tokens` presente y `max_tokens` ausente.
+- `service/procurawise/billing/stripe_payment_provider.py` — migrado de la llamada clásica `stripe.checkout.Session.create(**kwargs)` (con `timeout` colándose como parámetro de API real, rechazado por Stripe: "Received unknown parameter: timeout") a un `stripe.StripeClient` por instancia con `http_client=stripe.RequestsClient(timeout=...)` y `client.v1.checkout.sessions.create(params=..., options=...)`; docstring de la clase actualizado para describir el aislamiento por instancia con precisión.
+- `service/tests/unit/test_stripe_checkout_session_params.py` (nuevo) — 4 tests: `timeout` nunca en `params`/`options`, el resto de los params de Checkout Session sin cambios, `customer` solo cuando corresponde, el `RequestsClient` queda configurado con el timeout de la instancia.
+- `docs/operations/deployment.md` — referencias a "paso 6" corregidas a "paso 8" (2 lugares), nueva subsección "Defectos encontrados en la primera validación real de staging... y su remediation".
+- `docs/development/current-phase.md` — nueva entrada de remediation al inicio del archivo.
+
+**Resultado de pruebas:**
+- `make lint` (ruff + eslint + prettier) → limpio.
+- `make typecheck` (mypy + tsc) → limpio (requirió tipar `params` como `stripe.params.checkout.SessionCreateParams` en vez de `dict[str, Any]` para que mypy aceptara el TypedDict que `StripeClient.v1.checkout.sessions.create` espera).
+- `make test-backend` (`pytest -m "not docker..."`) → **304 passed** (+4 sobre la base de Fase 27).
+- `make test-integration` (Docker real, Mongo+Azurite) → **439 passed**, sin regresión.
+- `make contracts` → sin diff (ningún endpoint HTTP cambió — los 5 fixes son internos a IaC/providers).
+- `az bicep build`/`az bicep lint` sobre `infra/bicep/main.bicep` y `infra/bicep/modules/key-vault.bicep` → sin errores ni warnings.
+- `git diff --check` → limpio.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere ADR nuevo — los 5 fixes son correcciones de configuración/IaC/SDK-usage dentro de límites ya aprobados (confirmado contra ADRs 0004, 0011, 0014, 0019, 0021, 0025). 3 decisiones que podrían parecer bloqueantes se resolvieron con evidencia sin reabrir arquitectura: switch incondicional a `max_completion_tokens` (sin capability flag — YAGNI + prohibición explícita de nuevos modelos de IA en esta sesión); eliminar `founderPopulatedSecrets` de Bicep en vez de parametrizarlo con un bool de bootstrap (hace cumplir el diseño que `key-vault.bicep` ya documentaba como intención original); `stripe.StripeClient` por instancia en vez de mutar `stripe.default_http_client` globalmente (evita contaminación cruzada entre instancias/tests con distinto timeout).
+
+**Deuda técnica introducida:**
+- Ninguna nueva. Riesgo residual documentado (no corregido, sin evidencia de staging que lo justifique): `temperature=0.3` (`ai/service.py`) podría ser rechazado por el mismo modelo de familia razonamiento que exige `max_completion_tokens` — candidato a un defecto adicional si el redeploy real lo confirma.
+
+**Instrucciones para la siguiente sesión:**
+- **Revalidación live pendiente**: el founder debe re-ejecutar el redeploy real a staging (chat operacional, no una sesión de código) con estos 5 fixes aplicados, siguiendo el `bootstrap-oidc.md` reescrito (nota: quien ya pobló Key Vault manualmente en el primer intento probablemente ya tiene el rol RBAC y los secretos — el paso 6/7 nuevo solo es estrictamente necesario si se reprovisiona desde cero).
+- No repetir el trabajo de Fase 27 — la infraestructura Bicep, los workflows y el resto del runbook no cambiaron salvo los 5 puntos listados arriba.
+- No tocar todavía: Redis, scaling horizontal, subscriptions, cambios de billing model, nuevos modelos de IA, Foundry Web Search, cambios de auth/UX — explícitamente fuera de alcance de esta sesión de remediation.
+
+---
+
+### Sesión — 2026-08-10 — Fase 27 (E11, Bloque 6 "Hardening y despliegue"): Infra Azure real (Bicep) + CI/CD GitHub Actions OIDC staging→prod
+
+**Resumen:** Sesión que comenzó en Plan Mode exclusivo de solo lectura: confirmó el cierre formal de Fase 26 (`origin/main@9c44d63`, PR #43) y del hotfix posterior (`origin/main@491a27a`, PR #44) vía Git/GitHub, identificó Fase 27 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`deployment.md`/`architecture.md` (dependencia declarada Fase 26 ✅, única fase restante 100% infraestructura antes del piloto), y produjo un plan técnico completo con 2 preguntas genuinamente bloqueantes (representación de "staging" en `Settings.environment`, sin cuarto valor hasta ahora; alcance de verificación real dado que este entorno no tiene acceso a una suscripción Azure/Atlas real). El founder resolvió las 2 con la opción recomendada en cada caso vía `AskUserQuestion`. Tras la autorización ("Autorizo iniciar la implementacion"), ejecución completa en 8 bloques incrementales (housekeeping documental del hotfix, contenerización, `environment=staging`, Bicep fundación, Bicep datos, Bicep Container Apps, OIDC+workflows, documentación de cierre), cada bloque verificado al máximo nivel posible en este entorno (sin suscripción Azure real disponible).
+
+**Decisiones bloqueantes resueltas por el founder (plan §10):**
+1. Representación de "staging": **Opción A** — `Settings.environment` gana un cuarto valor (`Literal["local", "test", "staging", "production"]`), con una nueva `@property is_production_like` que agrupa `staging`/`production` para 5 de los 7 validadores fail-closed (OIDC/Azure OpenAI/notificaciones-si-activas real, sin cola en memoria, sin JWT default) — deliberadamente **sin** incluir el validador que rechaza claves Stripe live fuera de producción, así que staging nunca puede aceptar una clave `sk_live_...` (siempre `sk_test_`, evitando cobros reales durante UAT).
+2. Alcance de verificación real: **Opción A** — implementar y verificar todo lo posible en este entorno (sin acceso a Azure/Atlas reales); el primer deploy real queda como acción manual del founder, documentada en `infra/scripts/bootstrap-oidc.md`, mismo patrón ya usado en Fases 15 (OIDC real)/25 (Stripe Test Mode real).
+
+**Hallazgo real durante la implementación (no un bug, una consecuencia de diseño detectada antes de comitear):** el default inicial de `container-app.bicep` (`maxReplicas: 3`, siguiendo el patrón estándar de autoscaling de Container Apps) habría invalidado silenciosamente el riesgo aceptado de Fase 26 ("rate limiting in-process irrelevante mientras corra una sola réplica") en cuanto se ejecutara un deploy real. Corregido fijando `maxReplicas: 1` deliberadamente, con un comentario explicando la dependencia — subir ese límite requiere primero coordinar `shared/rate_limit.py` entre réplicas, no es un ajuste aislado. `docs/security/threat-model.md` actualizado para reflejar esta salvaguarda en vez de solo "revisar en Fase 27".
+
+**Diseño técnico central (no bloqueante, resuelto por evidencia):** `main.bicep` despliega a scope de *resource group* (`az deployment group create`), no de suscripción — el resource group se crea una única vez, manualmente, durante el bootstrap, precisamente para que la identidad OIDC del pipeline recurrente nunca necesite más que `Contributor` acotado a ese resource group ya existente (mínimo privilegio, plan §14) en vez de un permiso de suscripción completa para poder "crear" el resource group en cada corrida. Migraciones ejecutadas vía `az containerapp exec` contra el contenedor api ya desplegado (reutiliza la `Settings` real que Bicep ya inyectó vía Key Vault/env vars) en vez de reconstruir esa configuración en el runner de GitHub Actions, que habría duplicado innecesariamente toda la validación fail-closed de `shared/config.py`. Módulo `container-app.bicep` genérico, reusado para api/worker (misma forma de recurso, solo difieren en ingress/imagen) en vez de dos archivos casi idénticos.
+
+**Decisiones no bloqueantes resueltas por evidencia (ninguna requirió al founder):**
+1. Azure Service Bus namespace tier Standard, no Premium (NFR-003 no lo justifica).
+2. MongoDB Atlas se aprovisiona manualmente (Atlas no es un recurso Azure, Bicep no puede cubrirlo; ADR 0004 restringe la IaC del proyecto a Bicep/Azure-only, sin justificación para introducir Terraform solo por este recurso externo) — documentado como runbook manual, no como código.
+3. Sin dominio personalizado para staging — el FQDN autogenerado de Container Apps es suficiente, candidato a Fase 28 si se expone a clientes reales.
+4. `deploy-staging.yml`/`deploy-prod.yml` como dos workflows separados (no uno parametrizado), aprovechando las reglas de protección nativas de GitHub Environments en vez de reconstruirlas en código.
+5. Las 4 colas reales de Service Bus (no solo las 2 que `docker/servicebus-emulator/config.json` define, desactualizado desde las Fases 23/24) — descubierto revisando qué topics despacha realmente el worker antes de escribir el módulo Bicep, no asumido del archivo del emulador local.
+
+**Archivos tocados:** `service/Dockerfile.api`/`Dockerfile.worker`/`.dockerignore` (nuevos); `service/procurawise/shared/config.py` (+`staging`, +`is_production_like`, 5 validadores ajustados); `service/procurawise/api/main.py` (HSTS vía `is_production_like`); `service/tests/unit/test_config.py` (+11 tests); `infra/bicep/main.bicep` (nuevo, orquestador) + `infra/bicep/modules/{log-analytics,container-registry,key-vault,container-apps-env,storage-account,service-bus,managed-identity,container-app}.bicep` (nuevos); `infra/params/{staging,production}.bicepparam` (nuevos); `infra/scripts/bootstrap-oidc.md` (nuevo); `.github/workflows/deploy-staging.yml`/`deploy-prod.yml` (nuevos); `docs/operations/deployment.md` (secciones completadas); `docs/security/threat-model.md` (2 referencias actualizadas); `docs/development/current-phase.md`/`session-handoff.md` (esta entrada + la retroactiva del hotfix, Bloque 0).
+
+**Resultado de pruebas:**
+- `make lint`/`make typecheck` → limpio (backend + frontend, 0 errores).
+- Backend unit (`make test-backend`) → 300 passed (+11 sobre la base de Fase 26).
+- `az bicep build`/`az bicep lint` (9 archivos `.bicep`) → sin errores/warnings.
+- `az bicep build-params` (2 `.bicepparam`) → sin errores.
+- `docker build` de ambas imágenes → exitoso; smoke test real contra Mongo/Azurite locales → `/health/live`/`/health/ready` en 200, worker despachando 4 colas.
+- `git diff --check` → limpio.
+- Backend integración Docker/frontend/E2E → sin cambios de alcance esta fase, verificados sin regresión.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere ADR — todas las decisiones son sobre arquitectura de despliegue ya aprobada (ADR 0004/0005/0015/0019), sin nueva infraestructura conceptual, sin cambio de patrón de comunicación ni de datastore.
+
+**Deuda técnica introducida:**
+- Ninguna material nueva — la limitación de rate limiting no-coordinado ya era deuda conocida de Fase 26; esta sesión la preserva deliberadamente (`maxReplicas: 1`) en vez de introducirla sin darse cuenta.
+- Firma/escaneo de imágenes ACR no implementado (no solicitado por el criterio de aceptación textual) — candidato a hardening posterior.
+
+**Instrucciones para la siguiente sesión:**
+- Acción pendiente inmediata (no una "siguiente fase" de código): el founder debe ejecutar `infra/scripts/bootstrap-oidc.md` (resource group, App Registration OIDC, secrets del repo, Key Vault, cluster Atlas, primer deploy real) para completar la mitad de ejecución real del criterio de aceptación de Fase 27. Registrar el resultado en `current-phase.md` cuando ocurra.
+- Próxima fase de código según `backlog.md`: **Fase 28**, UAT piloto 1-3 empresas — depende de Fase 27; no iniciar su planeación hasta que el deploy real de Fase 27 esté confirmado (el piloto necesita un ambiente real funcionando).
+- No tocar todavía: firma/escaneo de imágenes ACR; dominio personalizado; coordinación de rate limiting entre réplicas (sigue fijado a `maxReplicas: 1`); aprovisionar Azure OpenAI/ACS como recursos Bicep (siguen tratados como servicios externos vía Key Vault).
+- Housekeeping pendiente heredado, sin cambios: ramas `phase-14` a `phase-26` siguen sin borrarse; rama local `main` sigue detrás de `origin/main` (requiere `git pull`/fast-forward explícito).
+
+### Sesión — 2026-08-10 — Hotfix (post-Fase 26, pre-Fase 27): `eslint-plugin-react-hooks` 5.2.0→7.1.1 (Dependabot) + bug real de re-suscripción en `useSyncExternalStore`
+
+**Resumen:** Sesión disparada por un check `frontend` fallido en el PR de Dependabot que sube `eslint-plugin-react-hooks` a 7.1.1, contra un bug real (`react-hooks/refs`) en `useReportJobStatus.ts`. El founder autorizó investigar/corregir; el alcance real resultó ser 88 errores en 15 archivos (3 reglas nuevas de la v7). El founder, vía `AskUserQuestion`, eligió "corregir todo ahora en esta rama" sobre las alternativas (unblock mínimo, o no subir la versión todavía). Ejecutado como una serie de fixes puntuales verificados individualmente, no por bloques de plan — sin sesión de Plan Mode dedicada (a diferencia de toda fase numerada).
+
+**Bug real encontrado y corregido durante la propia corrección (no solo lint):** los 4 hooks de polling migrados a `useSyncExternalStore` (`useReportJobStatus`, `useAiSuggestionJobStatus`, `useAiScoreSuggestionJobStatus`, `usePurchaseStatus`) memoizaban su función `subscribe` con deps `[]`. Para un id que empieza `null` (caso común: `reportId`/`jobId`), React invoca `subscribe` una única vez en el montaje, capturando `controllerRef.current === null` permanentemente — cuando el controller real se construye después (en un efecto separado, tras el id volverse no-nulo), `subscribe` nunca se vuelve a invocar (su identidad no cambió) y el polling queda silenciosamente sin ningún listener. Diagnosticado comparando `ReportsPage.test.tsx` contra el código pre-fix vía `git stash` (4/4 pasaba antes, confirmando regresión real, no flaky preexistente). Corregido dando a `subscribe` las mismas deps que el efecto de construcción del controller.
+
+**Decisiones no bloqueantes resueltas por evidencia (ninguna requirió al founder salvo la autorización inicial de alcance):**
+1. `src/api/client.ts` (generado por orval) exento de `react-hooks/refs`/`react-hooks/immutability` vía override en `eslint.config.js`, no editado a mano.
+2. `useQnaPolling`/`useNotificationsPolling`: ref de callback sincronizado en su propio efecto sin deps, no escrito directamente durante el render (idioma nuevo requerido por `react-hooks/refs` v7).
+3. `useAnswerAutosave`/`EconomicWeightsForm`/`EvaluationWizard`/`EconomicAssessmentPanel`: patrón "adjust state during render" (React docs) en vez de `setState` síncrono dentro de un efecto.
+4. `AuthCallbackPage.tsx`: `eslint-disable` puntual y documentado (el side-effect impuro de `history.replaceState` no es apto para un inicializador perezoso de `useState` bajo el doble-invocado de Strict Mode).
+5. `AuthContext.tsx`: bug real de orden de declaración — `proceedFromPreSessionToken` capturaba `switchTenant` por closure antes de su propia declaración, con `react-hooks/exhaustive-deps` deshabilitado ocultando el riesgo de closure obsoleto. Corregido reordenando y con el array de dependencias real.
+
+**Archivos tocados:** `eslint.config.js` (+override `client.ts`), `src/features/reports/hooks/useReportJobStatus.ts`, `src/features/evaluations/hooks/{useAiSuggestionJobStatus,useAiScoreSuggestionJobStatus,useQnaPolling}.ts`, `src/features/notifications/hooks/useNotificationsPolling.ts`, `src/features/billing/hooks/usePurchaseStatus.ts`, `src/features/vendor-portal/hooks/useAnswerAutosave.ts`, `src/actor/ActorContext.tsx`, `src/auth/{AuthCallbackPage,AuthContext}.tsx`, `src/features/evaluations/wizard/{EconomicWeightsForm,EvaluationWizard}.tsx`, `src/features/scoring/components/EconomicAssessmentPanel.tsx`.
+
+**Resultado de pruebas:**
+- `pnpm lint` → 0 errores, 86 warnings (línea base sin cambio respecto a Fase 26).
+- `pnpm typecheck` → limpio.
+- `pnpm test` → 212/212 (6 fallaban antes de corregir el bug de `subscribe`, en `ReportsPage.test.tsx`/`ScoringPage.test.tsx`/`AiSuggestRequirementsDialog.test.tsx`).
+- `make test-e2e` → 20/20 (incluye `report-generation.spec.ts`/`ai-score-suggestions.spec.ts`, que ejercitan los hooks corregidos).
+- `pnpm format` (prettier) → 1 fallo post-PR (CI, `EconomicAssessmentPanel.tsx`) corregido en un segundo commit dentro del mismo PR antes de fusionar.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Ninguna requiere ADR — todos los fixes son correcciones de un patrón de hooks ya establecido (`useSyncExternalStore`/ADR implícito de Fase 23), sin tocar arquitectura, base de datos, ni patrón de comunicación.
+
+**Deuda técnica introducida:**
+- Ninguna nueva. Deuda pre-existente corregida (el bug de `subscribe` afectaba a 4 hooks ya en producción desde Fases 23/25).
+
+**Deuda documental encontrada (no introducida por esta sesión, pero solo detectada durante la planeación de Fase 27):** esta sesión no actualizó `current-phase.md`/`session-handoff.md` en su momento — incumple CLAUDE.md §10 literalmente ("Al cerrar cualquier sesión de trabajo en código... añade una entrada en `session-handoff.md`"). Esta entrada y la sección correspondiente de `current-phase.md` son retroactivas, agregadas como Bloque 0 de la sesión de implementación de Fase 27.
+
+**Instrucciones para la siguiente sesión:**
+- Próxima fase según `backlog.md` (columna "Depende de"): **Fase 27**, Infra Azure real (Bicep) + CI/CD GitHub Actions OIDC staging→prod — depende de Fase 26 (✅ cerrada, sin dependencia de este hotfix).
+- No tocar todavía: nada específico de este hotfix queda pendiente — cierre completo.
+- Housekeeping pendiente heredado, sin cambios: ramas `phase-14` a `phase-26` siguen sin borrarse; rama local `main` quedó 1 commit detrás de `origin/main` tras este PR (requiere `git pull`/fast-forward).
+
 ### Sesión — 2026-08-09 — Fase 26 (E11, Bloque 6 "Hardening y despliegue"): Hardening (rate limiting, CSRF, headers, dependency/secret scanning, WCAG 2.1 AA, performance, backup/restore) + cierre formal de `threat-model.md`
 
 **Resumen:** Sesión que comenzó en Plan Mode exclusivo de solo lectura: confirmó el cierre formal de Fase 25 con evidencia de Git/GitHub (`origin/main` en `befa5f9`, squash-merge de PR #39), identificó Fase 26 por evidencia documental cruzada de `backlog.md`/`roadmap.md`/`threat-model.md` (dependencia declarada Fase 24, no Fase 25), y produjo un plan técnico completo con 2 preguntas genuinamente bloqueantes (nivel de verificación de backup/restore dado que Atlas M0 no soporta backups gestionados; alcance de la auditoría WCAG 2.1 AA sobre 35 rutas/3 portales). El founder resolvió las 2 con la opción recomendada en cada caso. Tras la autorización ("Autorizo avanzar con la implementacion del plan"), ejecución completa en 8 bloques incrementales (CORS+headers, rate limiting, CSRF/documentación, dependency scanning+SBOM, WCAG 2.1 AA, performance k6, backup/restore, cierre de `threat-model.md`), cada uno verificado contra Docker/E2E real antes de avanzar.

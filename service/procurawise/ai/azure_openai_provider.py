@@ -71,6 +71,12 @@ class AzureOpenAIProvider:
         last_error: Exception | None = None
         for attempt in range(1, _MAX_ATTEMPTS + 1):
             try:
+                # max_completion_tokens, not max_tokens, and no `temperature`
+                # at all: the deployed model rejects both max_tokens and any
+                # non-default temperature with a 400 (confirmed against the
+                # real Azure OpenAI resource in staging) - known constraints
+                # of reasoning-family Azure OpenAI models, which only accept
+                # their own default temperature (1).
                 response = self._client.chat.completions.create(
                     model=self._deployment,
                     messages=[
@@ -85,8 +91,7 @@ class AzureOpenAIProvider:
                             "strict": True,
                         },
                     },
-                    max_tokens=request.max_tokens,
-                    temperature=request.temperature,
+                    max_completion_tokens=request.max_tokens,
                     timeout=request.timeout_seconds,
                 )
                 break

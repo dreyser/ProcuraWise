@@ -15,7 +15,17 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore", populate_by_name=True
     )
 
-    environment: Literal["local", "test", "production"] = "local"
+    # Fase 27 (ADR 0004/0019): "staging" is its own value, not a reuse of
+    # "production" - Stripe must never accept a live key in staging (a
+    # secondary pre-production environment used for UAT rehearsal, plan
+    # Bloqueante #1 Opcion A), which reusing "production" literally would
+    # have broken (see _reject_live_stripe_key_outside_production below,
+    # which only exempts environment=="production" and therefore keeps
+    # rejecting live keys in staging automatically, unchanged). See
+    # `is_production_like` for the validators that *do* treat staging and
+    # production identically (OIDC/AI/notifications real config, no
+    # in-memory queue, no default JWT secret).
+    environment: Literal["local", "test", "staging", "production"] = "local"
     log_level: str = "info"
 
     mongodb_uri: str = "mongodb://localhost:27017"
@@ -78,7 +88,14 @@ class Settings(BaseSettings):
     # Pinned, not left on the SDK default - same rationale as
     # storage_api_version above: an unpinned default can change under us
     # between SDK releases without a deliberate compatibility check.
-    azure_openai_api_version: str = "2026-01-01-preview"
+    # 2024-10-21 is the current GA release (Microsoft Learn) and is confirmed
+    # to support Structured Outputs (response_format: json_schema,
+    # strict=True), which azure_openai_provider.py already relies on. A
+    # preview version discovered here previously (2026-01-01-preview) 404'd
+    # against the real Azure OpenAI resource in staging - do not swap back to
+    # an unverified preview version without re-confirming against a real
+    # resource first.
+    azure_openai_api_version: str = "2024-10-21"
     ai_request_timeout_seconds: int = 30
     # Same 1-year default as audit_event_retention_days (ADR 0016) but a
     # separate field - AIExecution is its own collection with its own
@@ -263,20 +280,35 @@ class Settings(BaseSettings):
     def cors_allowed_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
+    @property
+    def is_production_like(self) -> bool:
+        """Fase 27: "staging" is Azure real, similar to production
+        (deployment.md) - it must fail closed on the same missing-real-
+        config mistakes production does (no in-memory queue, no default JWT
+        secret, no missing OIDC/AI/notifications credentials), so a
+        misconfigured staging deploy is caught the same way a misconfigured
+        production one would be. Deliberately NOT used by
+        _reject_live_stripe_key_outside_production - staging must keep
+        rejecting live Stripe keys exactly like local/test do, never be
+        treated as an environment where a live key is expected."""
+        return self.environment in ("staging", "production")
+
     @model_validator(mode="after")
     def _reject_memory_queue_in_production(self) -> Self:
-        if self.environment == "production" and self.queue_backend == "memory":
-            raise ValueError("queue_backend=memory no está permitido cuando environment=production")
+        if self.is_production_like and self.queue_backend == "memory":
+            raise ValueError(
+                "queue_backend=memory no está permitido cuando environment=staging|production"
+            )
         return self
 
     @model_validator(mode="after")
     def _require_real_auth_config_in_production(self) -> Self:
-        if self.environment != "production":
+        if not self.is_production_like:
             return self
         if self.jwt_secret == _INSECURE_DEV_JWT_SECRET or len(self.jwt_secret) < 32:
             raise ValueError(
                 "jwt_secret debe configurarse explícitamente (>=32 caracteres, "
-                "distinto del default de desarrollo) cuando environment=production"
+                "distinto del default de desarrollo) cuando environment=staging|production"
             )
         missing = [
             name
@@ -290,14 +322,14 @@ class Settings(BaseSettings):
         ]
         if missing:
             raise ValueError(
-                f"faltan credenciales oidc requeridas cuando environment=production: "
+                f"faltan credenciales oidc requeridas cuando environment=staging|production: "
                 f"{', '.join(missing)}"
             )
         return self
 
     @model_validator(mode="after")
     def _require_real_ai_config_in_production(self) -> Self:
-        if self.environment != "production":
+        if not self.is_production_like:
             return self
         missing = [
             name
@@ -310,22 +342,23 @@ class Settings(BaseSettings):
         ]
         if missing:
             raise ValueError(
-                f"faltan credenciales de Azure OpenAI requeridas cuando environment=production: "
-                f"{', '.join(missing)}"
+                "faltan credenciales de Azure OpenAI requeridas cuando "
+                f"environment=staging|production: {', '.join(missing)}"
             )
         return self
 
     @model_validator(mode="after")
     def _require_real_notification_config_in_production(self) -> Self:
-        """Fase 24 (ADR 0024): prod-only-required (azure_openai-style), not
+        """Fase 24 (ADR 0024): prod-like-required (azure_openai-style), not
         fail-closed-in-every-environment (foundry_web_search-style) - unlike
         Foundry/Bing Grounding (ADR 0011), there is no documented legal-
         approval gate on transactional email, and notifications fire
         automatically off routine domain mutations every dev/CI run already
         exercises - forcing real ACS credentials into every local .env for a
         feature no local workflow can test against a real service anyway
-        would only add friction, not safety."""
-        if self.environment != "production":
+        would only add friction, not safety. Fase 27: applies to `staging`
+        too, via `is_production_like` - see that property's docstring."""
+        if not self.is_production_like:
             return self
         if not self.notifications_email_enabled:
             return self
@@ -340,19 +373,24 @@ class Settings(BaseSettings):
         if missing:
             raise ValueError(
                 f"faltan credenciales de Azure Communication Services requeridas cuando "
-                f"environment=production y notifications_email_enabled=true: "
+                f"environment=staging|production y notifications_email_enabled=true: "
                 f"{', '.join(missing)}"
             )
         return self
 
     @model_validator(mode="after")
     def _require_real_billing_config_in_production(self) -> Self:
-        """Fase 25 (ADR 0025): prod-only-required (azure_openai/notifications-
+        """Fase 25 (ADR 0025): prod-like-required (azure_openai/notifications-
         style), not fail-closed-in-every-environment (foundry-style) - no
         documented legal-approval gate exists for Stripe (unlike Foundry/Bing
         Grounding, ADR 0011), and no local Stripe sandbox emulator exists for
-        any environment to meaningfully test against anyway."""
-        if self.environment != "production":
+        any environment to meaningfully test against anyway. Fase 27: applies
+        to `staging` too (if billing is enabled there for UAT rehearsal it
+        must still be fully configured), but
+        `_reject_live_stripe_key_outside_production` below keeps staging
+        limited to `sk_test_` keys regardless - staging never gets a path to
+        a live key."""
+        if not self.is_production_like:
             return self
         if not self.billing_enabled:
             return self
@@ -367,7 +405,7 @@ class Settings(BaseSettings):
         ]
         if missing:
             raise ValueError(
-                f"faltan credenciales de Stripe requeridas cuando environment=production y "
+                f"faltan credenciales de Stripe requeridas cuando environment=staging|production y "
                 f"billing_enabled=true: {', '.join(missing)}"
             )
         return self
