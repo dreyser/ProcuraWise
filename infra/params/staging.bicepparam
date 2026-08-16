@@ -18,6 +18,8 @@ param namePrefix = 'procurawise'
 
 param apiImage = 'procurawiseacrstaging.azurecr.io/procurawise-api:placeholder'
 param workerImage = 'procurawiseacrstaging.azurecr.io/procurawise-worker:placeholder'
+// Fase 28 - mismo placeholder que api/worker, sobrescrito por deploy-staging.yml.
+param webImage = 'procurawiseacrstaging.azurecr.io/procurawise-web:placeholder'
 
 param storageContainerNames = [
   'procurawise-staging'
@@ -53,11 +55,14 @@ param plainEnv = [
   // deploys). Coincide exactamente con el redirect URI ya registrado en
   // ambos App Registrations de OIDC.
   { name: 'OIDC_REDIRECT_BASE_URL', value: 'https://procurawise-api-staging.blueforest-f099b0ce.eastus2.azurecontainerapps.io' }
-  // Sin resolver deliberadamente (Gap #7): no existe todavía ninguna
-  // decisión de hosting para el frontend en este Bicep (sin Static Web App
-  // ni equivalente) - inventar un valor aquí fabricaría infraestructura
-  // inexistente. No bloquea IA/Billing/health.
-  { name: 'FRONTEND_BASE_URL', value: 'https://REPLACE_ME_FRONTEND_FQDN' }
+  // Fase 28: resuelto - mismo patrón que OIDC_REDIRECT_BASE_URL arriba.
+  // `webAppName = '${namePrefix}-web-${environmentName}'` (main.bicep) da
+  // "procurawise-web-staging"; el dominio por defecto del Container Apps
+  // Environment ("blueforest-f099b0ce.eastus2.azurecontainerapps.io") ya es
+  // real y estable (confirmado por el FQDN real de la API arriba) - no
+  // cambia entre deploys mientras no se recree el entorno. Verificar contra
+  // el `webFqdn` real que emite `main.bicep` en el primer deploy de esta fase.
+  { name: 'FRONTEND_BASE_URL', value: 'https://procurawise-web-staging.blueforest-f099b0ce.eastus2.azurecontainerapps.io' }
   { name: 'AUDIT_EVENT_RETENTION_DAYS', value: '365' }
   // Recurso real procurawise-openai-staging (rg-procurawise-staging),
   // deployment gpt-5-mini - confirmado funcionando contra el API real de
@@ -96,8 +101,8 @@ param plainEnv = [
   { name: 'BILLING_WEBHOOK_EVENT_RETENTION_DAYS', value: '30' }
   // CORS: mismo dominio de la SPA de staging únicamente, nunca vacío en
   // Azure real (deny-all por defecto solo tiene sentido cuando no hay SPA
-  // real que llamar - Fase 26).
-  { name: 'CORS_ALLOWED_ORIGINS', value: 'https://REPLACE_ME_FRONTEND_FQDN' }
+  // real que llamar - Fase 26). Fase 28: mismo FQDN que FRONTEND_BASE_URL.
+  { name: 'CORS_ALLOWED_ORIGINS', value: 'https://procurawise-web-staging.blueforest-f099b0ce.eastus2.azurecontainerapps.io' }
   { name: 'RATE_LIMIT_LOGIN_MAX_ATTEMPTS', value: '5' }
   { name: 'RATE_LIMIT_LOGIN_WINDOW_SECONDS', value: '60' }
   { name: 'RATE_LIMIT_AI_MAX_REQUESTS', value: '10' }

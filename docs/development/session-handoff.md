@@ -32,6 +32,44 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-16 — Fase 28, Bloque A: frontend real (Container App) + config pública resuelta
+
+**Resumen:** Sesión de planeación (Plan Mode) para identificar la siguiente fase del roadmap tras el cierre operacional de Azure Staging, seguida de autorización explícita del founder para implementar el plan en la misma sesión ("Autorizo avanzar con la implementacion de este plan"). La investigación encontró que Fase 28 ("UAT piloto 1-3 empresas, fixes, lanzamiento controlado") era un backlog de una sola línea sin descripción expandida en ningún documento, y que el verdadero bloqueante no documentado era que el frontend nunca tuvo hosting real: `frontend_base_url`/`cors_allowed_origins` seguían en `http://localhost:5173` en staging, rompiendo 6 puntos de uso reales (redirect OIDC, invitación de proveedor ×3, Stripe Checkout success/cancel ×2). Sobrevivió 1 pregunta realmente bloqueante (hosting del frontend, sin decisión en ningún documento/ADR), resuelta por el founder en la misma sesión: tercer Container App reutilizando el módulo Bicep genérico de Fase 27. Implementado y verificado localmente el Bloque A completo (frontend real); Bloques B (onboarding piloto) y C (ciclo de fixes reactivo) quedan para cuando exista un deploy real y un piloto real usando el producto.
+
+**Archivos tocados:**
+- `apps/web/Dockerfile.web`, `apps/web/nginx.conf`, `apps/web/.dockerignore` (nuevos) — imagen del frontend, build multi-stage, runtime nginx estático sin backend.
+- `apps/web/src/lib/http.ts`, `apps/web/src/vite-env.d.ts` (nuevo) — `resolveUrl()` antepone `VITE_API_BASE_URL` (vacío por defecto) a las URLs relativas que `apiFetch` recibe de `orval`.
+- `infra/bicep/modules/container-app.bicep` — nuevos params `livenessPath`/`readinessPath` (default sin cambios).
+- `infra/bicep/main.bicep` — nuevo param `webImage`, identidad `web-identity` (solo AcrPull), módulo `webApp`, output `webFqdn`.
+- `infra/params/staging.bicepparam` — `FRONTEND_BASE_URL`/`CORS_ALLOWED_ORIGINS` resueltos al FQDN real predicho del Container App del frontend (mismo dominio ya confirmado real por `OIDC_REDIRECT_BASE_URL`); nuevo `webImage` placeholder. `infra/params/production.bicepparam` — solo `webImage` placeholder (resto sigue `REPLACE_ME`, sin entorno real todavía).
+- `.github/workflows/deploy-staging.yml`, `.github/workflows/deploy-prod.yml` — nuevo step de build+push+deploy de la imagen `web`, nuevo health check del `webFqdn`.
+- `docs/architecture/decisions/0019-azure-container-apps-hosting.md` — nota de alcance (frontend como tercer Container App), sin reabrir la decisión de plataforma.
+- `docs/operations/deployment.md` — nueva sección "Frontend (SPA, Fase 28)".
+- `docs/development/current-phase.md`, `docs/development/backlog.md` — entrada de esta fase + corrección de la fila stale de Fase 27.
+
+**Resultado de pruebas:**
+- `docker build -f apps/web/Dockerfile.web apps/web` → exitoso; smoke test (`docker run`) → `GET /` y `GET /evaluations/123` (ruta SPA arbitraria) → `200` ambos (fallback confirmado).
+- `az bicep build`/`az bicep lint` sobre `main.bicep` → sin errores ni warnings.
+- `az bicep build-params` sobre `staging.bicepparam`/`production.bicepparam` → sin errores.
+- YAML de ambos workflows validado (`ruby -ryaml`).
+- `make lint`/`make typecheck` (backend + frontend) → limpio (frontend: 0 errores, 86 warnings, misma línea base que Fase 26; backend: sin issues).
+- `make test-backend` → **304 passed** (sin cambio — Bloque A no tocó código backend).
+- `pnpm test` (frontend) → **212/212 passed**.
+- `make contracts` → sin diff (Bloque A no tocó el contrato OpenAPI/orval; advertencia cosmética de esbuild sobre `import.meta` en el bundling interno de orval del mutator, no afecta el build real de Vite ni el cliente generado).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):**
+- Hosting del frontend como tercer Container App — resuelto como nota de alcance de ADR 0019 existente, no un ADR nuevo (el founder lo consideró una extensión, no una reapertura de la decisión de plataforma).
+
+**Deuda técnica introducida:**
+- Ninguna nueva. Deuda ya conocida que este Bloque A no resuelve: login OIDC real por navegador nunca ejercido end-to-end (ahora sí desbloqueado técnicamente, pendiente de ejecución real); rate limiting de IA/billing checkout sin probar empíricamente.
+
+**Instrucciones para la siguiente sesión:**
+- Ejecutar el deploy real de `deploy-staging.yml` con estos cambios; verificar `webFqdn` responde `200` y que el login OIDC completo por navegador funciona contra el dominio real (nunca ejercido hasta ahora).
+- Tras confirmar el deploy real, dar de alta 1-3 tenants piloto vía `provisioning_cli.py` (Bloque B) y empezar el ciclo de uso real / fixes reactivo (Bloque C) — cada defecto real en su propia rama `fix/*`, mismo patrón que la remediation de Fase 27.
+- No tocar todavía: producción (sin Container Apps Environment real, `FRONTEND_BASE_URL`/`CORS_ALLOWED_ORIGINS` de `production.bicepparam` siguen `REPLACE_ME`), captura de feedback in-app (decisión recomendada explícita de no construirla a esta escala).
+
+---
+
 ### Sesión — 2026-08-16 — Validación operacional real de Azure Staging (post-Fase 27, cierre de Fase 25 pendiente)
 
 **Resumen:** Chat operacional (no de desarrollo — sin funcionalidad nueva, sin refactors, sin cambios de arquitectura) dedicado a validar con evidencia real, checkpoint por checkpoint, que el deployment producido por el pipeline real (`deploy-staging.yml` vía `workflow_dispatch`) queda completamente sano. Confirmó los 5 defectos de la sesión de remediation del 2026-08-14 corregidos en producción real, encontró y corrigió 4 defectos adicionales (#6-9, todos descubiertos únicamente por tener acceso a Azure/Stripe reales), y cerró la demo manual de Stripe Test Mode que Fase 25 dejó pendiente — incluyendo replay protection confirmado con el botón "Resend" real del Dashboard de Stripe.

@@ -17,6 +17,11 @@ param acrLoginServer string
 param image string
 param hasIngress bool
 param targetPort int = 8000
+// Fase 28: parametrizado para reusar este módulo también para el frontend
+// estático (nginx, sin `/health/live`/`/health/ready` propios de la API -
+// ver Dockerfile.web) - default sin cambios para api/worker.
+param livenessPath string = '/health/live'
+param readinessPath string = '/health/ready'
 // Fija en 1 réplica por defecto - deliberado, no un olvido. shared/rate_limit.py
 // (Fase 26) es in-process y no coordina su conteo entre réplicas; el
 // threat-model.md documenta ese gap como "irrelevante mientras Container
@@ -92,7 +97,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 {
                   type: 'Liveness'
                   httpGet: {
-                    path: '/health/live'
+                    path: livenessPath
                     port: targetPort
                   }
                   initialDelaySeconds: 5
@@ -101,7 +106,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
                 {
                   type: 'Readiness'
                   httpGet: {
-                    path: '/health/ready'
+                    path: readinessPath
                     port: targetPort
                   }
                   initialDelaySeconds: 5

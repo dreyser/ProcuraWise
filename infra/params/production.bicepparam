@@ -14,6 +14,8 @@ param namePrefix = 'procurawise'
 
 param apiImage = 'procurawiseacrproduction.azurecr.io/procurawise-api:placeholder'
 param workerImage = 'procurawiseacrproduction.azurecr.io/procurawise-worker:placeholder'
+// Fase 28 - mismo placeholder que api/worker, sobrescrito por deploy-prod.yml.
+param webImage = 'procurawiseacrproduction.azurecr.io/procurawise-web:placeholder'
 
 param storageContainerNames = [
   'procurawise-production'

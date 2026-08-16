@@ -28,6 +28,9 @@ param tenantId string = subscription().tenantId
 @description('Imagen completa (con tag) publicada en ACR por el paso de build del workflow - p. ej. "procurawiseacr.azurecr.io/procurawise-api:sha-abc123".')
 param apiImage string
 param workerImage string
+// Fase 28 (ADR 0019, nota de alcance): tercer Container App, sirve el
+// build estático del SPA (nginx, sin backend propio - ver Dockerfile.web).
+param webImage string
 
 @description('Nombres de contenedores Blob a crear - ver shared/config.py (storage_container_name/documents_container_name/reports_container_name).')
 param storageContainerNames array
@@ -43,8 +46,10 @@ var storageAccountName = replace('${namePrefix}st${environmentName}', '-', '')
 var serviceBusName = '${namePrefix}-sb-${environmentName}'
 var apiIdentityName = '${namePrefix}-id-api-${environmentName}'
 var workerIdentityName = '${namePrefix}-id-worker-${environmentName}'
+var webIdentityName = '${namePrefix}-id-web-${environmentName}'
 var apiAppName = '${namePrefix}-api-${environmentName}'
 var workerAppName = '${namePrefix}-worker-${environmentName}'
+var webAppName = '${namePrefix}-web-${environmentName}'
 
 module logAnalytics 'modules/log-analytics.bicep' = {
   name: 'log-analytics'
@@ -114,6 +119,14 @@ module workerIdentity 'modules/managed-identity.bicep' = {
   }
 }
 
+module webIdentity 'modules/managed-identity.bicep' = {
+  name: 'web-identity'
+  params: {
+    location: location
+    name: webIdentityName
+  }
+}
+
 // RBAC mínimo: AcrPull (pull de imágenes) + Key Vault Secrets User (leer
 // valores de secretos referenciados) para cada identidad - nunca
 // Contributor/Owner sobre estos recursos (CLAUDE.md §4, mínimo privilegio
@@ -147,6 +160,19 @@ resource workerAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   properties: {
     roleDefinitionId: acrPullRoleId
     principalId: workerIdentity.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Fase 28: el frontend no lee ningún secreto de Key Vault en runtime
+// (VITE_API_BASE_URL se hornea en build - Dockerfile.web) - solo necesita
+// AcrPull para bajar su propia imagen, nunca Key Vault Secrets User.
+resource webAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acrRef.id, webIdentityName, acrPullRoleId)
+  scope: acrRef
+  properties: {
+    roleDefinitionId: acrPullRoleId
+    principalId: webIdentity.outputs.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -253,6 +279,29 @@ module workerApp 'modules/container-app.bicep' = {
   dependsOn: [workerAcrPull, workerKvSecretsUser, storageConnectionStringSecret, serviceBusConnectionStringSecret]
 }
 
+// Fase 28 (ADR 0019, nota de alcance): reusa el mismo módulo genérico de
+// api/worker - sin Key Vault secrets, sin plainEnv (SPA estática, toda su
+// config va horneada en el build de la imagen, no en runtime), probes
+// apuntando a `/` en vez de `/health/*` (nginx no tiene esos paths - ver
+// modules/container-app.bicep).
+module webApp 'modules/container-app.bicep' = {
+  name: 'web-app'
+  params: {
+    location: location
+    name: webAppName
+    containerAppsEnvironmentId: containerAppsEnvironment.outputs.id
+    userAssignedIdentityId: webIdentity.outputs.id
+    acrLoginServer: containerRegistry.outputs.loginServer
+    image: webImage
+    hasIngress: true
+    targetPort: 80
+    livenessPath: '/'
+    readinessPath: '/'
+  }
+  dependsOn: [webAcrPull]
+}
+
 output apiFqdn string = apiApp.outputs.fqdn
+output webFqdn string = webApp.outputs.fqdn
 output keyVaultName string = keyVault.outputs.name
 output acrLoginServer string = containerRegistry.outputs.loginServer

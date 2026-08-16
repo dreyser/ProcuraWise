@@ -1,0 +1,36 @@
+# Fase 28 (ADR 0019, nota de alcance): imagen del frontend (SPA React+TS)
+# para Azure Container Apps - mismo entorno ya provisionado en Fase 27 para
+# api/worker, sin introducir un tipo de recurso Azure nuevo. Build multi-
+# stage: `pnpm build` en una etapa Node efímera, runtime final es un
+# servidor HTTP mínimo (nginx) sirviendo únicamente archivos estáticos - sin
+# proxy, sin lógica de backend, para permitir migrar después a Static Web
+# Apps/CDN sin rediseñar nada.
+
+FROM node:22-slim AS builder
+WORKDIR /app
+
+# VITE_API_BASE_URL se hornea en el bundle en tiempo de build (Vite expone
+# cualquier env `VITE_*` presente durante `vite build` vía import.meta.env)
+# - vacío por defecto, que preserva el comportamiento actual de dev/CI
+# (mismo origen, sin prefijo - ver src/lib/http.ts).
+ARG VITE_API_BASE_URL=""
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
+RUN corepack enable
+
+# Capa de dependencias separada del código propio, mismo motivo que
+# Dockerfile.api: maximiza el cache de build de Docker/ACR.
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+RUN pnpm build
+
+FROM nginx:1.27-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# nginx:alpine ya corre como root por defecto para poder bindear el puerto
+# 80, pero no necesita ningún privilegio adicional; sin secretos horneados
+# (VITE_API_BASE_URL es un origen público, no un secreto).
+EXPOSE 80
