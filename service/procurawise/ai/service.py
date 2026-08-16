@@ -56,7 +56,15 @@ PROMPT_TEMPLATE = "requirement_generation"
 PROMPT_VERSION = "v2"
 JOB_TOPIC = "ai-requirement-generation"
 
-_MAX_TOKENS = 2000
+
+# Defecto #9 (validación real de staging): confirmado empíricamente contra
+# el deployment real (gpt-5-mini, familia de razonamiento) que 2000 nunca
+# alcanza - el modelo consume el presupuesto entero en razonamiento interno
+# (invisible) antes de escribir el JSON de salida, devolviendo
+# finish_reason="length" y un output vacío. Con 8000 el mismo prompt termina
+# con finish_reason="stop" usando solo ~1929 completion_tokens en total - hay
+# margen real, no es solo "subir el número hasta que funcione una vez".
+_MAX_TOKENS = 8000
 _MAX_GENERATION_ATTEMPTS = 2
 
 # Fase 18 (ADR 0022): evaluacion asistida por IA - a second use_case sharing
@@ -67,7 +75,10 @@ SCORE_SUGGESTION_PROMPT_VERSION = "v1"
 SCORE_SUGGESTION_JOB_TOPIC = "ai-score-suggestion"
 # Higher than requirement-generation's _MAX_TOKENS - a single job can cover
 # every unscored requirement of a proposal's section, not just one item.
-_SCORE_SUGGESTION_MAX_TOKENS = 3000
+# Same reasoning-model token-budget headroom as _MAX_TOKENS above (defecto
+# #9) - kept proportionally larger, matching the original 1.5x ratio to
+# requirement-generation's own (now-corrected) budget.
+_SCORE_SUGGESTION_MAX_TOKENS = 12000
 
 
 def _render_context(snippets: list[ResearchSnippet]) -> str:
