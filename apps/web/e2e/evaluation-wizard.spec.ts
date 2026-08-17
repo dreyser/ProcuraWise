@@ -72,8 +72,16 @@ test.describe('evaluation wizard (Fase 10)', () => {
     })
     await page.getByRole('button', { name: 'Siguiente' }).click()
 
-    // Step 3: vendors - real catalog from GET /vendor-organizations.
+    // Step 3: vendors - real catalog from GET /vendor-organizations. The
+    // "dar de alta" form (CreateVendorOrganizationForm, already exercised
+    // end to end in vendor-onboarding.spec.ts via the standalone /vendors
+    // tab) must also be reachable from inside the wizard - a real pilot gap
+    // found during Fase 28 UAT: a first-time owner with an empty catalog had
+    // no way to create a vendor without leaving the wizard.
     await expect(page.getByRole('heading', { name: 'Vincular proveedor' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Dar de alta un proveedor nuevo' }),
+    ).toBeVisible()
     await page.getByRole('button', { name: 'Vincular' }).click()
     await expect(page.getByText('Proveedores vinculados (1 / 6)')).toBeVisible()
     await page.getByRole('button', { name: 'Siguiente' }).click()

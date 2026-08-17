@@ -1,6 +1,22 @@
 # Fase actual
 
-## Fase 28 — Fix: login OIDC redirigía a la URL relativa del frontend en vez de la API (defecto real #1 del piloto)
+## Fase 28 — Fixes: wizard sin forma de dar de alta un proveedor nuevo (defecto real #2) + UX del modal de sugerencias de IA (defecto real #3)
+
+**Estado: ✅ Corregidos y verificados localmente (2026-08-16) — redeploy real pendiente.** Defectos #2 y #3 del piloto real, encontrados por el founder creando la primera evaluación real de punta a punta (Bloque C).
+
+**Defecto #2 (bloqueante para el founder — no podía avanzar el wizard):** el paso 3 del wizard ("Vincular proveedor") solo permite vincular proveedores ya existentes en el catálogo del tenant — con el catálogo vacío (tenant piloto recién creado), el mensaje "Sin proveedores disponibles / No hay proveedores en el catálogo del tenant" no ofrecía ninguna forma de crear uno, dejando el wizard sin salida. Causa raíz: `CreateVendorOrganizationForm` (Fase 15) — que sí crea un `VendorOrganization` e invita a su contacto principal en un solo paso — solo estaba cableado en la página standalone `/evaluations/:id/vendors` (`VendorsPage.tsx`), nunca en `WizardStepVendors.tsx` (paso 3 del wizard), que solo importaba `VendorCatalogPicker`. Ninguna decisión de diseño documentada explica la omisión — es un gap real de Fase 15 nunca cerrado, no una limitación intencional (`POST /api/v1/vendor-organizations` ya está gateado a `evaluation_owner`, y el wizard entero ya está gateado a `isOwner` en `EvaluationWizard.tsx`, así que no había ninguna razón de autorización para omitirlo del wizard). Corregido reusando `CreateVendorOrganizationForm`/`InviteLinkNotice` dentro de `WizardStepVendors.tsx`, mismo patrón exacto que `VendorsPage.tsx` (crear vincula automáticamente el nuevo proveedor a la evaluación).
+
+**Defecto #3 (UX, no bloqueante):** en `AiSuggestRequirementsDialog.tsx` (Fase 13/14), (a) el estado de carga mientras la IA genera candidatos no tenía ningún indicador visual de "procesando" más allá de texto plano — corregido añadiendo un ícono `Loader2` (`lucide-react`) con `animate-spin` al componente compartido `LoadingState` (33 usos en toda la app, mejora consistente en todos); (b) la lista de candidatos generados no tenía límite de altura ni scroll propio — con varios candidatos (la validación de Fase 14 llegó a generar 10 reales) el modal se desbordaba del viewport sin forma de llegar a los botones del footer ("Aceptar seleccionados"/"Cancelar"). Corregido con `max-h-[60vh] overflow-y-auto` en el contenedor de candidatos, mismo patrón ya usado en `ImportRequirementsDialog.tsx` para su propio contenido de longitud variable — un patrón ya establecido en el codebase, simplemente no aplicado aquí.
+
+**Archivos tocados:**
+- `apps/web/src/features/evaluations/wizard/WizardStepVendors.tsx` — nueva sección "Dar de alta un proveedor nuevo".
+- `apps/web/src/components/LoadingState.tsx` — ícono `Loader2` animado.
+- `apps/web/src/features/evaluations/components/AiSuggestRequirementsDialog.tsx` — contenedor de candidatos con scroll propio.
+- `apps/web/e2e/evaluation-wizard.spec.ts` — nueva aserción confirmando que "Dar de alta un proveedor nuevo" es visible en el paso 3 (regresión del defecto #2).
+
+**Pruebas de esta sesión:** `make lint`/`make typecheck` (frontend) → limpio, sin warnings nuevos. `pnpm test` → 212/212. **`make test-e2e` (Docker real, 20 specs) → 20/20 passed**, incluidos los 2 specs del wizard (uno con la aserción nueva) y `vendor-onboarding.spec.ts` sin regresión.
+
+**Diferido**: redeploy real — acción del founder, mismo patrón que los defectos #1/#8/#9.
 
 **Estado: ✅ Corregido y verificado localmente (2026-08-16) — redeploy real pendiente.** Primer defecto real descubierto por el ciclo de uso real de Bloque C — apareció en el primer intento de login OIDC real (Bloque B, tras provisionar la primera cuenta piloto vía `provisioning_cli`): "Continuar con Google"/"Continuar con Microsoft" llevaban a `https://procurawise-web-staging.../api/v1/auth/oidc/{provider}/login` (dominio del **frontend**, no de la API) → 404 real ("Página no encontrada").
 

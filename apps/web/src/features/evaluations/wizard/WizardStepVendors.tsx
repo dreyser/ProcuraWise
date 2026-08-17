@@ -9,6 +9,7 @@ import {
   useUnlinkVendorApiV1EvaluationsEvaluationIdVendorsVendorOrgIdDelete,
   type EvaluationDetailResponse,
   type ProposalSummaryResponse,
+  type VendorOrganizationCreatedResponse,
   type VendorOrganizationListResponse,
 } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,8 @@ import { translateProposalStatus } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
 import { unwrapData } from '@/lib/http'
 import { VendorCatalogPicker } from '@/features/evaluations/components/VendorCatalogPicker'
+import { CreateVendorOrganizationForm } from '@/features/evaluations/components/CreateVendorOrganizationForm'
+import { InviteLinkNotice } from '@/features/evaluations/components/InviteLinkNotice'
 import { hasLinkedVendor } from '@/features/evaluations/lib/evaluationReadiness'
 
 const MAX_LINKED_VENDORS = 6
@@ -63,6 +66,9 @@ export function WizardStepVendors({
     null,
   )
   const [linkingId, setLinkingId] = useState<string | null>(null)
+  const [newVendorInvite, setNewVendorInvite] = useState<VendorOrganizationCreatedResponse | null>(
+    null,
+  )
 
   const invalidate = () => {
     onChanged()
@@ -168,6 +174,36 @@ export function WizardStepVendors({
           </div>
         )}
       </section>
+
+      {!atCapacity && (
+        <section className="mt-6 max-w-lg">
+          <h2 className="text-sm font-semibold text-foreground">Dar de alta un proveedor nuevo</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Si el proveedor no aparece en el catálogo, créalo aquí e invita a su contacto principal
+            en un solo paso.
+          </p>
+          {newVendorInvite && (
+            <div className="mt-2">
+              <InviteLinkNotice
+                email={newVendorInvite.invitation.email}
+                inviteUrl={newVendorInvite.invitation.invite_url}
+                onDismiss={() => setNewVendorInvite(null)}
+              />
+            </div>
+          )}
+          <div className="mt-2">
+            <CreateVendorOrganizationForm
+              onCreated={(result) => {
+                setNewVendorInvite(result)
+                linkVendor.mutate({
+                  evaluationId: evaluation.id,
+                  data: { vendor_org_id: result.id },
+                })
+              }}
+            />
+          </div>
+        </section>
+      )}
 
       <div className="mt-8 flex items-center gap-2">
         <Button type="button" variant="outline" onClick={onBack}>

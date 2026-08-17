@@ -32,6 +32,29 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-16 — Fase 28: defectos reales #2 y #3 — wizard sin alta de proveedor nuevo + UX del modal de IA
+
+**Resumen:** El founder, ya autenticado (defecto #1 resuelto), empezó a crear la primera evaluación real de punta a punta y reportó 3 detalles reales. Investigado con un agente de exploración antes de tocar código, confirmando cuál era genuinamente bloqueante: (1) UX del modal "Sugerir con IA" — sin spinner visible durante la generación, y sin scroll propio en la lista de candidatos (los botones del footer quedaban fuera del viewport con varios candidatos) — no bloqueante, cosmético; (2) **bloqueante real** — paso 3 del wizard ("Vincular proveedor") no ofrece ninguna forma de crear un proveedor nuevo cuando el catálogo del tenant está vacío, dejando el wizard sin salida para un tenant piloto recién creado. Confirmado como gap real de Fase 15 nunca cerrado (el formulario de alta ya existe, `CreateVendorOrganizationForm`, pero solo estaba cableado en la página standalone `/evaluations/:id/vendors`, nunca en el wizard) — no una limitación de diseño intencional.
+
+**Archivos tocados:**
+- `apps/web/src/features/evaluations/wizard/WizardStepVendors.tsx` — reusa `CreateVendorOrganizationForm`/`InviteLinkNotice` (mismo patrón que `VendorsPage.tsx`).
+- `apps/web/src/components/LoadingState.tsx` — ícono `Loader2` animado (componente compartido, 33 usos).
+- `apps/web/src/features/evaluations/components/AiSuggestRequirementsDialog.tsx` — `max-h-[60vh] overflow-y-auto` en la lista de candidatos (mismo patrón ya usado en `ImportRequirementsDialog.tsx`).
+- `apps/web/e2e/evaluation-wizard.spec.ts` — nueva aserción de regresión para el defecto #2.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (frontend) → limpio. `pnpm test` → 212/212. `make test-e2e` (Docker real) → **20/20 passed**, sin regresión en ningún spec existente.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna — ambos fixes reusan componentes/patrones ya existentes, sin nueva superficie de autorización (el wizard y `POST /vendor-organizations` ya estaban gateados a `evaluation_owner`).
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar esta rama (`fix/wizard-vendor-catalog-empty-and-ai-modal-ux`) y confirmar en Azure real: crear un proveedor nuevo desde el wizard, y que el modal de sugerencias de IA se ve bien con varios candidatos.
+- Continuar la primera evaluación real hasta cumplir el criterio de aceptación de Fase 28: invitar al proveedor recién creado, recibir su propuesta real, calificar y cerrar/decidir.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-16 — Fase 28: defecto real #1 del piloto — login OIDC resolvía contra el origen equivocado
 
 **Resumen:** Continuación operacional tras confirmar el deploy real de Bloque A (health checks en verde). El founder provisionó la primera cuenta piloto real vía `provisioning_cli.py` (`membership_id=f8c17626006149fdaeae096491022593`, `tenant_id=4d16b37eec214028be5b0e45f47648e2`, `role=evaluation_owner`) e intentó el primer login OIDC real por navegador — "Continuar con Google"/"Continuar con Microsoft" llevaban al dominio del *frontend* con el path de la API (`.../api/v1/auth/oidc/{provider}/login`) → 404 real. Causa raíz: `beginOidcLogin` (`auth/AuthContext.tsx`) navega la página completa vía `window.location.href`, que nunca pasó por `apiFetch`/`resolveUrl()` (la resolución de `VITE_API_BASE_URL` que Bloque A añadió) — Bloque A solo cubrió las llamadas `fetch` generadas por `orval`, no auditó navegaciones de página completa como clase aparte. Corregido exportando `resolveUrl()` y usándola en ese único call site (búsqueda exhaustiva confirmó que es el único caso real - `BillingPage.tsx` usa el mismo patrón pero con una URL absoluta que ya viene de Stripe, sin bug).
