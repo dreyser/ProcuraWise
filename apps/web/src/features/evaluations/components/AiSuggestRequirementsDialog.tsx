@@ -181,7 +181,7 @@ export function AiSuggestRequirementsDialog({
           )}
 
           {jobId !== null && job?.result?.status === 'succeeded' && (
-            <div className="flex flex-col gap-3">
+            <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
               {job.stale && (
                 <ErrorBanner
                   variant="info"
