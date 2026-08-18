@@ -1,5 +1,15 @@
 # Fase actual
 
+## Fase 28 — Fix: invitar colaborador a un proveedor ya vinculado quedaba oculto tras iniciar recepción de propuestas (defecto real #5)
+
+**Estado: ✅ Corregido y verificado localmente (2026-08-17) — redeploy real pendiente.** Encontrado por el founder probando el flujo de respuesta de proveedor real (Bloque C): necesitaba un invite link fresco para su cuenta de prueba de proveedor, pero el proveedor ya estaba vinculado a una evaluación que ya había iniciado `collecting_responses` (correcto — vincular un proveedor **nuevo** a esa evaluación sí está bloqueado por diseño: `evaluations/service.py:320-321` rechaza `link_vendor` fuera de `draft` con `InvalidTransitionError`, mismo espíritu que la inmutabilidad del snapshot). El botón "Colaboradores" (invitar un colaborador adicional al proveedor **ya vinculado** — acción distinta, no cambia el roster de la evaluación) estaba innecesariamente oculto también, aunque el backend (`vendor_auth_router.py:121-157`, `invite_collaborator`) no tiene ninguna precondición de estado de evaluación — solo `require_owner`. El frontend (`VendorsPage.tsx`) reusaba la misma condición `canEdit` (`isOwner && status === 'draft'`) tanto para "Colaboradores" como para "Desvincular", sobre-restringiendo una acción que el backend sí permite en cualquier estado.
+
+**Corregido**: nueva condición `canManageCollaborators = isOwner` (sin restricción de `draft`), aplicada solo al botón/panel "Colaboradores" — "Desvincular" se queda con `canEdit` (unlink sí tiene su propio guard en `unlink_vendor`, sin tocar). `VendorCollaboratorsPanel.tsx` en sí ya no tenía ninguna dependencia de estado de evaluación (confirmado por grep) — el gap estaba solo en `VendorsPage.tsx`.
+
+**Pruebas de esta sesión:** `make lint`/`make typecheck` (frontend) → limpio. `pnpm test` → 212/212. `make test-e2e` (Docker real) → 20/20 passed, sin regresión.
+
+**Diferido**: redeploy real — acción del founder, mismo patrón que los defectos #1/#2/#3.
+
 ## Fase 28 — Fixes: wizard sin forma de dar de alta un proveedor nuevo (defecto real #2) + UX del modal de sugerencias de IA (defecto real #3)
 
 **Estado: ✅ Corregidos y verificados localmente (2026-08-16) — redeploy real pendiente.** Defectos #2 y #3 del piloto real, encontrados por el founder creando la primera evaluación real de punta a punta (Bloque C).
