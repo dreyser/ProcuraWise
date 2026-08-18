@@ -32,6 +32,31 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-17 — Fase 28: defecto real #5 (colaborador de proveedor bloqueado tras iniciar recepción) + diagnóstico de flujo de aprobación (no bloqueante)
+
+**Resumen:** Continuación del ciclo de uso real (Bloque C). El founder avanzó la primera evaluación real hasta iniciar recepción de propuestas, provisionando manualmente (vía `provisioning_cli.py`) las cuentas internas que necesitó sobre la marcha (aprobador, evaluadores) — confirmado como diseño correcto (roles internos son CLI-only, sin flujo de invitación in-app, misma decisión de alcance AUTH-PROD que ya cubre la cuenta del propio owner). Un intento de crear la cuenta de prueba de proveedor terminó provisionada por error como `approver` (CLI no puede crear `vendor_contact` — confirmado, `BUYER_LOGIN_ROLES` lo excluye deliberadamente); se le indicó no intentar convertirla y en su lugar usar el flujo real de alta de proveedor (Fase 15, ya corregido en el defecto #2).
+
+Al intentar obtener un invite link fresco para su proveedor de prueba (ya vinculado a la evaluación, que ya estaba en `collecting_responses`), encontró que el botón "Colaboradores" en la pestaña Proveedores también estaba oculto. Investigado antes de tocar código: vincular un proveedor **nuevo** a la evaluación sí está bloqueado por diseño una vez iniciada la recepción (`InvalidTransitionError`, confirmado server-side) — pero invitar un colaborador **adicional** a un proveedor **ya vinculado** no tiene esa restricción en el backend, solo estaba sobre-restringido en el frontend. Corregido (defecto real #5).
+
+Por separado, se diagnosticó (sin tocar código, founder no pidió el fix todavía) el caso reportado la sesión anterior: el aprobador logueado no veía el botón "Aprobar" pese a `approval_status: pending`. Causa confirmada: `isAssignedApprover` (`EvaluationApprovalPage.tsx:57-58`) requiere que el `membership_id` de la sesión actual coincida exactamente con `evaluation.approver_membership_id` — el founder había quedado logueado con una cuenta de aprobador distinta a la seleccionada originalmente. Diagnóstico entregado con pasos de solución (retirar solicitud → reconfirmar aprobador correcto → re-solicitar). **Queda abierto, no bloqueante**: cuando `role === 'approver'` pero el membership no coincide, la página no muestra ningún mensaje explicativo — mismo patrón de "dead end silencioso" que los defectos #2/#5, pendiente de que el founder confirme si quiere el fix ahora o después.
+
+**Archivos tocados:**
+- `apps/web/src/features/evaluations/pages/VendorsPage.tsx` — nueva condición `canManageCollaborators = isOwner` (sin restricción de `draft`), separada de `canEdit`, aplicada solo al botón/panel de colaboradores.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (frontend) → limpio. `pnpm test` → 212/212. `make test-e2e` (Docker real, Docker Desktop tuvo que reiniciarse manualmente para esta corrida) → 20/20 passed, sin regresión.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna. Nota abierta (no deuda nueva, ya existía): el mensaje "dead end silencioso" del aprobador no asignado, descrito arriba.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/vendor-collaborator-invite-blocked-after-collection-starts` y confirmar en Azure real: invitar un colaborador a un proveedor ya vinculado con la evaluación ya en `collecting_responses`.
+- Confirmar con el founder si quiere el mensaje explicativo del aprobador-no-asignado ahora o más adelante.
+- Continuar el ciclo real hasta cumplir el criterio de aceptación de Fase 28: el proveedor de prueba responde una propuesta real, se califica y se cierra/decide.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-16 — Fase 28: defectos reales #2 y #3 — wizard sin alta de proveedor nuevo + UX del modal de IA
 
 **Resumen:** El founder, ya autenticado (defecto #1 resuelto), empezó a crear la primera evaluación real de punta a punta y reportó 3 detalles reales. Investigado con un agente de exploración antes de tocar código, confirmando cuál era genuinamente bloqueante: (1) UX del modal "Sugerir con IA" — sin spinner visible durante la generación, y sin scroll propio en la lista de candidatos (los botones del footer quedaban fuera del viewport con varios candidatos) — no bloqueante, cosmético; (2) **bloqueante real** — paso 3 del wizard ("Vincular proveedor") no ofrece ninguna forma de crear un proveedor nuevo cuando el catálogo del tenant está vacío, dejando el wizard sin salida para un tenant piloto recién creado. Confirmado como gap real de Fase 15 nunca cerrado (el formulario de alta ya existe, `CreateVendorOrganizationForm`, pero solo estaba cableado en la página standalone `/evaluations/:id/vendors`, nunca en el wizard) — no una limitación de diseño intencional.

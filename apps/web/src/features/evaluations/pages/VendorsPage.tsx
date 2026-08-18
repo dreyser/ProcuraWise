@@ -113,6 +113,14 @@ export function VendorsPage() {
   if (!evaluation) return null
 
   const canEdit = isOwner && evaluation.status === 'draft'
+  // Fase 28 (defecto real): inviting an additional collaborator to an
+  // already-linked vendor org has no evaluation-status precondition
+  // server-side (vendor_auth_router.py's invite_collaborator only requires
+  // require_owner) - unlike link_vendor/unlink_vendor, it doesn't touch this
+  // evaluation's vendor roster at all. Gating it to canEdit (draft-only) was
+  // over-restrictive: a real pilot owner had no way to get a fresh invite
+  // link for their vendor contact once collection had already started.
+  const canManageCollaborators = isOwner
   const atCapacity = proposals.length >= MAX_LINKED_VENDORS
   const linkedVendorOrgIds = new Set(proposals.map((p) => p.vendor_org_id))
 
@@ -158,7 +166,7 @@ export function VendorsPage() {
                 <TableRow>
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Estado de la propuesta</TableHead>
-                  {canEdit && <TableHead>Acciones</TableHead>}
+                  {(canManageCollaborators || canEdit) && <TableHead>Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -172,36 +180,42 @@ export function VendorsPage() {
                         <TableCell>
                           <StatusBadge label={translateProposalStatus(proposal.status)} />
                         </TableCell>
-                        {canEdit && (
+                        {(canManageCollaborators || canEdit) && (
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  setExpandedVendorOrgId(isExpanded ? null : proposal.vendor_org_id)
-                                }
-                              >
-                                {isExpanded ? 'Ocultar colaboradores' : 'Colaboradores'}
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  setPendingUnlink({ vendorOrgId: proposal.vendor_org_id, name })
-                                }
-                              >
-                                Desvincular
-                              </Button>
+                              {canManageCollaborators && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    setExpandedVendorOrgId(
+                                      isExpanded ? null : proposal.vendor_org_id,
+                                    )
+                                  }
+                                >
+                                  {isExpanded ? 'Ocultar colaboradores' : 'Colaboradores'}
+                                </Button>
+                              )}
+                              {canEdit && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    setPendingUnlink({ vendorOrgId: proposal.vendor_org_id, name })
+                                  }
+                                >
+                                  Desvincular
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         )}
                       </TableRow>
                       {isExpanded && (
                         <TableRow>
-                          <TableCell colSpan={canEdit ? 3 : 2}>
+                          <TableCell colSpan={canManageCollaborators || canEdit ? 3 : 2}>
                             <VendorCollaboratorsPanel vendorOrgId={proposal.vendor_org_id} />
                           </TableCell>
                         </TableRow>
