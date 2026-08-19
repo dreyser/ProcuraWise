@@ -57,6 +57,29 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ---
 
+### Sesión — 2026-08-19 — Fase 28: housekeeping de documentación + investigación (sin fix) de falsos conflictos de versión respondiendo una propuesta
+
+**Resumen:** Sesión en dos partes, ambas en Plan Mode (solo lectura hasta aprobación explícita). Parte 1 — housekeeping de documentación pedido por el founder: encontró y corrigió un bug real introducido por esta misma sesión de trabajo — el `Edit` que insertó la entrada del defecto #2/#3 (sesión 2026-08-16) borró por error el encabezado `## Fase 28 — Fix: login OIDC...` sin volver a insertarlo, dejando esa entrada huérfana sin título en `current-phase.md`; corregido, y de paso se fusionó el contenido de confirmación real de OIDC (login exitoso con Google/Microsoft, evaluación de `OIDC_STATE_TTL_MINUTES` cerrada como no-bug) que llevaba desde el 2026-08-16 solo en una rama local nunca pusheada (`docs/phase-28-bloque-a-confirmed`, ahora incorporada aquí y descartable). También se actualizó la fila de Fase 28 en `backlog.md`, desactualizada desde el cierre de Bloque A. `session-handoff.md` se verificó íntegro, sin problemas.
+
+Parte 2 — investigación del founder probando el flujo real de respuesta de proveedor: el mensaje "Los datos cambiaron desde la última vez que los consultaste. Recarga para continuar." aparecía en cada cambio de una respuesta. Traza exhaustiva de `AnswerAutosaveController`, `useAnswerAutosave`, el query cache de react-query y el backend de `Proposal.version` (compare-and-swap real en Mongo) — el mecanismo está cuidadosamente diseñado contra los bugs obvios de este tipo (cola serializada, versión leída fresca al enviar, versión local actualizada tras cada guardado exitoso, con test de regresión dedicado). Se descartaron con evidencia de código: doble-escritor con `CostItemsPanel` (founder confirmó que solo editaba respuestas, no costos), versión capturada al encolar en vez de al enviar, versión local no actualizada tras guardar, polling de fondo agresivo, mismatch de query key, y múltiples pestañas. Se encontró un comportamiento real no confirmado como causa: el textarea compartido "Comentario" (presente en todo tipo de respuesta) también confirma en su propio blur, duplicando la frecuencia de escrituras por requerimiento tocado — no debería por sí solo causar un conflicto de versión dado que la cola lo maneja correctamente, pero aumenta la superficie para exponer cualquier condición de carrera real no identificable por lectura de código. **No se encontró la causa raíz determinística — se decidió explícitamente NO adivinar un fix** y en su lugar proponer un diagnóstico barato (founder captura en DevTools el `expected_version` real enviado en la request que falla, la próxima vez que reproduzca el error) antes de escribir cualquier código. Plan completo (incluye la tabla de hipótesis descartadas con sus citas de código) en `~/.claude/plans/procurawise-planeaci-n-buzzing-petal.md`.
+
+**Archivos tocados:**
+- `docs/development/current-phase.md` — encabezado huérfano corregido; contenido de confirmación real de OIDC fusionado; entrada principal de Fase 28 actualizada al estado real (Bloque A cerrado y confirmado, Bloque B/C en curso, defectos #1/#2/#3/#5 listados, defecto #6 potencial anotado como investigación abierta).
+- `docs/development/backlog.md` — fila de Fase 28 actualizada.
+
+**Resultado de pruebas:** ninguna — sesión de solo documentación + investigación, sin cambios de código.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna. Nota abierta (no deuda nueva): causa raíz del defecto #6 (falsos conflictos de versión) sin confirmar, pendiente de diagnóstico del founder.
+
+**Instrucciones para la siguiente sesión:**
+- Si el founder ya capturó el `expected_version` real de una request fallida (DevTools Network), usar esa evidencia para escribir el fix dirigido — no adivinar.
+- Si el founder prefiere mitigar el síntoma sin diagnosticar primero: quitar el doble-commit del campo "Comentario" (`AnswerField.tsx`, `commitComment` en su propio `onBlur`) y/o mejorar el diálogo de conflicto para que la recarga sea de un solo clic sin perder el valor que se estaba escribiendo — ver plan §2.6.
+- Rama local `docs/phase-28-bloque-a-confirmed` ya fusionada aquí — segura de eliminar (`git branch -D docs/phase-28-bloque-a-confirmed`), su contenido ya no es necesario por separado.
+
+---
+
 ### Sesión — 2026-08-17 — Fase 28: defecto real #5 (colaborador de proveedor bloqueado tras iniciar recepción) + diagnóstico de flujo de aprobación (no bloqueante)
 
 **Resumen:** Continuación del ciclo de uso real (Bloque C). El founder avanzó la primera evaluación real hasta iniciar recepción de propuestas, provisionando manualmente (vía `provisioning_cli.py`) las cuentas internas que necesitó sobre la marcha (aprobador, evaluadores) — confirmado como diseño correcto (roles internos son CLI-only, sin flujo de invitación in-app, misma decisión de alcance AUTH-PROD que ya cubre la cuenta del propio owner). Un intento de crear la cuenta de prueba de proveedor terminó provisionada por error como `approver` (CLI no puede crear `vendor_contact` — confirmado, `BUYER_LOGIN_ROLES` lo excluye deliberadamente); se le indicó no intentar convertirla y en su lugar usar el flujo real de alta de proveedor (Fase 15, ya corregido en el defecto #2).
