@@ -64,19 +64,20 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 Parte 2 — investigación del founder probando el flujo real de respuesta de proveedor: el mensaje "Los datos cambiaron desde la última vez que los consultaste. Recarga para continuar." aparecía en cada cambio de una respuesta. Traza exhaustiva de `AnswerAutosaveController`, `useAnswerAutosave`, el query cache de react-query y el backend de `Proposal.version` (compare-and-swap real en Mongo) — el mecanismo está cuidadosamente diseñado contra los bugs obvios de este tipo (cola serializada, versión leída fresca al enviar, versión local actualizada tras cada guardado exitoso, con test de regresión dedicado). Se descartaron con evidencia de código: doble-escritor con `CostItemsPanel` (founder confirmó que solo editaba respuestas, no costos), versión capturada al encolar en vez de al enviar, versión local no actualizada tras guardar, polling de fondo agresivo, mismatch de query key, y múltiples pestañas. Se encontró un comportamiento real no confirmado como causa: el textarea compartido "Comentario" (presente en todo tipo de respuesta) también confirma en su propio blur, duplicando la frecuencia de escrituras por requerimiento tocado — no debería por sí solo causar un conflicto de versión dado que la cola lo maneja correctamente, pero aumenta la superficie para exponer cualquier condición de carrera real no identificable por lectura de código. **No se encontró la causa raíz determinística — se decidió explícitamente NO adivinar un fix** y en su lugar proponer un diagnóstico barato (founder captura en DevTools el `expected_version` real enviado en la request que falla, la próxima vez que reproduzca el error) antes de escribir cualquier código. Plan completo (incluye la tabla de hipótesis descartadas con sus citas de código) en `~/.claude/plans/procurawise-planeaci-n-buzzing-petal.md`.
 
 **Archivos tocados:**
-- `docs/development/current-phase.md` — encabezado huérfano corregido; contenido de confirmación real de OIDC fusionado; entrada principal de Fase 28 actualizada al estado real (Bloque A cerrado y confirmado, Bloque B/C en curso, defectos #1/#2/#3/#5 listados, defecto #6 potencial anotado como investigación abierta).
+- `docs/development/current-phase.md` — encabezado huérfano corregido; contenido de confirmación real de OIDC fusionado; entrada principal de Fase 28 actualizada al estado real (Bloque A cerrado y confirmado, Bloque B/C en curso, defectos #1/#2/#3/#5 listados).
 - `docs/development/backlog.md` — fila de Fase 28 actualizada.
 
 **Resultado de pruebas:** ninguna — sesión de solo documentación + investigación, sin cambios de código.
 
 **Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
 
-**Deuda técnica introducida:** Ninguna. Nota abierta (no deuda nueva): causa raíz del defecto #6 (falsos conflictos de versión) sin confirmar, pendiente de diagnóstico del founder.
+**Deuda técnica introducida:** Ninguna.
+
+**Actualización posterior, misma fecha (2026-08-19):** la hipótesis de "falsos conflictos de versión" resultó **no ser un bug** — la evaluación seguía en `draft` (nunca se completó "Iniciar recepción de propuestas"), corregido manualmente por el founder como owner. Retomar la sesión de proveedor después de ese fix expuso el defecto real #6 (sin salida entre login de comprador y portal de proveedores) — corregido y documentado en la entrada de arriba ("Sesión — 2026-08-19 — Fase 28: defecto real #6"). El mensaje genérico de conflicto 409 (que mezcla `StaleVersionError` real con otras dos causas no relacionadas a versión) queda como nota abierta, no confirmada como bloqueante.
 
 **Instrucciones para la siguiente sesión:**
-- Si el founder ya capturó el `expected_version` real de una request fallida (DevTools Network), usar esa evidencia para escribir el fix dirigido — no adivinar.
-- Si el founder prefiere mitigar el síntoma sin diagnosticar primero: quitar el doble-commit del campo "Comentario" (`AnswerField.tsx`, `commitComment` en su propio `onBlur`) y/o mejorar el diálogo de conflicto para que la recarga sea de un solo clic sin perder el valor que se estaba escribiendo — ver plan §2.6.
 - Rama local `docs/phase-28-bloque-a-confirmed` ya fusionada aquí — segura de eliminar (`git branch -D docs/phase-28-bloque-a-confirmed`), su contenido ya no es necesario por separado.
+- Ver la entrada de arriba ("defecto real #6") para las instrucciones vigentes de la siguiente sesión.
 
 ---
 
