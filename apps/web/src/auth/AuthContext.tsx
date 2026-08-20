@@ -28,6 +28,13 @@ export interface AuthResult {
    * every buyer role shares one (no longer true since tenant_admin,
    * Fase 25, has its own home at /billing). */
   role?: string
+  /** Fase 28 (defecto real): set only when credentials were valid but the
+   * account has zero buyer memberships - the one case where a real vendor
+   * typing their own working credentials into the wrong (buyer) login form
+   * hits a dead end with no indication of where to actually go. A typed
+   * flag instead of matching on `message` text, since that string is
+   * user-facing copy that should stay free to reword. */
+  noBuyerAccess?: boolean
 }
 
 interface AuthContextValue {
@@ -123,7 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (options.length === 0) {
         return {
           ok: false,
-          message: 'Tu cuenta no tiene accesos de comprador configurados todavía.',
+          message:
+            'Esta cuenta no tiene acceso de comprador. Si vas a entrar como proveedor, usa el portal de proveedores.',
+          noBuyerAccess: true,
         }
       }
       if (options.length > 1) {

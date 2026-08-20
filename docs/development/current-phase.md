@@ -1,6 +1,27 @@
 # Fase actual
 
-## Fase 28 — Fix: invitar colaborador a un proveedor ya vinculado quedaba oculto tras iniciar recepción de propuestas (defecto real #5)
+## Fase 28 — Fix: sin salida entre el login de comprador y el portal de proveedores (defecto real #6)
+
+**Estado: ✅ Corregido y verificado localmente (2026-08-19) — redeploy real pendiente.** Encontrado por el founder probando el flujo real de respuesta de proveedor: tras aceptar la invitación (crear contraseña) y responder correctamente en esa misma sesión, al cerrar sesión y volver más tarde obtuvo "Tu cuenta no tiene accesos de comprador configurados todavía." — un mensaje de la sesión de **comprador**, no de proveedor. No era una cuenta rota: la sesión previa investigó primero un supuesto bug de "los datos cambiaron" que resultó no ser un conflicto de versión — la evaluación seguía en `draft` (el founder la avanzó manualmente a `collecting_responses` como owner) — y este defecto #6 apareció después, al retomar la sesión de proveedor.
+
+**Causa raíz**: `RootRedirect` (`apps/web/src/app/router.tsx:161-179`) — comentario explícito en el código: "no hay señal confiable de qué pantalla de login preferir" cuando ninguna sesión (comprador ni proveedor) está activa, y por diseño (Fase 15) ninguna de las dos persiste entre refrescos. Por defecto cae a `/login` (comprador). Un proveedor que navega a la URL raíz del sitio (en vez de un deep-link específico, que sí resuelve correctamente vía `RequireVendorAuth`) aterriza en el login de comprador; su contraseña es válida (verificación de contraseña compartida entre ambos tipos de cuenta), así que el login "funciona" a nivel de credenciales, pero no encuentra ninguna membership de comprador (es `vendor_contact` únicamente) y muestra el mensaje de error, sin ninguna pista de a dónde ir.
+
+**Decisión del founder para el fix** (alcance acotado explícitamente):
+- Mantener `/` cayendo a `/login` (comprador) por defecto cuando no hay sesión activa — preserva la decisión de producto existente, sin inventar detección de identidad antes del login.
+- Añadir un enlace visible "¿Eres proveedor? Ingresa al portal de proveedores" en la página de login de comprador → `/vendor/login`.
+- Añadir el enlace recíproco "¿Eres comprador? Ingresa a tu cuenta" en la página de login de proveedor → `/login` (no existía).
+- Reemplazar el mensaje de error genérico por uno orientado a la navegación, con un enlace directo a `/vendor/login` en el mismo lugar donde aparece el error.
+- **No** redirigir automáticamente un login de comprador exitoso hacia el portal de proveedores basado en lookup del backend — evitaría acoplar el flujo de login de comprador a descubrimiento de identidad de proveedor, con riesgo de enumeración de cuentas o comportamiento ambiguo multi-rol.
+- Preservar la decisión deliberada de "auth solo en memoria" (Fase 15) — este defecto es sobre descubribilidad del punto de entrada tras perder la sesión, no sobre persistencia de sesión.
+
+**Corregido**:
+- `AuthContext.tsx`: `AuthResult` gana un campo tipado `noBuyerAccess?: boolean` (en vez de matchear el texto del mensaje, que debe quedar libre de redactarse) — se establece solo cuando las credenciales son válidas pero la cuenta no tiene memberships de comprador. Mensaje actualizado: "Esta cuenta no tiene acceso de comprador. Si vas a entrar como proveedor, usa el portal de proveedores."
+- `LoginPage.tsx`: enlace inline "Ir al portal de proveedores" cuando `noBuyerAccess` es verdadero, más un enlace permanente "¿Eres proveedor?" al pie de la página (visible siempre, no solo en error).
+- `VendorLoginPage.tsx`: enlace recíproco permanente "¿Eres comprador?" → `/login`.
+
+**Pruebas de esta sesión:** `make lint`/`make typecheck` (frontend) → limpio. `pnpm test` → 212/212. `make test-e2e` (Docker real, 20 specs) → 20/20 passed, sin regresión (login es el punto de entrada de casi todos los specs).
+
+**Diferido**: redeploy real — acción del founder, mismo patrón que los defectos #1/#2/#3/#5. También queda abierto, no bloqueante: el mensaje genérico "los datos cambiaron..." sigue mapeando 3 causas de 409 distintas (`StaleVersionError` real, `evaluation` no está en `collecting_responses`, `proposal` no está en `draft`) al mismo texto — fue lo que llevó a investigar la pista equivocada antes de encontrar este defecto #6. No corregido todavía, pendiente de decisión del founder.
 
 **Estado: ✅ Corregido y verificado localmente (2026-08-17) — redeploy real pendiente.** Encontrado por el founder probando el flujo de respuesta de proveedor real (Bloque C): necesitaba un invite link fresco para su cuenta de prueba de proveedor, pero el proveedor ya estaba vinculado a una evaluación que ya había iniciado `collecting_responses` (correcto — vincular un proveedor **nuevo** a esa evaluación sí está bloqueado por diseño: `evaluations/service.py:320-321` rechaza `link_vendor` fuera de `draft` con `InvalidTransitionError`, mismo espíritu que la inmutabilidad del snapshot). El botón "Colaboradores" (invitar un colaborador adicional al proveedor **ya vinculado** — acción distinta, no cambia el roster de la evaluación) estaba innecesariamente oculto también, aunque el backend (`vendor_auth_router.py:121-157`, `invite_collaborator`) no tiene ninguna precondición de estado de evaluación — solo `require_owner`. El frontend (`VendorsPage.tsx`) reusaba la misma condición `canEdit` (`isOwner && status === 'draft'`) tanto para "Colaboradores" como para "Desvincular", sobre-restringiendo una acción que el backend sí permite en cualquier estado.
 
