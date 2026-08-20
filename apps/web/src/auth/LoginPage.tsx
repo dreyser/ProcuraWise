@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,6 +22,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [noBuyerAccess, setNoBuyerAccess] = useState(false)
 
   const {
     register,
@@ -31,9 +32,11 @@ export function LoginPage() {
 
   const onSubmit = async (values: LoginFormValues) => {
     setSubmitError(null)
+    setNoBuyerAccess(false)
     const result = await loginWithPassword(values.email, values.password)
     if (!result.ok) {
       setSubmitError(result.message ?? 'No se pudo iniciar sesión.')
+      setNoBuyerAccess(result.noBuyerAccess ?? false)
       return
     }
     // Fase 25: result.role is only set once a single Membership actually
@@ -59,6 +62,11 @@ export function LoginPage() {
       {submitError && (
         <div className="mt-4">
           <ErrorBanner message={submitError} />
+          {noBuyerAccess && (
+            <Link to="/vendor/login" className="mt-2 block text-sm text-primary underline">
+              Ir al portal de proveedores
+            </Link>
+          )}
         </div>
       )}
 
@@ -110,6 +118,13 @@ export function LoginPage() {
           Continuar con Google
         </Button>
       </div>
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        ¿Eres proveedor?{' '}
+        <Link to="/vendor/login" className="text-primary underline">
+          Ingresa al portal de proveedores
+        </Link>
+      </p>
     </main>
   )
 }

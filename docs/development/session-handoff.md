@@ -32,6 +32,31 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-19 — Fase 28: defecto real #6 (sin salida entre login de comprador y portal de proveedores)
+
+**Resumen:** Continuación de la investigación del mismo día sobre falsos conflictos "los datos cambiaron" respondiendo una propuesta (ver plan `~/.claude/plans/procurawise-planeaci-n-buzzing-petal.md` y la entrada de housekeeping de esta misma fecha). Esa pista resultó no ser un conflicto de versión: la evaluación seguía en `draft` (nunca se completó "Iniciar recepción de propuestas"), lo que el founder confirmó y corrigió manualmente como owner. Al retomar la sesión de proveedor después de ese fix, apareció un defecto real distinto y genuino: cerrar sesión como proveedor y volver más tarde (navegando a la URL raíz en vez de un deep-link) aterriza en el login de **comprador** por defecto (`RootRedirect`, sin señal confiable de cuál sesión preferir cuando ninguna está activa — auth deliberadamente solo en memoria, Fase 15); la contraseña del proveedor es válida ahí (verificación compartida), así que el login "funciona" pero no encuentra memberships de comprador, mostrando un mensaje de error sin ninguna pista de a dónde ir realmente.
+
+**Alcance del fix acotado explícitamente por el founder** (evitar reabrir la decisión de "auth solo en memoria" o acoplar el login de comprador a lookup de identidad de proveedor): mantener `/` cayendo a `/login` (comprador) por defecto; agregar enlaces cruzados visibles en ambas páginas de login (comprador↔proveedor); mensaje de error orientado a la navegación con enlace directo a `/vendor/login`; sin auto-redirect basado en backend.
+
+**Archivos tocados:**
+- `apps/web/src/auth/AuthContext.tsx` — `AuthResult.noBuyerAccess` (flag tipado, no matching de texto), mensaje de error actualizado.
+- `apps/web/src/auth/LoginPage.tsx` — enlace inline en el error + enlace permanente "¿Eres proveedor?".
+- `apps/web/src/vendor-auth/VendorLoginPage.tsx` — enlace recíproco permanente "¿Eres comprador?".
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (frontend) → limpio. `pnpm test` → 212/212. `make test-e2e` (Docker real) → 20/20 passed, sin regresión.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna — el founder acotó explícitamente el alcance para no reabrir "auth solo en memoria" ni introducir detección de identidad pre-login.
+
+**Deuda técnica introducida:** Ninguna. Nota abierta, no deuda nueva: el mensaje genérico de conflicto ("los datos cambiaron...") sigue mapeando 3 causas de 409 distintas al mismo texto — fue lo que llevó a investigar la pista equivocada antes de encontrar este defecto #6. Pendiente de decisión del founder sobre si vale la pena corregirlo.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/vendor-buyer-login-cross-links` y confirmar en Azure real: cerrar sesión de proveedor, navegar a la URL raíz, confirmar que el enlace "¿Eres proveedor?" lleva a `/vendor/login` y que el login ahí funciona.
+- Decidir si se corrige el mensaje genérico de conflicto 409 (nota abierta arriba) — no confirmado como bloqueante para el criterio de aceptación de Fase 28.
+- Continuar el ciclo real: proveedor responde requerimientos (evaluación ya en `collecting_responses`), calificar y cerrar/decidir — sigue siendo lo único pendiente para el criterio de aceptación textual de `backlog.md`.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-17 — Fase 28: defecto real #5 (colaborador de proveedor bloqueado tras iniciar recepción) + diagnóstico de flujo de aprobación (no bloqueante)
 
 **Resumen:** Continuación del ciclo de uso real (Bloque C). El founder avanzó la primera evaluación real hasta iniciar recepción de propuestas, provisionando manualmente (vía `provisioning_cli.py`) las cuentas internas que necesitó sobre la marcha (aprobador, evaluadores) — confirmado como diseño correcto (roles internos son CLI-only, sin flujo de invitación in-app, misma decisión de alcance AUTH-PROD que ya cubre la cuenta del propio owner). Un intento de crear la cuenta de prueba de proveedor terminó provisionada por error como `approver` (CLI no puede crear `vendor_contact` — confirmado, `BUYER_LOGIN_ROLES` lo excluye deliberadamente); se le indicó no intentar convertirla y en su lugar usar el flujo real de alta de proveedor (Fase 15, ya corregido en el defecto #2).

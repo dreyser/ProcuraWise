@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useVendorAuth } from '@/vendor-auth/VendorAuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,6 +96,13 @@ export function VendorLoginPage() {
           {isSubmitting ? 'Entrando…' : 'Entrar'}
         </Button>
       </form>
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        ¿Eres comprador?{' '}
+        <Link to="/login" className="text-primary underline">
+          Ingresa a tu cuenta
+        </Link>
+      </p>
     </main>
   )
 }
