@@ -32,6 +32,31 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-21 — Fase 28: defecto real #7 (respuesta del proveedor no visible al calificar) + confirmación del modelo de permisos de scoring
+
+**Resumen:** El founder, calificando la primera propuesta real, preguntó (Plan Mode, investigación antes de tocar código) si dos comportamientos eran diseño esperado: (1) el owner no ve la respuesta del proveedor al calificar, solo el requerimiento y el control de calificación; (2) como evaluador funcional, no encuentra forma de calificar — solo puede cambiar progreso en "Asignaciones". Investigado con evidencia de código: (1) es un gap real, no diseño — los datos ya existen (`ScoringPage.tsx` nunca leía `currentSnapshot.answers`, sin ninguna razón documentada); (2) no es una limitación — evaluadores sí pueden calificar por diseño (`SCORE_WRITE_ROLES` los incluye, sin gate de `Assignment` para el owner), el problema real es solo de descubribilidad ("Asignaciones" no enlaza hacia "Propuestas"/"Calificar"). El founder autorizó implementar únicamente el fix del punto 1 para proceder con el deploy — el punto 2 (enlace de descubribilidad) y mostrar evidencia agrupada por requerimiento (decisión de diseño ya documentada explícitamente en `BuyerDocumentsList.tsx`) quedaron fuera de alcance de este fix.
+
+**Archivos tocados:**
+- `apps/web/src/features/scoring/pages/ScoringPage.tsx` — cada requerimiento ahora muestra la respuesta del proveedor (valor formateado + comentario).
+- `apps/web/src/features/vendor-portal/components/AnswerField.tsx` — `formatReadOnlyValue` exportada, cambiado su parámetro a `responseType: string` (antes tomaba el `VendorRequirementResponse` completo) para poder reusarla desde `ScoringPage.tsx` sin depender de que los dos tipos `RequirementResponse`/`VendorRequirementResponse` (generados por separado por orval) sigan siendo estructuralmente idénticos.
+
+**Defecto secundario encontrado por la propia verificación e2e** (introducido por este fix, corregido en la misma sesión, no una regresión de código previo): el bloque nuevo usaba `text-muted-foreground` sobre `bg-muted` (contraste 4.34:1, bajo el mínimo WCAG AA 4.5:1) — detectado por `axe-core` en 3 specs e2e reales que fallaron en la primera corrida completa (`ai-score-suggestions`, `documents`, `vertical-slice`). Corregido a `text-foreground`. Recordatorio útil de esta sesión: correr el suite completo de e2e, no solo lint/typecheck/unit, sigue encontrando cosas reales que las otras capas no cubren.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed. `pnpm test` → 212/212. `make contracts` → sin diff. `make test-e2e` (Docker real) → 20/20 passed (tras corregir el defecto de contraste; 3 fallaban antes del fix).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/scoring-page-shows-vendor-answer` y confirmar en Azure real: calificar una propuesta real y ver la respuesta del proveedor junto al control de calificación.
+- Nota abierta, no bloqueante: agregar un enlace desde "Asignaciones" hacia "Propuestas" para evaluadores (descubribilidad, no funcionalidad) — pendiente de que el founder lo pida.
+- Nota abierta, no bloqueante: evidencia por requerimiento en `BuyerDocumentsList.tsx` — decisión de diseño ya documentada, revisitar solo si el founder lo pide explícitamente.
+- Continuar el ciclo real hasta cumplir el criterio de aceptación de Fase 28: completar la calificación, cerrar/decidir la evaluación.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-19 — Fase 28: defecto real #6 (sin salida entre login de comprador y portal de proveedores)
 
 **Resumen:** Continuación de la investigación del mismo día sobre falsos conflictos "los datos cambiaron" respondiendo una propuesta (ver plan `~/.claude/plans/procurawise-planeaci-n-buzzing-petal.md` y la entrada de housekeeping de esta misma fecha). Esa pista resultó no ser un conflicto de versión: la evaluación seguía en `draft` (nunca se completó "Iniciar recepción de propuestas"), lo que el founder confirmó y corrigió manualmente como owner. Al retomar la sesión de proveedor después de ese fix, apareció un defecto real distinto y genuino: cerrar sesión como proveedor y volver más tarde (navegando a la URL raíz en vez de un deep-link) aterriza en el login de **comprador** por defecto (`RootRedirect`, sin señal confiable de cuál sesión preferir cuando ninguna está activa — auth deliberadamente solo en memoria, Fase 15); la contraseña del proveedor es válida ahí (verificación compartida), así que el login "funciona" pero no encuentra memberships de comprador, mostrando un mensaje de error sin ninguna pista de a dónde ir realmente.
