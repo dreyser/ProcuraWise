@@ -28,6 +28,7 @@ import { translateDimension, translateRiskFlag } from '@/lib/enumLabels'
 import { ScoreInput } from '@/features/scoring/components/ScoreInput'
 import { BuyerDocumentsList } from '@/features/scoring/components/BuyerDocumentsList'
 import { EconomicAssessmentPanel } from '@/features/scoring/components/EconomicAssessmentPanel'
+import { formatReadOnlyValue } from '@/features/vendor-portal/components/AnswerField'
 import { useAiScoreSuggestionJobStatus } from '@/features/evaluations/hooks/useAiScoreSuggestionJobStatus'
 
 interface Draft {
@@ -83,6 +84,13 @@ export function ScoringPage() {
     (proposalResult?.scores ?? []).map((s) => [s.requirement_id, s]),
   )
   const requirements = currentSnapshot?.requirements ?? []
+  // Fase 28 (defecto real): the frozen answer was already available on the
+  // snapshot and used server-side by the AI score suggestion - it just never
+  // got rendered here, leaving the buyer scoring blind to what they're
+  // actually rating.
+  const answersByRequirement = new Map(
+    (currentSnapshot?.answers ?? []).map((a) => [a.requirement_id, a]),
+  )
 
   useEffect(() => {
     if (initialized || requirements.length === 0) return
@@ -247,6 +255,7 @@ export function ScoringPage() {
                 : null
             const hasConflict = conflictIds.has(requirement.id)
             const suggestion = suggestionsByRequirement.get(requirement.id)
+            const answer = answersByRequirement.get(requirement.id)
 
             return (
               <div key={requirement.id} className="rounded-md border border-border p-4">
@@ -262,6 +271,23 @@ export function ScoringPage() {
                   )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{requirement.description}</p>
+
+                <div className="mt-3 rounded-md bg-muted p-3 text-sm">
+                  {/* text-foreground, not text-muted-foreground: on top of
+                   * bg-muted the latter drops to a 4.34:1 contrast ratio,
+                   * below the WCAG AA 4.5:1 minimum (caught by axe-core in
+                   * checkA11y, e2e/support/a11y.ts) - the same combination
+                   * already used one line below for the answer value. */}
+                  <p className="text-xs font-medium text-foreground">Respuesta del proveedor</p>
+                  <p className="mt-1 text-foreground">
+                    {formatReadOnlyValue(requirement.response_type, answer?.value ?? null)}
+                  </p>
+                  {answer?.vendor_comment && (
+                    <p className="mt-1 text-xs text-foreground">
+                      Comentario: {answer.vendor_comment}
+                    </p>
+                  )}
+                </div>
 
                 {suggestion && (
                   <div className="mt-3 rounded-md border border-dashed border-border bg-muted p-3 text-sm">

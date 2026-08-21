@@ -30,9 +30,16 @@ interface AnswerFieldProps {
   error?: string
 }
 
-function formatReadOnlyValue(requirement: VendorRequirementResponse, value: unknown): string {
+/** Exported for reuse by ScoringPage.tsx (Fase 28 defecto real): only
+ * `response_type` was ever read from the requirement, so this takes that
+ * string directly rather than a full requirement object - `RequirementResponse`
+ * (buyer side) and `VendorRequirementResponse` (vendor side) are two
+ * separately orval-generated types for what's the same backend enum, and a
+ * plain string param sidesteps relying on their literal unions staying
+ * structurally identical. */
+export function formatReadOnlyValue(responseType: string, value: unknown): string {
   if (value === null || value === undefined || value === '') return 'Sin responder'
-  switch (requirement.response_type) {
+  switch (responseType) {
     case 'compliant_status':
       return translateCompliantStatus(String(value))
     case 'multi_choice':
@@ -149,7 +156,7 @@ export function AnswerField({
             {value}
           </a>
         ) : (
-          <p>{formatReadOnlyValue(requirement, value)}</p>
+          <p>{formatReadOnlyValue(requirement.response_type, value)}</p>
         )}
         {vendorComment && (
           <p className="mt-1 text-xs text-muted-foreground">Comentario: {vendorComment}</p>
