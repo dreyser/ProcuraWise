@@ -15,6 +15,11 @@ NotificationEvent = Literal[
     "proposal_reopened",
     "approval_requested",
     "evaluation_completed",
+    # ADR 0026 (R2) - mirrors approval_requested for the optional review
+    # stage ahead of it. There is no "review_rejected"/"review_changes_
+    # requested" notification, matching the existing precedent: the
+    # approver's own reject() below never notifies the owner either.
+    "review_requested",
     # Fase 25 (billing/admin, ADR 0025, plan Bloqueante #1 Opcion A): the
     # only billing notification - "payment_failed" is deliberately absent, a
     # declined card never completes the Checkout Session (Stripe's own

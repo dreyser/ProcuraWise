@@ -34,6 +34,12 @@ export function hasResponseDeadline(evaluation: EvaluationDetailResponse): boole
   return evaluation.response_deadline !== null
 }
 
+/** ADR 0026 (R2) - a Reviewer is optional per evaluation; `hasReviewer`
+ * mirrors `hasApprover` for the new stage. */
+export function hasReviewer(evaluation: EvaluationDetailResponse): boolean {
+  return evaluation.reviewer_membership_id !== null
+}
+
 /** Client-side preview of the same preconditions `start-collection` enforces
  * server-side (evaluations/service.py::start_collection) - never the source
  * of truth, only a UX hint (brief §23/CLAUDE.md §5). Shared between
@@ -95,9 +101,46 @@ export function requestApprovalPreconditionReasons(evaluation: EvaluationDetailR
   if (!hasResponseDeadline(evaluation)) {
     reasons.push('Debes establecer una fecha límite de respuesta.')
   }
+  // ADR 0026 (R2): only applies when a reviewer is actually assigned - an
+  // evaluation that never uses the (optional) review stage is unaffected.
+  if (hasReviewer(evaluation) && evaluation.review_status !== 'approved') {
+    reasons.push('La evaluación debe pasar revisión antes de poder pedir aprobación.')
+  }
   return reasons
 }
 
 export function isReadyToRequestApproval(evaluation: EvaluationDetailResponse): boolean {
   return requestApprovalPreconditionReasons(evaluation).length === 0
+}
+
+/** ADR 0026 (R2) - mirrors requestApprovalPreconditionReasons for the
+ * optional review stage: draft readiness (weights + vendor) + a reviewer
+ * assigned. No response_deadline requirement - that's an approval-stage
+ * precondition, unaffected by whether the evaluation is reviewed first. */
+export function requestReviewPreconditionReasons(evaluation: EvaluationDetailResponse): string[] {
+  const reasons: string[] = []
+  const functionalWeight = weightOf(evaluation, 'functional')
+  const technicalWeight = weightOf(evaluation, 'technical')
+
+  if (Math.abs(functionalWeight - DIMENSION_WEIGHT_TARGETS.functional) > WEIGHT_TOLERANCE) {
+    reasons.push(
+      `Los requerimientos funcionales deben sumar ${DIMENSION_WEIGHT_TARGETS.functional} puntos (llevan ${functionalWeight}).`,
+    )
+  }
+  if (Math.abs(technicalWeight - DIMENSION_WEIGHT_TARGETS.technical) > WEIGHT_TOLERANCE) {
+    reasons.push(
+      `Los requerimientos técnicos deben sumar ${DIMENSION_WEIGHT_TARGETS.technical} puntos (llevan ${technicalWeight}).`,
+    )
+  }
+  if (!hasLinkedVendor(evaluation)) {
+    reasons.push('Debes vincular al menos un proveedor.')
+  }
+  if (!hasReviewer(evaluation)) {
+    reasons.push('Debes asignar un revisor.')
+  }
+  return reasons
+}
+
+export function isReadyToRequestReview(evaluation: EvaluationDetailResponse): boolean {
+  return requestReviewPreconditionReasons(evaluation).length === 0
 }

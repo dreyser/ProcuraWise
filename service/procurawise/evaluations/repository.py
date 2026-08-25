@@ -214,6 +214,56 @@ class EvaluationRepository:
         )
         return result.matched_count > 0
 
+    def set_reviewer(self, tenant_id: str, evaluation_id: str, reviewer_membership_id: str) -> bool:
+        """ADR 0026 (R2) - mirrors set_approver exactly, gated on
+        review_status instead of approval_status. Unlike approval_status
+        (which predates any real evaluation data), review_status is a brand
+        new field on documents that may already exist in "draft" from the
+        Fase 28 pilot with no review_status key at all - Mongo's $in treats
+        None as matching both an explicit null and a genuinely-absent field,
+        so including None here is enough to accept those documents as
+        "not_requested" without a backfill migration."""
+        result = self._scoped(tenant_id).update_one(
+            {
+                "_id": evaluation_id,
+                "status": "draft",
+                "review_status": {"$in": ["not_requested", "rejected", None]},
+            },
+            {
+                "$set": {
+                    "reviewer_membership_id": reviewer_membership_id,
+                    "updated_at": datetime.now(UTC),
+                }
+            },
+        )
+        return result.matched_count > 0
+
+    def transition_review_status(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        from_statuses: tuple[str, ...],
+        to_status: str,
+        extra_set: dict[str, Any] | None = None,
+    ) -> bool:
+        """ADR 0026 (R2) - mirrors transition_approval_status exactly,
+        applied to review_status instead. Same None-in-$in trick as
+        set_reviewer above, only added when "not_requested" is itself one of
+        the accepted source states - a pre-existing document with no
+        review_status key is only ever a valid "not_requested", never a
+        valid "pending" (nothing could have set it to pending without the
+        key already existing)."""
+        query_values: list[str | None] = list(from_statuses)
+        if "not_requested" in from_statuses:
+            query_values.append(None)
+        update = {"review_status": to_status, "updated_at": datetime.now(UTC)}
+        update.update(extra_set or {})
+        result = self._scoped(tenant_id).update_one(
+            {"_id": evaluation_id, "review_status": {"$in": query_values}},
+            {"$set": update},
+        )
+        return result.matched_count > 0
+
     def backfill_approval_snapshot_id(
         self, tenant_id: str, evaluation_id: str, snapshot_id: str
     ) -> bool:

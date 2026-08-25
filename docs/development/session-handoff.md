@@ -32,6 +32,31 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: R2 implementado (Reviewer + aprobación en dos pasos, ADR 0026)
+
+**Resumen:** Implementación completa del diseño de ADR 0026 (UAT-06/07/08). Backend: 7 campos nuevos en `Evaluation` (sin migración), endpoints `/reviewer`, `/request-review`, `/review/approve`, `/review/reject` mirroring el mecanismo de approver existente, auto-encadenado de la aprobación de revisión a "pendiente de aprobación" (blocking question #2), y `kind`/`requirement_notes` en `reject`/`review_reject` para distinguir "solicitar cambios" de un rechazo genérico en la auditoría (blocking question resuelta 2026-08-24). Frontend: sección "Revisión (opcional)" en `EvaluationApprovalPage.tsx`, navegación contextual en `EvaluationTabNav.tsx` (UAT-08, oculta "Aprobación" a quien no sea owner/approver/reviewer asignado), `translateReviewStatus` nuevo para no confundir "revisión pendiente" con "aprobación pendiente".
+
+**Dos defectos reales encontrados y corregidos durante esta misma sesión (antes de cerrar):**
+1. El filtro Mongo de `set_reviewer`/`transition_review_status` no aceptaba documentos sin `review_status` (campo completamente nuevo) - evaluaciones reales ya existentes del piloto (Fase 28) habrían quedado sin poder asignar revisor nunca. Corregido incluyendo `None` en el `$in` (Mongo trata `None` como "null o campo ausente"), sin necesidad de migración.
+2. Los campos "Aprobador"/"Fecha límite de respuesta" solo se persistían al hacer clic en "Solicitar aprobación" - botón que ahora también puede quedar deshabilitado por el nuevo gate de revisión, un motivo sin relación con si esos campos ya están elegidos. Esto hacía imposible configurar el approver con antelación mientras la revisión está en curso, inutilizando el auto-encadenado. Corregido persistiendo esos campos inmediatamente (`onValueChange`/`onBlur`) en vez de solo al enviar. Encontrado escribiendo el e2e del journey completo, no por inspección de código.
+
+**Archivos tocados (backend):** `evaluations/models.py`, `evaluations/repository.py`, `evaluations/service.py`, `evaluations/router.py`, `evaluations/schemas.py`, `evaluations/exceptions.py`, `scoring/router.py` (su propio builder de `EvaluationDetailResponse`), `audit/models.py`, `notifications/models.py`, `tests/unit/test_evaluation_models.py`, `tests/api/test_review_approval.py` (nuevo).
+
+**Archivos tocados (frontend):** `EvaluationApprovalPage.tsx`/`.test.tsx` (nuevo), `EvaluationTabNav.tsx`/`.test.tsx` (nuevo), `evaluationReadiness.ts`/`.test.ts`, `enumLabels.ts`/`.test.ts`, `e2e/evaluation-approval.spec.ts` (nuevo journey de 3 actores + UAT-08 actualizado), y 4 archivos de test que solo necesitaron los nuevos campos `review_*` en su fixture de `EvaluationDetailResponse` (`App.integration.test.tsx`, `QnaPage.test.tsx`, `WizardStepMetadata.test.tsx`, `deriveWizardStep.test.ts`).
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 309 passed. `pytest -m docker` → 447 passed (+8 nuevos). `pnpm test` → 232/232 (+11 nuevos). `make contracts` → diff real esperado (a diferencia de R1, R2 sí cambia backend/contrato). `make test-e2e` (Docker real, 23 specs) → 23/23 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna adicional a las 2 ya registradas dentro del propio ADR 0026.
+
+**Deuda técnica introducida:** Ninguna nueva. Nota heredada, no bloqueante: un approver/reviewer no-owner sigue sin poder resolver nombres de otros miembros vía `memberLabel` (`GET /org-members` está restringido a `tenant_admin`/`evaluation_owner` desde antes de esta sesión) - limitación pre-existente, no introducida ni ampliada por R2.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar el conjunto `docs/adr-0026-reviewer-approval` + `feat/r2-reviewer-two-step-approval` y confirmar en staging el journey de 3 actores real.
+- Continuar con **R3** (UAT-04/09 progreso/estado consolidado + UAT-15 autosave de scoring, depende de R2) - ver `backlog.md` sección E12.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes - no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-25 — Remediación UAT piloto: ADR 0026 (Reviewer + aprobación en dos pasos) redactado y aceptado — R2 desbloqueado
 
 **Resumen:** R2 (UAT-06/07/08) exigía explícitamente un ADR nuevo antes de implementarse. Investigado el mecanismo actual de aprobación de un paso (`approver_membership_id`/`approval_status` en `evaluations/models.py`, `set_approver`/`request_approval`/`approve`/`reject` en `evaluations/service.py`) y confirmado que `Assignment` (dimension+section, solo scoring) no puede representar "revisor de toda la evaluación". Dos preguntas bloqueantes reales identificadas antes de redactar (impacto en modelo de datos y en radio de cambio sobre e2e existentes) — resueltas por el founder: (1) Reviewer opcional por evaluación, no obligatorio — cero migración, cero cambio en tests existentes; (2) aprobación del Reviewer auto-encadena a "pendiente de aprobación" del Approver, sin segunda acción manual del Owner. ADR 0026 registra la decisión completa: Reviewer reutiliza `internal_collaborator` vía un campo `reviewer_membership_id` (mismo patrón que `approver_membership_id`), `review_status` reutiliza el tipo `ApprovalStatus` existente (sin 5º valor), y "solicitar cambios" persiste `rejected` con comentarios por requerimiento y un evento de auditoría distinguible de un rechazo genérico.

@@ -77,6 +77,13 @@ function buildEvaluation(
         exit_portability_lockin: 10,
       },
     },
+    reviewer_membership_id: null,
+    review_status: 'not_requested',
+    review_requested_at: null,
+    review_requested_by_membership_id: null,
+    review_decided_at: null,
+    review_decided_by_membership_id: null,
+    review_comment: null,
     ...overrides,
   }
 }

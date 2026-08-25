@@ -63,6 +63,31 @@ class NotAssignedApproverError(Exception):
     assigned approver_membership_id."""
 
 
+class ReviewerMembershipNotFoundError(Exception):
+    """target reviewer_membership_id does not exist in the caller's tenant."""
+
+
+class ReviewerRoleMismatchError(Exception):
+    """The target Membership's role is not "internal_collaborator" (ADR
+    0026: Reviewer is a capability over that existing role, not a new
+    global Role value)."""
+
+
+class SelfReviewError(Exception):
+    """The target reviewer shares a user_id with the evaluation's creator -
+    mirrors SelfApprovalError for the review stage (ADR 0026)."""
+
+
+class ReviewPreconditionError(Exception):
+    """request_review was called but a precondition (weights complete, at
+    least one vendor linked, reviewer assigned) is not met."""
+
+
+class NotAssignedReviewerError(Exception):
+    """review/approve or review/reject was called by someone other than the
+    evaluation's assigned reviewer_membership_id."""
+
+
 class SnapshotNotFoundError(Exception):
     """No EvaluationSnapshot exists yet for this evaluation - either it has
     never been published, or (plan §29) it was published before Fase 12

@@ -56,6 +56,42 @@ def test_evaluation_from_document_defaults_approval_status_for_pre_phase12_docum
     assert restored.approval_snapshot_id is None
 
 
+def test_evaluation_create_defaults_review_fields_to_not_requested() -> None:
+    """ADR 0026 (R2): a fresh evaluation never uses the (optional) review
+    stage until an owner explicitly assigns a reviewer."""
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    assert evaluation.review_status == "not_requested"
+    assert evaluation.reviewer_membership_id is None
+    assert evaluation.review_requested_at is None
+    assert evaluation.review_decided_at is None
+    assert evaluation.review_comment is None
+
+
+def test_evaluation_from_document_defaults_review_status_for_pre_r2_documents() -> None:
+    """ADR 0026 (R2): evaluations persisted before R2 (including real
+    evaluations from the Fase 28 pilot) have none of the review_* keys - no
+    backfill, from_document must still load them as "never reviewed"."""
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    doc = evaluation.to_document()
+    for key in [
+        "reviewer_membership_id",
+        "review_status",
+        "review_requested_at",
+        "review_requested_by_membership_id",
+        "review_decided_at",
+        "review_decided_by_membership_id",
+        "review_comment",
+    ]:
+        del doc[key]
+    restored = Evaluation.from_document(doc)
+    assert restored.review_status == "not_requested"
+    assert restored.reviewer_membership_id is None
+
+
 def test_evaluation_from_document_defaults_tco_fields_for_pre_phase19_documents() -> None:
     """Evaluations persisted before Fase 19 have neither key (plan §17
     N239-241: no backfill) - MXN/1 year are the safe defaults."""
@@ -282,4 +318,51 @@ def test_approval_invalidation_extra_set_resets_approval_when_pending_or_approve
         "approval_decided_at": None,
         "approval_decided_by_membership_id": None,
         "approval_comment": None,
+    }
+
+
+@pytest.mark.parametrize("review_status", ["pending", "approved"])
+def test_approval_invalidation_extra_set_resets_review_when_pending_or_approved(
+    review_status: str,
+) -> None:
+    """ADR 0026 (R2): a draft-gated edit must invalidate a reviewer's
+    decision the same way it already invalidates an approver's - otherwise a
+    Reviewer's approval could silently survive a content change it never
+    actually reviewed."""
+    from dataclasses import replace
+
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    evaluation = replace(evaluation, review_status=review_status)  # type: ignore[arg-type]
+    extra_set = evaluation.approval_invalidation_extra_set()
+    assert extra_set == {
+        "review_status": "not_requested",
+        "review_decided_at": None,
+        "review_decided_by_membership_id": None,
+        "review_comment": None,
+    }
+
+
+def test_approval_invalidation_extra_set_resets_both_when_both_pending() -> None:
+    """ADR 0026 (R2): an evaluation that auto-chained review approval into a
+    pending approver decision (blocking question #2) has both statuses
+    "live" at once - an edit at that point must invalidate both in the same
+    atomic write, not just one."""
+    from dataclasses import replace
+
+    evaluation = Evaluation.create(
+        tenant_id="t", name="RFP", description="", created_by_membership_id="m"
+    )
+    evaluation = replace(evaluation, approval_status="pending", review_status="approved")  # type: ignore[arg-type]
+    extra_set = evaluation.approval_invalidation_extra_set()
+    assert extra_set == {
+        "approval_status": "not_requested",
+        "approval_decided_at": None,
+        "approval_decided_by_membership_id": None,
+        "approval_comment": None,
+        "review_status": "not_requested",
+        "review_decided_at": None,
+        "review_decided_by_membership_id": None,
+        "review_comment": None,
     }

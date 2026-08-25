@@ -113,6 +113,13 @@ def _evaluation_detail(evaluation: Evaluation) -> EvaluationDetailResponse:
             commercial=evaluation.economic_criteria_weights.commercial,
             risk=evaluation.economic_criteria_weights.risk,
         ),
+        reviewer_membership_id=evaluation.reviewer_membership_id,
+        review_status=evaluation.review_status,
+        review_requested_at=evaluation.review_requested_at,
+        review_requested_by_membership_id=evaluation.review_requested_by_membership_id,
+        review_decided_at=evaluation.review_decided_at,
+        review_decided_by_membership_id=evaluation.review_decided_by_membership_id,
+        review_comment=evaluation.review_comment,
     )
 
 

@@ -137,6 +137,15 @@ class EvaluationDetailResponse(APIModel):
     base_currency: str
     tco_horizon_years: int
     economic_criteria_weights: EconomicCriteriaWeightsResponse
+    # ADR 0026 (R2) - review stage is optional per evaluation; None/
+    # "not_requested" for every evaluation that never assigns a reviewer.
+    reviewer_membership_id: str | None
+    review_status: ApprovalStatus
+    review_requested_at: datetime | None
+    review_requested_by_membership_id: str | None
+    review_decided_at: datetime | None
+    review_decided_by_membership_id: str | None
+    review_comment: str | None
 
 
 class SetApproverRequest(APIModel):
@@ -147,8 +156,31 @@ class ApprovalDecisionRequest(APIModel):
     comment: str | None = None
 
 
+class RequirementNoteRequest(APIModel):
+    """ADR 0026 (R2) - a per-requirement comment attached to a "solicitar
+    cambios" decision (blocking question resolved 2026-08-24: preserved
+    individually, never collapsed into the single evaluation-level
+    `comment`)."""
+
+    requirement_id: str
+    comment: str
+
+
 class RejectionRequest(APIModel):
     comment: str
+    # ADR 0026 (R2) - both fields are additive/optional so this schema keeps
+    # working unchanged for every caller that predates R2 (the reject body
+    # they already send). `kind` never changes what gets persisted
+    # (approval_status/review_status always become "rejected" either way) -
+    # it only changes which AuditAction is recorded, so "solicitud de
+    # cambios" and "rechazo genérico" are never the same, indistinguishable
+    # audit event.
+    kind: Literal["rejected", "changes_requested"] = "rejected"
+    requirement_notes: list[RequirementNoteRequest] | None = None
+
+
+class SetReviewerRequest(APIModel):
+    reviewer_membership_id: str
 
 
 class PublicationReadinessResponse(APIModel):
@@ -159,6 +191,15 @@ class PublicationReadinessResponse(APIModel):
     approval_status: ApprovalStatus
     approver_membership_id: str | None
     response_deadline: datetime | None
+    # ADR 0026 (R2) - mirrors the approval readiness fields above for the
+    # review stage. can_request_review/request_review_reasons are always
+    # meaningful (an evaluation with no reviewer assigned simply has an
+    # empty reasons list and can_request_review=False until one is set,
+    # same shape as approval before an approver is assigned).
+    can_request_review: bool
+    request_review_reasons: list[str]
+    review_status: ApprovalStatus
+    reviewer_membership_id: str | None
 
 
 class EvaluationSnapshotResponse(APIModel):

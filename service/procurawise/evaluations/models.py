@@ -255,6 +255,22 @@ class Evaluation:
     approval_decided_by_membership_id: str | None
     approval_comment: str | None
     approval_snapshot_id: str | None
+    # ADR 0026 (R2, UAT-06/07/08): an optional review stage ahead of the
+    # approver decision above. Reuses the same ApprovalStatus type and the
+    # same "Membership designated per-evaluation" shape as approver_
+    # fields - a Reviewer is not a new Role, it's an internal_collaborator
+    # Membership designated as this evaluation's reviewer. None/
+    # "not_requested" for every evaluation that never assigns a reviewer -
+    # for those, the approval flow is byte-for-byte identical to before ADR
+    # 0026 (no reviewer means no review gate, see
+    # EvaluationService._approval_readiness_reasons).
+    reviewer_membership_id: str | None
+    review_status: ApprovalStatus
+    review_requested_at: datetime | None
+    review_requested_by_membership_id: str | None
+    review_decided_at: datetime | None
+    review_decided_by_membership_id: str | None
+    review_comment: str | None
     # Fase 19 (ADR 0008, plan §9 R9): TCO config lives on the Evaluation
     # (like weights/response_deadline), not per-Proposal - every vendor's
     # CostItems are compared against the same base currency/horizon.
@@ -296,6 +312,13 @@ class Evaluation:
             approval_decided_by_membership_id=None,
             approval_comment=None,
             approval_snapshot_id=None,
+            reviewer_membership_id=None,
+            review_status="not_requested",
+            review_requested_at=None,
+            review_requested_by_membership_id=None,
+            review_decided_at=None,
+            review_decided_by_membership_id=None,
+            review_comment=None,
             base_currency="MXN",
             tco_horizon_years=1,
             economic_criteria_weights=EconomicCriteriaWeights.defaults(),
@@ -325,6 +348,13 @@ class Evaluation:
             "approval_decided_by_membership_id": self.approval_decided_by_membership_id,
             "approval_comment": self.approval_comment,
             "approval_snapshot_id": self.approval_snapshot_id,
+            "reviewer_membership_id": self.reviewer_membership_id,
+            "review_status": self.review_status,
+            "review_requested_at": self.review_requested_at,
+            "review_requested_by_membership_id": self.review_requested_by_membership_id,
+            "review_decided_at": self.review_decided_at,
+            "review_decided_by_membership_id": self.review_decided_by_membership_id,
+            "review_comment": self.review_comment,
             "base_currency": self.base_currency,
             "tco_horizon_years": self.tco_horizon_years,
             "economic_criteria_weights": self.economic_criteria_weights.to_document(),
@@ -357,6 +387,19 @@ class Evaluation:
             approval_decided_by_membership_id=doc.get("approval_decided_by_membership_id"),
             approval_comment=doc.get("approval_comment"),
             approval_snapshot_id=doc.get("approval_snapshot_id"),
+            # ADR 0026 - evaluations persisted before R2 have none of these
+            # keys; no backfill needed, "not_requested"/None means "this
+            # evaluation never used the review stage", which is also its
+            # correct meaning for every evaluation created after R2 that
+            # simply never assigns a reviewer (ADR 0026: optional per
+            # evaluation).
+            reviewer_membership_id=doc.get("reviewer_membership_id"),
+            review_status=doc.get("review_status", "not_requested"),
+            review_requested_at=doc.get("review_requested_at"),
+            review_requested_by_membership_id=doc.get("review_requested_by_membership_id"),
+            review_decided_at=doc.get("review_decided_at"),
+            review_decided_by_membership_id=doc.get("review_decided_by_membership_id"),
+            review_comment=doc.get("review_comment"),
             # Fase 19 - evaluations persisted before this phase have neither
             # key; MXN/1 year are the safe defaults (plan §17 N239-241, no
             # backfill).
@@ -375,15 +418,37 @@ class Evaluation:
         separate follow-up write - the mutation and the invalidation land
         together or not at all. Callers outside evaluations.service (e.g.
         knowledge_templates.service applying a template onto a draft
-        evaluation, Fase 11) reuse this instead of reimplementing the rule."""
-        if self.approval_status not in INVALIDATED_BY_APPROVAL_EDIT:
-            return {}
-        return {
-            "approval_status": "not_requested",
-            "approval_decided_at": None,
-            "approval_decided_by_membership_id": None,
-            "approval_comment": None,
-        }
+        evaluation, Fase 11) reuse this instead of reimplementing the rule.
+
+        ADR 0026 (R2): the same trigger also resets review_status when it is
+        "pending"/"approved" - an edit after the reviewer decided must
+        invalidate that decision exactly like it already invalidates the
+        approver's, otherwise a Reviewer's approval could silently survive a
+        content change it never actually reviewed. Both resets are folded
+        into the one dict this method returns so every existing call site
+        (evaluations.service, ai.service, knowledge_templates.service,
+        reports.import_service) gets the review reset for free, with no
+        change required at any of them."""
+        extra: dict[str, Any] = {}
+        if self.approval_status in INVALIDATED_BY_APPROVAL_EDIT:
+            extra.update(
+                {
+                    "approval_status": "not_requested",
+                    "approval_decided_at": None,
+                    "approval_decided_by_membership_id": None,
+                    "approval_comment": None,
+                }
+            )
+        if self.review_status in INVALIDATED_BY_APPROVAL_EDIT:
+            extra.update(
+                {
+                    "review_status": "not_requested",
+                    "review_decided_at": None,
+                    "review_decided_by_membership_id": None,
+                    "review_comment": None,
+                }
+            )
+        return extra
 
 
 @dataclass(frozen=True)

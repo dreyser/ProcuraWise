@@ -128,7 +128,9 @@ test.describe('evaluation approval and publication (Fase 12)', () => {
     await expect(page.getByText('Sin solicitar')).toBeVisible()
   })
 
-  test('a non-assigned actor never sees approve/reject controls', async ({ page }) => {
+  test('a non-assigned actor never sees the Aprobación tab at all (UAT-08, ADR 0026)', async ({
+    page,
+  }) => {
     const name = `RFP No Autorizado E2E ${Date.now()}`
     await createDraftEvaluation(page, name)
 
@@ -138,14 +140,78 @@ test.describe('evaluation approval and publication (Fase 12)', () => {
     await page.getByRole('button', { name: 'Solicitar aprobación' }).click()
     await expect(page.getByText('Aprobación pendiente')).toBeVisible()
 
-    // A functional evaluator (not the assigned approver, not the owner)
-    // can read the approval tab but must never see a decision control.
+    // A functional evaluator (not the assigned approver, not the owner, not
+    // a reviewer) never sees a decision control - and, since UAT-08/ADR
+    // 0026, doesn't even see the "Aprobación" tab in the nav, rather than
+    // reaching a page with the status visible but no buttons.
     await loginAsBuyer(page, 'evaluator.functional.a@dev.procurawise.local')
-    await openEvaluationApprovalTab(page, name)
-    await expect(page.getByText('Aprobación pendiente')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Aprobar' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Rechazar' })).toHaveCount(0)
+    await page.waitForURL('**/evaluations', wait)
+    await page.getByRole('link', { name }).click()
+    await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
+    await expect(page.getByRole('link', { name: 'Requerimientos' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Aprobación' })).toHaveCount(0)
 
     await checkA11y(page)
+  })
+
+  test('R2 (ADR 0026): reviewer approves and auto-chains into pending approver, who then approves', async ({
+    page,
+  }) => {
+    // The wizard's own step 4 (WizardStepReview.tsx) only ever offered the
+    // plain owner->approver flow and stays that way after ADR 0026 (the
+    // review stage is opt-in, reached from the standalone "Aprobación" tab,
+    // never forced into the wizard's fast path) - so this journey leaves
+    // the wizard after linking the vendor and does the review+approval
+    // configuration from the dedicated page instead, exactly like an owner
+    // who opts into a reviewer after finishing the wizard would.
+    const name = `RFP Reviewer E2E ${Date.now()}`
+    await createDraftEvaluation(page, name)
+    await page.getByRole('link', { name: 'Evaluaciones' }).click()
+    await openEvaluationApprovalTab(page, name)
+
+    // Configure the reviewer AND the approver/deadline before requesting
+    // review, not after - editing response_deadline (update_evaluation)
+    // while review_status is "pending" deliberately invalidates that
+    // pending review too (Evaluation.approval_invalidation_extra_set, ADR
+    // 0026: an edit after a decision must invalidate it, same rule already
+    // applied to the approver's own decision). Configuring everything
+    // upfront, then kicking off review, is the real intended flow - and is
+    // also what makes the auto-chain meaningful (approver+deadline already
+    // valid by the time review is approved).
+    await page.getByLabel('Revisor').click()
+    await page.getByRole('option', { name: 'Colaborador Interno A' }).click()
+    await page.getByLabel('Aprobador').click()
+    await page.getByRole('option', { name: 'Aprobador A' }).click()
+    await page.getByLabel('Fecha límite de respuesta').fill('2030-01-01')
+    await page.keyboard.press('Tab') // blur the deadline input, forcing its persist
+
+    await page.getByRole('button', { name: 'Solicitar revisión' }).click()
+    await expect(page.getByText('Revisión (opcional)')).toBeVisible()
+    await expect(page.getByText('Revisión pendiente')).toBeVisible()
+    // Now that a reviewer is actually assigned and pending, the review gate
+    // in _approval_readiness_reasons blocks "Solicitar aprobación" even
+    // though approver+deadline are already valid - review must pass first.
+    await expect(page.getByRole('button', { name: 'Solicitar aprobación' })).toBeDisabled()
+
+    await loginAsBuyer(page, 'collaborator.a@dev.procurawise.local')
+    await openEvaluationApprovalTab(page, name)
+    await expect(page.getByText('Tu revisión')).toBeVisible()
+    await page.getByLabel('Comentario (obligatorio para rechazar)').first().fill('se ve bien')
+    await page.getByRole('button', { name: 'Aprobar revisión' }).click()
+    await expect(page.getByText('Aprobada').first()).toBeVisible()
+    // Auto-chain (ADR 0026, blocking question #2): approval is already
+    // pending without the owner requesting it a second time.
+    await expect(page.getByText('Aprobación pendiente')).toBeVisible()
+
+    await loginAsBuyer(page, 'approver.a@dev.procurawise.local')
+    await openEvaluationApprovalTab(page, name)
+    await expect(page.getByText('Tu decisión')).toBeVisible()
+    await page.getByRole('button', { name: 'Aprobar' }).click()
+    await expect(page.getByText('Aprobada').first()).toBeVisible()
+
+    // Acceptance criterion: reviewer never approves via the approver's own
+    // control (already structurally true here - the reviewer's login never
+    // saw an "Aprobar"/"Rechazar" pair under "Tu decisión", only "Tu
+    // revisión" with "Aprobar revisión"/reject, a visibly distinct control).
   })
 })

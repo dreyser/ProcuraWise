@@ -9,9 +9,14 @@ import {
   useListOrgMembersApiV1OrgMembersGet,
   useRejectEvaluationApiV1EvaluationsEvaluationIdRejectPost,
   useRequestApprovalApiV1EvaluationsEvaluationIdRequestApprovalPost,
+  useRequestReviewApiV1EvaluationsEvaluationIdRequestReviewPost,
+  useReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost,
+  useReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost,
   useSetApproverApiV1EvaluationsEvaluationIdApproverPost,
+  useSetReviewerApiV1EvaluationsEvaluationIdReviewerPost,
   useUpdateEvaluationApiV1EvaluationsEvaluationIdPatch,
   useWithdrawApprovalRequestApiV1EvaluationsEvaluationIdRequestApprovalDelete,
+  useWithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete,
   type EvaluationDetailResponse,
   type EvaluationSnapshotResponse,
   type OrgMembersListResponse,
@@ -27,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -34,10 +40,63 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { translateApprovalStatus, translateEvaluationStatus } from '@/lib/enumLabels'
+import {
+  translateApprovalStatus,
+  translateEvaluationStatus,
+  translateReviewStatus,
+} from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
-import { requestApprovalPreconditionReasons } from '@/features/evaluations/lib/evaluationReadiness'
+import {
+  requestApprovalPreconditionReasons,
+  requestReviewPreconditionReasons,
+} from '@/features/evaluations/lib/evaluationReadiness'
+
+/** ADR 0026 (R2) - shared by both the reviewer's and the approver's own
+ * reject flow: per-requirement comments, only sent when at least one is
+ * non-empty, and only meaningful when the decision is flagged as "solicitar
+ * cambios" rather than a generic rejection (blocking question resolved
+ * 2026-08-24 - both persist the same rejected status, distinguished only in
+ * the audit trail). */
+function RequirementNotesEditor({
+  requirements,
+  notes,
+  onChange,
+}: {
+  requirements: EvaluationDetailResponse['requirements']
+  notes: Record<string, string>
+  onChange: (requirementId: string, value: string) => void
+}) {
+  if (requirements.length === 0) return null
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+      <p className="text-xs text-muted-foreground">
+        Comentario por requerimiento (opcional, se preserva individualmente):
+      </p>
+      {requirements.map((requirement) => (
+        <div key={requirement.id}>
+          <Label htmlFor={`requirement-note-${requirement.id}`} className="text-xs">
+            {requirement.title}
+          </Label>
+          <Input
+            id={`requirement-note-${requirement.id}`}
+            value={notes[requirement.id] ?? ''}
+            onChange={(event) => onChange(requirement.id, event.target.value)}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function buildRequirementNotes(
+  notes: Record<string, string>,
+): { requirement_id: string; comment: string }[] | null {
+  const entries = Object.entries(notes)
+    .filter(([, value]) => value.trim())
+    .map(([requirement_id, comment]) => ({ requirement_id, comment }))
+  return entries.length > 0 ? entries : null
+}
 
 /** "Aprobación" tab (Fase 12): reachable by every BUYER_READ_ROLES actor for
  * visibility, but the approve/reject controls only render for the
@@ -56,10 +115,14 @@ export function EvaluationApprovalPage() {
   const evaluation = unwrapData<EvaluationDetailResponse>(evaluationQuery.data)
   const isAssignedApprover =
     actor?.role === 'approver' && actor.membership_id === evaluation?.approver_membership_id
+  const isAssignedReviewer =
+    actor?.role === 'internal_collaborator' &&
+    actor.membership_id === evaluation?.reviewer_membership_id
 
   const orgMembersQuery = useListOrgMembersApiV1OrgMembersGet({ query: { enabled: isOwner } })
   const orgMembers = unwrapData<OrgMembersListResponse>(orgMembersQuery.data)?.items ?? []
   const approvers = orgMembers.filter((member) => member.role === 'approver')
+  const reviewers = orgMembers.filter((member) => member.role === 'internal_collaborator')
   const memberLabel = (membershipId: string | null): string | null => {
     if (!membershipId) return null
     return orgMembers.find((member) => member.membership_id === membershipId)?.display_name ?? null
@@ -74,6 +137,15 @@ export function EvaluationApprovalPage() {
   const [comment, setComment] = useState('')
   const [confirmWithdraw, setConfirmWithdraw] = useState(false)
   const [confirmReject, setConfirmReject] = useState(false)
+  const [changesRequested, setChangesRequested] = useState(false)
+  const [requirementNotes, setRequirementNotes] = useState<Record<string, string>>({})
+
+  const [selectedReviewerId, setSelectedReviewerId] = useState('')
+  const [reviewComment, setReviewComment] = useState('')
+  const [confirmWithdrawReview, setConfirmWithdrawReview] = useState(false)
+  const [confirmReviewReject, setConfirmReviewReject] = useState(false)
+  const [reviewChangesRequested, setReviewChangesRequested] = useState(false)
+  const [reviewRequirementNotes, setReviewRequirementNotes] = useState<Record<string, string>>({})
 
   const invalidateEvaluation = () =>
     queryClient.invalidateQueries({
@@ -107,6 +179,38 @@ export function EvaluationApprovalPage() {
         invalidateEvaluation()
         setConfirmReject(false)
         setComment('')
+        setChangesRequested(false)
+        setRequirementNotes({})
+      },
+    },
+  })
+
+  const setReviewer = useSetReviewerApiV1EvaluationsEvaluationIdReviewerPost({
+    mutation: { onSuccess: invalidateEvaluation },
+  })
+  const requestReview = useRequestReviewApiV1EvaluationsEvaluationIdRequestReviewPost({
+    mutation: { onSuccess: invalidateEvaluation },
+  })
+  const withdrawReviewRequest =
+    useWithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete({
+      mutation: {
+        onSuccess: () => {
+          invalidateEvaluation()
+          setConfirmWithdrawReview(false)
+        },
+      },
+    })
+  const reviewApprove = useReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost({
+    mutation: { onSuccess: invalidateEvaluation },
+  })
+  const reviewReject = useReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost({
+    mutation: {
+      onSuccess: () => {
+        invalidateEvaluation()
+        setConfirmReviewReject(false)
+        setReviewComment('')
+        setReviewChangesRequested(false)
+        setReviewRequirementNotes({})
       },
     },
   })
@@ -119,6 +223,38 @@ export function EvaluationApprovalPage() {
     return <ErrorBanner message={normalizeApiError(evaluationQuery.error).message} />
   }
   if (!evaluation) return null
+
+  const canConfigureReview =
+    isOwner &&
+    evaluation.status === 'draft' &&
+    (evaluation.review_status === 'not_requested' || evaluation.review_status === 'rejected')
+  const effectiveReviewerId = selectedReviewerId || evaluation.reviewer_membership_id
+  const reviewRequestReasons = requestReviewPreconditionReasons({
+    ...evaluation,
+    reviewer_membership_id: effectiveReviewerId,
+  })
+  const canRequestReview = canConfigureReview && reviewRequestReasons.length === 0
+  const reviewRequestPending = setReviewer.isPending || requestReview.isPending
+  const reviewRequestError = setReviewer.isError
+    ? setReviewer.error
+    : requestReview.isError
+      ? requestReview.error
+      : null
+
+  const handleRequestReview = async () => {
+    try {
+      const reviewerToSet = selectedReviewerId || evaluation.reviewer_membership_id
+      if (reviewerToSet && reviewerToSet !== evaluation.reviewer_membership_id) {
+        await setReviewer.mutateAsync({
+          evaluationId: evaluation.id,
+          data: { reviewer_membership_id: reviewerToSet },
+        })
+      }
+      await requestReview.mutateAsync({ evaluationId: evaluation.id })
+    } catch {
+      // Surfaced via the individual mutations' own isError/error state above.
+    }
+  }
 
   const canConfigure =
     isOwner &&
@@ -172,6 +308,8 @@ export function EvaluationApprovalPage() {
 
   const requestedByLabel = memberLabel(evaluation.approval_requested_by_membership_id)
   const decidedByLabel = memberLabel(evaluation.approval_decided_by_membership_id)
+  const reviewRequestedByLabel = memberLabel(evaluation.review_requested_by_membership_id)
+  const reviewDecidedByLabel = memberLabel(evaluation.review_decided_by_membership_id)
 
   return (
     <div className="max-w-2xl">
@@ -180,6 +318,179 @@ export function EvaluationApprovalPage() {
         <StatusBadge label={translateEvaluationStatus(evaluation.status)} />
       </div>
       <EvaluationTabNav evaluationId={evaluation.id} />
+
+      {/* ADR 0026 (R2): the review stage is optional per evaluation - shown
+          to the owner always (so they can opt in), and to everyone else
+          only once a reviewer has actually been assigned. */}
+      {(isOwner || evaluation.reviewer_membership_id) && (
+        <section className="mt-6">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-foreground">Revisión (opcional)</h2>
+            {evaluation.reviewer_membership_id && (
+              <StatusBadge label={translateReviewStatus(evaluation.review_status)} />
+            )}
+          </div>
+
+          {evaluation.reviewer_membership_id ? (
+            <dl className="mt-3 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Revisor</dt>
+                <dd className="text-foreground">
+                  {memberLabel(evaluation.reviewer_membership_id) ?? 'Desconocido'}
+                </dd>
+              </div>
+              {evaluation.review_requested_at && (
+                <div>
+                  <dt className="text-muted-foreground">Solicitada</dt>
+                  <dd className="text-foreground">
+                    {new Date(evaluation.review_requested_at).toLocaleString()}
+                    {reviewRequestedByLabel ? ` · ${reviewRequestedByLabel}` : ''}
+                  </dd>
+                </div>
+              )}
+              {evaluation.review_decided_at && (
+                <div>
+                  <dt className="text-muted-foreground">
+                    {evaluation.review_status === 'rejected' ? 'Rechazada' : 'Decidida'}
+                  </dt>
+                  <dd className="text-foreground">
+                    {new Date(evaluation.review_decided_at).toLocaleString()}
+                    {reviewDecidedByLabel ? ` · ${reviewDecidedByLabel}` : ''}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Sin revisor asignado - esta evaluación puede pedir aprobación directamente.
+            </p>
+          )}
+          {evaluation.review_comment && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Comentario: {evaluation.review_comment}
+            </p>
+          )}
+
+          {canConfigureReview && (
+            <div className="mt-4 flex flex-col gap-3">
+              <div>
+                <Label htmlFor="review-reviewer-select">Revisor</Label>
+                <Select
+                  value={selectedReviewerId || evaluation.reviewer_membership_id || undefined}
+                  onValueChange={setSelectedReviewerId}
+                >
+                  <SelectTrigger id="review-reviewer-select" className="w-full">
+                    <SelectValue placeholder="Selecciona un revisor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {reviewers.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        Sin colaboradores internos en tu organización
+                      </SelectItem>
+                    ) : (
+                      reviewers.map((member) => (
+                        <SelectItem key={member.membership_id} value={member.membership_id}>
+                          {member.display_name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              {reviewRequestError && (
+                <ErrorBanner message={normalizeApiError(reviewRequestError).message} />
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                className="self-start"
+                disabled={!canRequestReview || reviewRequestPending}
+                onClick={handleRequestReview}
+              >
+                {reviewRequestPending ? 'Solicitando…' : 'Solicitar revisión'}
+              </Button>
+              <DisabledActionHint reasons={canRequestReview ? [] : reviewRequestReasons} />
+            </div>
+          )}
+
+          {isOwner && evaluation.review_status === 'pending' && (
+            <div className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmWithdrawReview(true)}
+              >
+                Retirar solicitud de revisión
+              </Button>
+            </div>
+          )}
+
+          {isAssignedReviewer && evaluation.review_status === 'pending' && (
+            <div className="mt-4 flex flex-col gap-3">
+              <h3 className="text-sm font-semibold text-foreground">Tu revisión</h3>
+              <div>
+                <Label htmlFor="review-comment">Comentario (obligatorio para rechazar)</Label>
+                <Textarea
+                  id="review-comment"
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="review-changes-requested"
+                  checked={reviewChangesRequested}
+                  onCheckedChange={() => setReviewChangesRequested((value) => !value)}
+                />
+                <Label htmlFor="review-changes-requested" className="text-sm">
+                  Es una solicitud de cambios, no un rechazo definitivo
+                </Label>
+              </div>
+              {reviewChangesRequested && (
+                <RequirementNotesEditor
+                  requirements={evaluation.requirements}
+                  notes={reviewRequirementNotes}
+                  onChange={(id, value) =>
+                    setReviewRequirementNotes((prev) => ({ ...prev, [id]: value }))
+                  }
+                />
+              )}
+              {(reviewApprove.isError || reviewReject.isError) && (
+                <ErrorBanner
+                  message={normalizeApiError(reviewApprove.error ?? reviewReject.error).message}
+                />
+              )}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  disabled={reviewApprove.isPending}
+                  onClick={() =>
+                    reviewApprove.mutate({
+                      evaluationId: evaluation.id,
+                      data: { comment: reviewComment || null },
+                    })
+                  }
+                >
+                  {reviewApprove.isPending ? 'Aprobando…' : 'Aprobar revisión'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={!reviewComment.trim()}
+                  onClick={() => setConfirmReviewReject(true)}
+                >
+                  {reviewChangesRequested ? 'Solicitar cambios' : 'Rechazar'}
+                </Button>
+              </div>
+              <DisabledActionHint
+                reasons={
+                  reviewComment.trim() ? [] : ['Debes escribir un comentario para rechazar.']
+                }
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="mt-6">
         <div className="flex items-center gap-2">
@@ -232,7 +543,22 @@ export function EvaluationApprovalPage() {
               <Label htmlFor="approval-approver-select">Aprobador</Label>
               <Select
                 value={selectedApproverId || evaluation.approver_membership_id || undefined}
-                onValueChange={setSelectedApproverId}
+                onValueChange={(value) => {
+                  setSelectedApproverId(value)
+                  // ADR 0026 (R2): persist immediately rather than only as
+                  // part of the "Solicitar aprobación" submit - that button
+                  // can now stay disabled purely because review hasn't
+                  // passed yet (a reason unrelated to whether an approver
+                  // is chosen), so waiting for it would make the approver
+                  // impossible to configure in advance while review is in
+                  // progress, defeating the auto-chain on review approval.
+                  if (value && value !== evaluation.approver_membership_id) {
+                    setApprover.mutate({
+                      evaluationId: evaluation.id,
+                      data: { approver_membership_id: value },
+                    })
+                  }
+                }}
               >
                 <SelectTrigger id="approval-approver-select" className="w-full">
                   <SelectValue placeholder="Selecciona un aprobador" />
@@ -261,6 +587,18 @@ export function EvaluationApprovalPage() {
                   evaluation.response_deadline ? evaluation.response_deadline.slice(0, 10) : ''
                 }
                 onChange={(event) => setDeadline(event.target.value)}
+                onBlur={(event) => {
+                  const value = event.target.value
+                  const deadlineIso = value ? new Date(`${value}T00:00:00Z`).toISOString() : null
+                  // Same reasoning as the approver Select above - persisted
+                  // on blur, not gated behind the request-approval button.
+                  if (deadlineIso && deadlineIso !== evaluation.response_deadline) {
+                    updateDeadline.mutate({
+                      evaluationId: evaluation.id,
+                      data: { response_deadline: deadlineIso },
+                    })
+                  }
+                }}
               />
             </div>
             {requestError && <ErrorBanner message={normalizeApiError(requestError).message} />}
@@ -297,6 +635,23 @@ export function EvaluationApprovalPage() {
                 onChange={(event) => setComment(event.target.value)}
               />
             </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="approval-changes-requested"
+                checked={changesRequested}
+                onCheckedChange={() => setChangesRequested((value) => !value)}
+              />
+              <Label htmlFor="approval-changes-requested" className="text-sm">
+                Es una solicitud de cambios, no un rechazo definitivo
+              </Label>
+            </div>
+            {changesRequested && (
+              <RequirementNotesEditor
+                requirements={evaluation.requirements}
+                notes={requirementNotes}
+                onChange={(id, value) => setRequirementNotes((prev) => ({ ...prev, [id]: value }))}
+              />
+            )}
             {(approveEvaluation.isError || rejectEvaluation.isError) && (
               <ErrorBanner
                 message={
@@ -323,7 +678,7 @@ export function EvaluationApprovalPage() {
                 disabled={!comment.trim()}
                 onClick={() => setConfirmReject(true)}
               >
-                Rechazar
+                {changesRequested ? 'Solicitar cambios' : 'Rechazar'}
               </Button>
             </div>
             <DisabledActionHint
@@ -366,13 +721,51 @@ export function EvaluationApprovalPage() {
       <ConfirmDialog
         open={confirmReject}
         onOpenChange={setConfirmReject}
-        title="Rechazar evaluación"
+        title={changesRequested ? 'Solicitar cambios' : 'Rechazar evaluación'}
         description="El responsable de evaluación verá tu comentario y podrá editar y volver a solicitar aprobación."
-        confirmLabel="Rechazar"
+        confirmLabel={changesRequested ? 'Solicitar cambios' : 'Rechazar'}
         variant="destructive"
         isPending={rejectEvaluation.isPending}
         onConfirm={() =>
-          rejectEvaluation.mutate({ evaluationId: evaluation.id, data: { comment } })
+          rejectEvaluation.mutate({
+            evaluationId: evaluation.id,
+            data: {
+              comment,
+              kind: changesRequested ? 'changes_requested' : 'rejected',
+              requirement_notes: buildRequirementNotes(requirementNotes),
+            },
+          })
+        }
+      />
+
+      <ConfirmDialog
+        open={confirmWithdrawReview}
+        onOpenChange={setConfirmWithdrawReview}
+        title="Retirar solicitud de revisión"
+        description="El revisor ya no podrá decidir sobre esta solicitud hasta que la vuelvas a enviar."
+        confirmLabel="Retirar solicitud"
+        variant="destructive"
+        isPending={withdrawReviewRequest.isPending}
+        onConfirm={() => withdrawReviewRequest.mutate({ evaluationId: evaluation.id })}
+      />
+
+      <ConfirmDialog
+        open={confirmReviewReject}
+        onOpenChange={setConfirmReviewReject}
+        title={reviewChangesRequested ? 'Solicitar cambios' : 'Rechazar revisión'}
+        description="El responsable de evaluación verá tu comentario y podrá editar y volver a solicitar revisión."
+        confirmLabel={reviewChangesRequested ? 'Solicitar cambios' : 'Rechazar'}
+        variant="destructive"
+        isPending={reviewReject.isPending}
+        onConfirm={() =>
+          reviewReject.mutate({
+            evaluationId: evaluation.id,
+            data: {
+              comment: reviewComment,
+              kind: reviewChangesRequested ? 'changes_requested' : 'rejected',
+              requirement_notes: buildRequirementNotes(reviewRequirementNotes),
+            },
+          })
         }
       />
     </div>

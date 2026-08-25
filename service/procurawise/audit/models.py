@@ -177,6 +177,20 @@ AuditAction = Literal[
     "billing_checkout_session_created",
     "billing_payment_succeeded",
     "billing_checkout_expired",
+    # ADR 0026 (R2, UAT-06/07/08) - resource_type "evaluation" (reused, same
+    # pattern as the approval family above). "_changes_requested" variants
+    # are never the same action as their "_rejected" sibling even though
+    # both persist review_status/approval_status="rejected" - the action
+    # itself is the audit-trail discriminator the founder's blocking
+    # decision (2026-08-24) required, not an optional metadata flag a reader
+    # could ignore.
+    "evaluation_reviewer_set",
+    "evaluation_review_requested",
+    "evaluation_review_withdrawn",
+    "evaluation_review_approved",
+    "evaluation_review_rejected",
+    "evaluation_review_changes_requested",
+    "evaluation_changes_requested",
 ]
 
 
