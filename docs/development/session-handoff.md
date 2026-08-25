@@ -32,6 +32,28 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: ADR 0026 (Reviewer + aprobación en dos pasos) redactado y aceptado — R2 desbloqueado
+
+**Resumen:** R2 (UAT-06/07/08) exigía explícitamente un ADR nuevo antes de implementarse. Investigado el mecanismo actual de aprobación de un paso (`approver_membership_id`/`approval_status` en `evaluations/models.py`, `set_approver`/`request_approval`/`approve`/`reject` en `evaluations/service.py`) y confirmado que `Assignment` (dimension+section, solo scoring) no puede representar "revisor de toda la evaluación". Dos preguntas bloqueantes reales identificadas antes de redactar (impacto en modelo de datos y en radio de cambio sobre e2e existentes) — resueltas por el founder: (1) Reviewer opcional por evaluación, no obligatorio — cero migración, cero cambio en tests existentes; (2) aprobación del Reviewer auto-encadena a "pendiente de aprobación" del Approver, sin segunda acción manual del Owner. ADR 0026 registra la decisión completa: Reviewer reutiliza `internal_collaborator` vía un campo `reviewer_membership_id` (mismo patrón que `approver_membership_id`), `review_status` reutiliza el tipo `ApprovalStatus` existente (sin 5º valor), y "solicitar cambios" persiste `rejected` con comentarios por requerimiento y un evento de auditoría distinguible de un rechazo genérico.
+
+**Archivos tocados:**
+- `docs/architecture/decisions/0026-reviewer-aprobacion-dos-pasos.md` — nuevo ADR (Accepted).
+- `docs/development/backlog.md` — fila R2 (sección E12) actualizada: desbloqueada, referencia al ADR 0026.
+
+**Resultado de pruebas:** N/A — sesión de documentación pura, ningún archivo de código de producto tocado.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna adicional — las dos preguntas bloqueantes de esta sesión ya quedaron registradas dentro del propio ADR 0026, no como decisiones ad-hoc separadas.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- **R2 está desbloqueado.** Implementar exactamente el diseño de ADR 0026: nuevos campos en `Evaluation` (`reviewer_membership_id`, `review_status`, `review_requested_at`/`_by`, `review_decided_at`/`_by`, `review_comment`), endpoints nuevos (`POST /reviewer`, `POST`/`DELETE /request-review`, `POST /review/approve`, `POST /review/reject`), extensión `requirement_notes`/`kind` en `approve`/`reject` existentes, nuevos valores de `AuditAction`, extensión de `INVALIDATED_BY_APPROVAL_EDIT` para resetear `review_status` también, y navegación contextual en `EvaluationTabNav.tsx` (ocultar "Aprobación" a quien no sea owner/approver/reviewer asignado).
+- Los tests e2e/integración existentes del flujo de aprobación (`evaluation-approval.spec.ts`, `proposal-negotiation.spec.ts`, `vertical-slice.spec.ts`, `decision-approval.spec.ts`, `tests/conftest.py::approve_and_publish`) no deben requerir cambios — ninguno asigna revisor. Los tests nuevos de R2 deben cubrir explícitamente el camino con revisor (journey de 3 actores) y el test de autorización negativo del criterio de aceptación (reviewer nunca aprueba, approver nunca edita).
+- `dev_seed.py` ya siembra una Membership `internal_collaborator` (`Colaborador Interno A`) — usarla como el actor Reviewer en los tests nuevos, sin sembrar una identidad nueva.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-25 — Remediación UAT piloto: R1C implementado (UAT-10) — R1 completo
 
 **Resumen:** Tercer y último bloque de R1, encadenado sobre R1B. UAT-10 no era un bug — el análisis de remediación ya lo había investigado y descartado explícitamente como candidato a brecha de seguridad. Este bloque es refuerzo de verificación puro: confirmado que `scoring/`, `tco/` y `decisions/` routers usan uniformemente `shared.context.require_role` → `identity.jwt_provider.get_current_context`, que exige `token_use == "access"` antes de construir cualquier `ActorContext` — un `vendor_contact` solo porta un token `vendor_access`, físicamente distinto, así que se rechaza (401) en la capa de dependencias, antes de cualquier lookup por id. Sin cambios de código de producto; solo se amplió `isolation.spec.ts` con un test explícito para scoring/economic-assessment/decisions (antes solo cubría `/api/v1/evaluations` genéricamente).

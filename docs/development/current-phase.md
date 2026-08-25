@@ -1,5 +1,18 @@
 # Fase actual
 
+## Remediación UAT piloto — ADR 0026 aceptado (Reviewer + aprobación en dos pasos), R2 desbloqueado
+
+**Estado: 📋 ADR redactado y aceptado (2026-08-25) — implementación de R2 todavía no iniciada.** `backlog.md` exigía explícitamente un ADR nuevo antes de implementar R2 (UAT-06/07/08). Antes de redactarlo se identificaron dos preguntas bloqueantes reales con impacto directo en el modelo de datos y en el radio de cambio sobre specs e2e existentes — resueltas por el founder en esta sesión:
+
+1. **¿Reviewer obligatorio para toda evaluación, u opcional por evaluación?** → **Opcional por evaluación.** Si el Owner no asigna revisor, el flujo es idéntico al de hoy (Owner→Approver, sin cambios, cero migración). Si asigna uno, la evaluación debe pasar revisión antes de poder pedir aprobación.
+2. **¿La aprobación del Reviewer avanza automáticamente a "pendiente de aprobación", o el Owner debe volver a pedir aprobación manualmente?** → **Auto-encadenado** — en la misma transacción que la aprobación del Reviewer, si el resto de la readiness ya se cumple (approver asignado, `response_deadline` fijado), `approval_status` pasa a `pending` y se notifica al approver, sin una segunda acción del Owner.
+
+**Decisión registrada en [ADR 0026](../architecture/decisions/0026-reviewer-aprobacion-dos-pasos.md):** Reviewer reutiliza el rol ya existente `internal_collaborator` (no un nuevo valor de `Role`) — una Membership específica designada por evaluación vía `reviewer_membership_id`, mismo patrón exacto que `approver_membership_id` ya usa hoy (no se fuerza el concepto a través de `Assignment`, que es dimension+section-scoped para scoring, un concepto distinto). `ApprovalStatus` no gana un 5º valor (decisión previa del founder, 2026-08-24) — `review_status` reutiliza el mismo tipo (`not_requested|pending|approved|rejected`) aplicado a una segunda etapa. "Solicitar cambios" (Reviewer o Approver) persiste `rejected`/`review_status=rejected` con comentarios por requerimiento (`requirement_notes`, nuevo, embebido en el cuerpo de la petición) y un evento de auditoría distinguible (`evaluation_review_changes_requested`/`evaluation_changes_requested` vs. `evaluation_review_rejected`/`evaluation_rejected` — nunca colapsados). `EvaluationTabNav.tsx` (hoy estático) ocultará "Aprobación" a quien no sea owner/approver/reviewer asignado de esa evaluación (UAT-08).
+
+**Sin cambios de código de producto en esta sesión** — solo `docs/architecture/decisions/0026-reviewer-aprobacion-dos-pasos.md` (nuevo) y actualización de `backlog.md` (fila R2 desbloqueada).
+
+**R2 queda desbloqueado y listo para implementarse** en una sesión futura, siguiendo exactamente el diseño del ADR 0026.
+
 ## Remediación UAT piloto — R1C completo (UAT-10)
 
 **Estado: ✅ Implementado y verificado localmente (2026-08-25) — redeploy real pendiente.** Tercer y último bloque de R1 (E12), encadenado sobre R1B (`fix/r1b-multi-vendor-reopen-and-economic-visibility`). A diferencia de R1A/R1B, UAT-10 no era un bug — el análisis de remediación ya lo había investigado explícitamente como candidato a brecha de seguridad y lo había descartado con evidencia; este bloque es refuerzo de verificación puro, sin ningún cambio de código de producto.
