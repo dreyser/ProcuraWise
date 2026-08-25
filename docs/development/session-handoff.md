@@ -32,6 +32,30 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-24 — Remediación UAT piloto (E12): análisis completo de 20 hallazgos + cierre de planeación R1-R4
+
+**Resumen:** Sesión en dos partes, ambas en Plan Mode (solo lectura/documentación, sin cambios de código). Parte 1: análisis exhaustivo del primer UAT real end-to-end (creación de evaluación → requerimientos → aprobación → onboarding/respuesta de proveedor → scoring → TCO/económico → reapertura/negociación → resultados/decisión → notificaciones, múltiples proveedores), con 9 decisiones de producto ya aprobadas por el founder (A-I) y 20 hallazgos (UAT-01 a UAT-20) analizados contra el repositorio real vía 4 agentes de exploración en paralelo (identidad/roles/navegación/aprobación; reopen de propuestas; notificaciones/IA; layout de tabla/Company Profile), más investigación directa de vendor isolation y economic assessment ya cubierta en sesiones previas de esta misma fase. Hallazgo transversal: la mayoría de los 20 son "el mecanismo ya existe, la UI no lo deriva/expone" — solo 3 requieren mecanismo nuevo real (Reviewer/aprobación en dos pasos, Company Profile, navegación contextual). Ninguna brecha de seguridad confirmada (UAT-10 investigado y descartado con evidencia). Parte 2: el founder aprobó el análisis completo, resolvió la única pregunta bloqueante (Opción 1: `ApprovalStatus` sin 5º valor, "solicitar cambios" = `rejected` + comentarios por requerimiento + evento de auditoría distinguible) y aprobó la estructura de remediación R1(R1A/R1B/R1C)→R2→R3→R4 con gate de piloto externo en R1+R2. Esta sesión de cierre documentó esa estructura en `backlog.md`/`roadmap.md`/`current-phase.md` — cero cambios de código/producto.
+
+**Archivos tocados:**
+- `docs/development/backlog.md` — nueva sección "E12 — Remediación UAT piloto" con las 6 filas (R1A/R1B/R1C/R2/R3/R4), pregunta bloqueante resuelta, gate de piloto, nota de UAT-12 cerrado.
+- `docs/product/roadmap.md` — nueva sección "Remediación UAT piloto (post-Fase 28...)" con la secuencia y dependencias entre bloques.
+- `docs/development/current-phase.md` — nueva entrada al tope con el resumen completo del análisis y la estructura aprobada.
+
+**Resultado de pruebas:** ninguna — sesión de documentación pura, sin cambios de código. `git diff --check` limpio (ver detalle en la respuesta de cierre de la sesión).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** El mecanismo de Reviewer (R2) requerirá un ADR nuevo (0026) **antes** de implementarse — no se redacta en esta sesión, solo se deja registrado como bloqueante de R2.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Empezar **R1A** (UAT-01 Q&A + UAT-11 mensaje de conflicto distinguible) — sin dependencias, bajo riesgo, alto valor. Ver detalle exacto de causa raíz y fix esperado en `current-phase.md`/`backlog.md` sección E12.
+- R1B y R1C pueden ejecutarse en cualquier orden respecto a R1A (sin dependencia entre sub-bloques de R1) — considerar sesiones separadas por sub-bloque para mantener el contexto acotado.
+- **No empezar R2 sin antes redactar y confirmar el ADR 0026** (mecanismo de Reviewer/aprobación en dos pasos) — es una extensión real del modelo de autorización, no una extensión trivial.
+- No reabrir UAT-12 (ya cerrado, PR #62).
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-21 — Fase 28: defecto real #7 (respuesta del proveedor no visible al calificar) + confirmación del modelo de permisos de scoring
 
 **Resumen:** El founder, calificando la primera propuesta real, preguntó (Plan Mode, investigación antes de tocar código) si dos comportamientos eran diseño esperado: (1) el owner no ve la respuesta del proveedor al calificar, solo el requerimiento y el control de calificación; (2) como evaluador funcional, no encuentra forma de calificar — solo puede cambiar progreso en "Asignaciones". Investigado con evidencia de código: (1) es un gap real, no diseño — los datos ya existen (`ScoringPage.tsx` nunca leía `currentSnapshot.answers`, sin ninguna razón documentada); (2) no es una limitación — evaluadores sí pueden calificar por diseño (`SCORE_WRITE_ROLES` los incluye, sin gate de `Assignment` para el owner), el problema real es solo de descubribilidad ("Asignaciones" no enlaza hacia "Propuestas"/"Calificar"). El founder autorizó implementar únicamente el fix del punto 1 para proceder con el deploy — el punto 2 (enlace de descubribilidad) y mostrar evidencia agrupada por requerimiento (decisión de diseño ya documentada explícitamente en `BuyerDocumentsList.tsx`) quedaron fuera de alcance de este fix.
