@@ -32,6 +32,26 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: R1C implementado (UAT-10) — R1 completo
+
+**Resumen:** Tercer y último bloque de R1, encadenado sobre R1B. UAT-10 no era un bug — el análisis de remediación ya lo había investigado y descartado explícitamente como candidato a brecha de seguridad. Este bloque es refuerzo de verificación puro: confirmado que `scoring/`, `tco/` y `decisions/` routers usan uniformemente `shared.context.require_role` → `identity.jwt_provider.get_current_context`, que exige `token_use == "access"` antes de construir cualquier `ActorContext` — un `vendor_contact` solo porta un token `vendor_access`, físicamente distinto, así que se rechaza (401) en la capa de dependencias, antes de cualquier lookup por id. Sin cambios de código de producto; solo se amplió `isolation.spec.ts` con un test explícito para scoring/economic-assessment/decisions (antes solo cubría `/api/v1/evaluations` genéricamente).
+
+**Archivos tocados:**
+- `apps/web/e2e/isolation.spec.ts` — nuevo test cubriendo 5 peticiones (scoring write, economic-assessment read+write, decisions read+approve) con el JWT real de un `vendor_contact`.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed (sin cambio). `pnpm test` → 220/220 (sin cambio). `make contracts` → sin diff. `make test-e2e` (Docker real, 22 specs) → 22/22 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/r1c-vendor-isolation-coverage` (o el conjunto R1A+R1B+R1C junto, a decisión del founder) y confirmar en staging.
+- **R1 queda completo** (R1A + R1B + R1C). El siguiente bloque es **R2** (UAT-06/07/08: Reviewer + aprobación en dos pasos + navegación contextual por rol) — **no empezar sin antes redactar y confirmar el ADR 0026**, sigue pendiente.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-25 — Remediación UAT piloto: R1B implementado (UAT-16 + UAT-14)
 
 **Resumen:** Segundo bloque de la remediación UAT (E12), encadenado sobre la rama de R1A. UAT-16: `ProposalsPage.tsx` condicionaba acciones y `canReopen` solo a `evaluation.status === 'evaluating'`, sin incluir `collecting_responses` (el estado real tras el primer reopen de un proveedor) — esto ocultaba la columna de acciones de **todos los demás proveedores** aunque el backend (`EvaluationRepository.update_deadline_while_collecting`, sin cambios) ya soporta reopens concurrentes e independientes por proveedor. UAT-14: `ScoringPage.tsx` renderizaba la sección Comercial/Riesgo sin condicional de rol — el backend ya bloqueaba la escritura correctamente vía `enforce_section_assignment`, pero `evaluator_functional`/`evaluator_technical` seguían viéndola. Ambos fixes 100% frontend, sin cambios de backend/contrato.

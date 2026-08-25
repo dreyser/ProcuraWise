@@ -1,5 +1,20 @@
 # Fase actual
 
+## Remediación UAT piloto — R1C completo (UAT-10)
+
+**Estado: ✅ Implementado y verificado localmente (2026-08-25) — redeploy real pendiente.** Tercer y último bloque de R1 (E12), encadenado sobre R1B (`fix/r1b-multi-vendor-reopen-and-economic-visibility`). A diferencia de R1A/R1B, UAT-10 no era un bug — el análisis de remediación ya lo había investigado explícitamente como candidato a brecha de seguridad y lo había descartado con evidencia; este bloque es refuerzo de verificación puro, sin ningún cambio de código de producto.
+
+**Confirmación del mecanismo (antes de escribir el test):** `scoring/router.py`, `tco/router.py` y `decisions/router.py` usan exclusivamente `shared.context.require_role`/`require_buyer_read`/`require_owner`/`require_approver`, todos construidos sobre `require_role`, que resuelve identidad vía `identity.jwt_provider.get_current_context`. Esa función exige `token_use == "access"` (`decode_token(..., expected_use=ACCESS_TOKEN_USE)`) antes de construir cualquier `ActorContext` — un `vendor_contact` real solo puede portar un `vendor_access` token (`get_current_vendor_context`, físicamente distinto), así que la petición se rechaza (401) en la capa de dependencias de FastAPI, antes de que el `evaluation_id`/`proposal_id` del path se usen para nada. Es el mismo mecanismo ya probado para `/api/v1/evaluations` en `isolation.spec.ts` — la pregunta de UAT-10 era si sigue siendo válido específicamente para scoring/economic-assessment/decisions, no si existe un mecanismo distinto ahí.
+
+**Corregido (cobertura, no bug):** `apps/web/e2e/isolation.spec.ts` gana un segundo test, `'isolation: vendor_contact is rejected from scoring, economic-assessment, and decisions routes'` — con el JWT real de `vendor.a@dev.procurawise.local` (login real, no el mecanismo interino de dev-header), ejercita 5 peticiones directas contra el backend: `PUT .../scores/{id}` (scoring, escritura), `GET`/`PUT .../economic-assessment` (lectura y escritura), `GET .../decision` (lectura) y `POST .../decision/approve` (escritura). Usa un id de placeholder (`isolation-check`) para evaluación/propuesta/requerimiento — válido porque el rechazo ocurre en la dependencia de autenticación, antes de cualquier lookup por id.
+
+**Archivos tocados:**
+- `apps/web/e2e/isolation.spec.ts` — nuevo test (arriba).
+
+**Pruebas de esta sesión:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed (sin cambio, ningún archivo de backend tocado). `pnpm test` → 220/220 (sin cambio, solo se agregó un spec e2e). `make contracts` → sin diff. `make test-e2e` (Docker real, 22 specs — +1 por el nuevo test de UAT-10) → 22/22 passed.
+
+**R1 completo** (R1A + R1B + R1C). Siguiente bloque: **R2**, bloqueado hasta redactar y confirmar ADR 0026 (Reviewer + aprobación en dos pasos) — ver `backlog.md` sección E12.
+
 ## Remediación UAT piloto — R1B completo (UAT-16 + UAT-14)
 
 **Estado: ✅ Implementado y verificado localmente (2026-08-25) — redeploy real pendiente.** Segundo bloque de la remediación UAT (E12) implementado, encadenado sobre R1A (misma rama base, `fix/r1a-qna-navigation-and-conflict-messages`, para evitar el patrón de conflicto de merge en las cabeceras de los docs autoritativos ya visto antes en esta remediación).
