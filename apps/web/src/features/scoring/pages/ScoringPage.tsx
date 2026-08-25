@@ -145,6 +145,16 @@ export function ScoringPage() {
 
   const canWriteScores = Boolean(actor?.role && SCORE_WRITE_ROLES.includes(actor.role))
   const isEditable = evaluation.status === 'evaluating' && canWriteScores
+  // UAT-14 (remediación R1B, Decisión F): the backend already blocks a
+  // functional/technical evaluator from writing commercial/risk scores
+  // (enforce_section_assignment with the "economic" sentinel,
+  // scoring/service.py) - but the panel still rendered for them
+  // read-only, showing questions entirely outside their assigned
+  // responsibility. Owner/evaluator_economic/internal_collaborator/
+  // approver are unaffected - only the two non-economic evaluator
+  // sub-roles never see this section at all.
+  const canSeeEconomic =
+    actor?.role !== 'evaluator_functional' && actor?.role !== 'evaluator_technical'
   const scoredCount = requirements.filter((r) => scoresByRequirement.has(r.id)).length
 
   const handleSave = async (requirementId: string) => {
@@ -443,11 +453,13 @@ export function ScoringPage() {
 
       {renderDimension('functional')}
       {renderDimension('technical')}
-      <EconomicAssessmentPanel
-        evaluationId={evaluationId!}
-        proposalId={proposalId!}
-        isEditable={isEditable}
-      />
+      {canSeeEconomic && (
+        <EconomicAssessmentPanel
+          evaluationId={evaluationId!}
+          proposalId={proposalId!}
+          isEditable={isEditable}
+        />
+      )}
 
       <BuyerDocumentsList evaluationId={evaluationId!} proposalId={proposalId!} />
     </div>

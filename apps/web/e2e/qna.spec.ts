@@ -95,7 +95,15 @@ async function createDraftEvaluationWithTwoVendors(
   await page.getByRole('button', { name: 'Siguiente' }).click()
 
   await expect(page.getByRole('heading', { name: 'Vincular proveedor' })).toBeVisible()
-  await page.getByRole('button', { name: 'Vincular' }).click()
+  // Scoped to a specific vendor row, not a bare role/name match - the
+  // catalog is shared tenant-wide across specs in a full suite run, so more
+  // than one "Vincular" button can exist by the time this runs (same fix
+  // as UAT-16's own multi-vendor test, proposal-negotiation.spec.ts).
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: 'Proveedor Uno (dev)' })
+    .getByRole('button', { name: 'Vincular' })
+    .click()
   await expect(page.getByText(/Proveedores vinculados \(1 \/ \d+\)/)).toBeVisible()
 
   // Onboard vendor B now, still in draft, via the real VendorsPage route

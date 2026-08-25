@@ -183,10 +183,23 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   }
 
   // 4b. Fase 20: the economic assessment (commercial/risk, score 3 - not an
-  // extreme value, so no comment is required) - no Assignment exists for
-  // this seeded evaluation, so evaluator_functional may fill it too (same
-  // "unassigned section is open to any evaluator sub-role" rule already
-  // exercised above for the technical requirement).
+  // extreme value, so no comment is required). UAT-16 remediación (R1B,
+  // Decisión F): evaluator_functional/technical never see this section at
+  // all now, regardless of Assignment - a genuinely different login as
+  // evaluator_economic is required here, same "different buyer account,
+  // not just a role switch" principle as every other actor change in this
+  // spec.
+  await page.getByRole('button', { name: 'Cerrar sesión' }).click()
+  await page.waitForURL('**/login**', wait)
+  await loginAsBuyer(page, 'evaluator.economic.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: 'Evaluacion de ejemplo (dev)' }).click()
+  await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
+  await page.getByRole('link', { name: 'Propuestas' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/proposals`, wait)
+  await page.getByRole('link', { name: 'Calificar' }).click()
+  await page.waitForURL(/\/proposals\/[a-f0-9]+\/score$/, wait)
+
   const economicCriterionLabels = [
     'Pago y plazo',
     'Protección de precio',
@@ -207,7 +220,7 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await expect(page.getByRole('alert')).toHaveCount(0)
 
   // 5. Owner: consult results and complete. Uses the "Cerrar sesión" button
-  // once here (rather than another bare page.goto) to also exercise that
+  // again here (rather than another bare page.goto) to also exercise that
   // real UI action, not just the login form.
   await page.getByRole('button', { name: 'Cerrar sesión' }).click()
   await page.waitForURL('**/login**', wait)

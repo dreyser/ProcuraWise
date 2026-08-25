@@ -32,6 +32,31 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: R1B implementado (UAT-16 + UAT-14)
+
+**Resumen:** Segundo bloque de la remediación UAT (E12), encadenado sobre la rama de R1A. UAT-16: `ProposalsPage.tsx` condicionaba acciones y `canReopen` solo a `evaluation.status === 'evaluating'`, sin incluir `collecting_responses` (el estado real tras el primer reopen de un proveedor) — esto ocultaba la columna de acciones de **todos los demás proveedores** aunque el backend (`EvaluationRepository.update_deadline_while_collecting`, sin cambios) ya soporta reopens concurrentes e independientes por proveedor. UAT-14: `ScoringPage.tsx` renderizaba la sección Comercial/Riesgo sin condicional de rol — el backend ya bloqueaba la escritura correctamente vía `enforce_section_assignment`, pero `evaluator_functional`/`evaluator_technical` seguían viéndola. Ambos fixes 100% frontend, sin cambios de backend/contrato.
+
+**Archivos tocados:**
+- `apps/web/src/features/proposals/pages/ProposalsPage.tsx` — `showActionsColumn`, `canReopen` ampliado a incluir `collecting_responses`.
+- `apps/web/src/features/scoring/pages/ScoringPage.tsx`/`ScoringPage.test.tsx` — `canSeeEconomic` gating `EconomicAssessmentPanel` + 4 tests nuevos por rol.
+- `apps/web/e2e/proposal-negotiation.spec.ts` — nuevo spec grande (UAT-16, dos proveedores reales, reopen independiente confirmado).
+- `apps/web/e2e/vertical-slice.spec.ts` — actualizado para usar `evaluator_economic` en la sección económica (dependía del comportamiento antiguo que UAT-14 corrige).
+- `apps/web/e2e/qna.spec.ts` — selector `Vincular` acotado al proveedor específico (se volvió ambiguo con el segundo proveedor del nuevo spec de UAT-16).
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed. `pnpm test` → 220/220. `make contracts` → sin diff. `make test-e2e` (Docker real, 21 specs) → 21/21 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna. Nota abierta, no bloqueante: el mismo patrón de selector `Vincular` sin scope sigue latente (no roto) en `documents.spec.ts`, `ai-score-suggestions.spec.ts`, `evaluation-wizard.spec.ts`, `evaluation-approval.spec.ts` — corregir solo si algún cambio futuro los rompe.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/r1b-multi-vendor-reopen-and-economic-visibility` y confirmar en Azure real: reabrir la propuesta de un proveedor no oculta las acciones de otro; `evaluator_functional`/`evaluator_technical` ya no ven la sección Comercial/Riesgo.
+- Continuar con **R1C** (UAT-10 — ampliar `isolation.spec.ts` con más endpoints buyer-only para `vendor_contact`; es refuerzo de verificación, no hay brecha real encontrada) — ver `backlog.md` sección E12.
+- No empezar R2 sin antes redactar y confirmar el ADR 0026 (sigue pendiente, sin cambios desde la sesión anterior).
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-25 — Remediación UAT piloto: R1A implementado (UAT-01 + UAT-11)
 
 **Resumen:** Primer bloque de implementación de la remediación UAT (E12) cerrada la sesión anterior. UAT-01: `QnaPage.tsx` no importaba `EvaluationTabNav` (única de las 10 páginas del shell de evaluación sin la barra de tabs) — corregido siguiendo el patrón exacto de `RequirementsPage.tsx`. UAT-11: `normalizeApiError` mapeaba todo 409 al mismo texto genérico sin leer `error.data.detail`, aunque el backend ya devuelve strings distintos por causa (`InvalidProposalTransitionError`/`InvalidQuestionTransitionError` vs. `StaleVersionError`) — corregido con una tabla de traducción que preserva el mensaje genérico para cualquier detail no reconocido (ningún caso de conflicto real se regresionó). Ambos fixes son 100% frontend, sin cambios de backend/contrato.

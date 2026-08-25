@@ -1,5 +1,27 @@
 # Fase actual
 
+## Remediación UAT piloto — R1B completo (UAT-16 + UAT-14)
+
+**Estado: ✅ Implementado y verificado localmente (2026-08-25) — redeploy real pendiente.** Segundo bloque de la remediación UAT (E12) implementado, encadenado sobre R1A (misma rama base, `fix/r1a-qna-navigation-and-conflict-messages`, para evitar el patrón de conflicto de merge en las cabeceras de los docs autoritativos ya visto antes en esta remediación).
+
+**UAT-16 (reopen de un proveedor bloqueaba las acciones de otro):** `ProposalsPage.tsx` condicionaba tanto la columna de acciones como el propio `canReopen` a `evaluation.status === 'evaluating'` exclusivamente. Tras el primer reopen de un proveedor, `EvaluationRepository.update_deadline_while_collecting` (backend, sin cambios — ya soporta reopens concurrentes e independientes por proveedor) mueve la evaluación completa a `collecting_responses`; con ese único estado excluido de la condición del frontend, la fila de **cualquier otro** proveedor perdía su columna de acciones (incluido su propio "Reabrir para negociación" y "Calificar") aunque el backend nunca les impidió operar. Confirmado 100% causa raíz de frontend antes de tocar código. Corregido: nueva constante `showActionsColumn = evaluation.status === 'evaluating' || evaluation.status === 'collecting_responses' || evaluation.status === 'completed'` reemplazando la condición duplicada en cabecera y fila de la tabla; `canReopen` ampliado con el mismo estado adicional.
+
+**UAT-14 (evaluadores functional/technical veían la sección Comercial/Riesgo):** el backend ya bloqueaba correctamente la escritura de `EconomicAssessment` vía `enforce_section_assignment` (sentinel `ECONOMIC_SECTION`) — el gap era puramente de visibilidad: `ScoringPage.tsx` renderizaba `<EconomicAssessmentPanel>` sin ningún condicional de rol, así que `evaluator_functional`/`evaluator_technical` veían la sección completa (aunque cualquier intento de guardado les fallaría en el backend). Corregido con `canSeeEconomic = actor?.role !== 'evaluator_functional' && actor?.role !== 'evaluator_technical'`, gating el render del panel — cambio puramente aditivo de ocultamiento en frontend, sin tocar la regla de negocio ya correcta del backend.
+
+**Archivos tocados:**
+- `apps/web/src/features/proposals/pages/ProposalsPage.tsx` — `showActionsColumn`, `canReopen` ampliado.
+- `apps/web/src/features/scoring/pages/ScoringPage.tsx` — `canSeeEconomic` gating `EconomicAssessmentPanel`.
+- `apps/web/src/features/scoring/pages/ScoringPage.test.tsx` — 4 casos nuevos: owner ve la sección, `evaluator_functional`/`evaluator_technical` no la ven (`it.each`), `evaluator_economic` sí la ve.
+- `apps/web/e2e/proposal-negotiation.spec.ts` — nuevo spec grande (UAT-16): dos proveedores reales en la misma evaluación (uno vinculado vía catálogo, otro dado de alta nuevo), ambos responden y se someten a evaluación, se reabre solo el proveedor A, se confirma que el proveedor B conserva su propia columna de acciones ("Reabrir para negociación" y "Calificar") — prueba de regresión directa del bug.
+- `apps/web/e2e/vertical-slice.spec.ts` — actualizado: la sección económica ahora la llena `evaluator.economic.a@dev.procurawise.local` (login/logout adicional) en vez de `evaluator.functional.a@dev.procurawise.local`, que dejó de tener acceso a esa sección por el propio fix de UAT-14 (no era una regresión — el spec dependía del comportamiento antiguo, ya incorrecto, que este mismo bloque corrige).
+- `apps/web/e2e/qna.spec.ts` — el selector `Vincular` (línea ~98) era ambiguo (sin scope) y se volvió inválido en cuanto el catálogo del tenant compartido por toda la suite e2e pasó a tener 2 proveedores (por el nuevo spec de UAT-16); corregido acotándolo al `listitem` del proveedor específico, mismo patrón ya usado en otros specs.
+
+**Fragilidad pre-existente identificada, no corregida (no está rota hoy):** el mismo patrón de selector `Vincular` sin scope existe también en `documents.spec.ts:68`, `ai-score-suggestions.spec.ts:87`, `evaluation-wizard.spec.ts:85`, `evaluation-approval.spec.ts:60` — no rotos porque esos specs corren alfabéticamente antes que `proposal-negotiation.spec.ts` (el catálogo compartido todavía tiene 1 solo proveedor en ese punto de la suite). Dejado sin tocar deliberadamente, para no ampliar el alcance de este fix; solo ameritaría corrección si algún cambio futuro en la suite los rompe.
+
+**Pruebas de esta sesión:** `make lint`/`make typecheck` (backend + frontend) → limpio (0 errores; solo warnings pre-existentes de ESLint no relacionados). `make test-backend` → 304 passed (sin cambio, R1B es 100% frontend). `pnpm test` → 220/220 (+4 vs. R1A). `make contracts` → sin diff (`client.ts`/`openapi.json` no cambiaron, consistente con no haber tocado backend). `make test-e2e` (Docker real, 21 specs — +1 por el nuevo spec de UAT-16) → 21/21 passed.
+
+**Diferido**: redeploy real — acción del founder. R1C (UAT-10) sigue pendiente — ver `backlog.md` sección E12.
+
 ## Remediación UAT piloto — R1A completo (UAT-01 + UAT-11)
 
 **Estado: ✅ Implementado y verificado localmente (2026-08-25) — redeploy real pendiente.** Primer bloque de la remediación UAT (E12) implementado.
