@@ -126,7 +126,7 @@ function mockBackend(
   evaluation: EvaluationDetailResponse,
 ) {
   router.on('GET', /\/api\/v1\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluation }))
-  router.on('GET', /\/api\/v1\/org-members$/, () => ({ status: 200, body: orgMembers() }))
+  router.on('GET', /\/api\/v1\/org\/members$/, () => ({ status: 200, body: orgMembers() }))
 }
 
 function renderPage() {

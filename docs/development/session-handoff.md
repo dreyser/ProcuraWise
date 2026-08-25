@@ -32,6 +32,37 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: R3 implementado (autosave de scoring + estado consolidado) — R3 completo
+
+**Resumen:** Último bloque de R3. UAT-15: `ScoringPage.tsx` autoguarda (sin botón manual), vía un `ScoreAutosaveController` nuevo (no reutiliza literalmente `AnswerAutosaveController` - `Score.version` es por-requerimiento, no global por propuesta como `Proposal.version`, así que serializa por campo en vez de globalmente, y un 409 en un campo no bloquea los demás). UAT-04/09: nuevo `EvaluationProgressSummary.tsx` en la pestaña "Resumen" (solo owner) con bloqueadores/próxima acción/completitud por evaluador, combinando datos ya expuestos por endpoints existentes (readiness + proposals + results + assignments + org-members), sin agregación nueva de backend. 100% frontend, `make contracts` sin diff.
+
+**Cuatro defectos reales encontrados y corregidos en esta misma sesión:**
+1. Un lint nuevo (`react-hooks/set-state-in-effect`) empezó a marcar un efecto preexistente en `ScoringPage.tsx` al agregar código nuevo alrededor - corregido con el patrón "adjust state during render" ya documentado en `useAnswerAutosave.ts`, en vez de perseguir la causa exacta.
+2. `page.getByRole('radio', { name: '5' })` sin `exact: true` en 2 specs e2e (`decision-approval.spec.ts`, `vertical-slice.spec.ts`) - coincidía por subcadena con los `aria-label` de `EconomicAssessmentPanel` ("Pago y plazo: 5"), inflando el conteo de radios de 2 a 3. Corregido con `exact: true`.
+3. El fix anterior destapó que el loop de aserciones de esos mismos 2 specs estaba gateado por el conteo del botón "Guardar calificación" (eliminado por UAT-15) - al desaparecer, el loop nunca se ejecutaba, un passing silencioso sin verificar nada. Corregido fusionando check-de-radio y aserción en un solo paso (autoguardado real).
+4. Bug latente pre-existente (no introducido esta sesión): mocks de test apuntando a `/org-members` en vez del endpoint real `/org/members` - inofensivo donde ningún assert dependía de nombres resueltos, mismo patrón de "aserción demasiado débil para detectar el mock roto" que el punto 3.
+
+**Archivos tocados:**
+- `apps/web/src/lib/scoreAutosaveController.ts`/`.test.ts` (nuevo) - controlador de autosave por campo.
+- `apps/web/src/features/scoring/hooks/useScoreAutosave.ts` (nuevo).
+- `apps/web/src/features/scoring/pages/ScoringPage.tsx`/`.test.tsx` - sin botón manual, autosave en `ScoreInput`/`onBlur` del comentario.
+- `apps/web/src/features/evaluations/components/EvaluationProgressSummary.tsx`/`.test.tsx` (nuevo) - estado consolidado, montado en `EvaluationDetailPage.tsx`.
+- `apps/web/e2e/decision-approval.spec.ts`, `apps/web/e2e/vertical-slice.spec.ts` - `exact: true` + fusión check+assert.
+- `apps/web/src/features/evaluations/pages/EvaluationApprovalPage.test.tsx` - mock `/org-members` → `/org/members`.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 309 passed. `pnpm test` → 245/245 (+13 nuevos). `make contracts` → sin diff. `make test-e2e` (Docker real, 23 specs) → 23/23 passed, confirmado con corrida limpia completa (no una re-ejecución parcial contra estado compartido, que fue justamente cómo se detectó el defecto #3).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna - UAT-15/04/09 no requirieron ningún cambio de arquitectura ni de contrato.
+
+**Deuda técnica introducida:** Ninguna nueva.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar y confirmar en staging: calificar autoguarda sin botón; "Resumen" muestra bloqueadores/próxima acción/completitud por evaluador para el owner en cada estado de la evaluación.
+- **R3 queda completo** (R1 + R2 + R3 del plan de remediación E12). El siguiente bloque es **R4** (UAT-02/03/05/13/17/18/19/20 - mejoras P1/P2 restantes, sin dependencia fuerte entre sí ni con R1/R2/R3) - ver `backlog.md` sección E12 para el detalle de cada hallazgo.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes - no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-25 — Remediación UAT piloto: R2 implementado (Reviewer + aprobación en dos pasos, ADR 0026)
 
 **Resumen:** Implementación completa del diseño de ADR 0026 (UAT-06/07/08). Backend: 7 campos nuevos en `Evaluation` (sin migración), endpoints `/reviewer`, `/request-review`, `/review/approve`, `/review/reject` mirroring el mecanismo de approver existente, auto-encadenado de la aprobación de revisión a "pendiente de aprobación" (blocking question #2), y `kind`/`requirement_notes` en `reject`/`review_reject` para distinguir "solicitar cambios" de un rechazo genérico en la auditoría (blocking question resuelta 2026-08-24). Frontend: sección "Revisión (opcional)" en `EvaluationApprovalPage.tsx`, navegación contextual en `EvaluationTabNav.tsx` (UAT-08, oculta "Aprobación" a quien no sea owner/approver/reviewer asignado), `translateReviewStatus` nuevo para no confundir "revisión pendiente" con "aprobación pendiente".

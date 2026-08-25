@@ -170,15 +170,21 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   // The 0-5 radios are visually sr-only (the styled <label> is the
   // clickable surface, a legitimate accessible pattern) - force the click
   // since Playwright's actionability check won't click "through" the label.
-  const scoreButtons5 = page.getByRole('radio', { name: '5' })
+  //
+  // UAT-15 (R3): scoring autosaves - checking a score radio is itself the
+  // save trigger now, there is no separate "Guardar calificación" button to
+  // click afterward. Checked one at a time (not all-then-assert) so each
+  // "Calificados: N / 2" increment is verified against the specific write
+  // that caused it, same proof the old check-all/save-all/assert-all loop
+  // gave before autosave removed the middle step.
+  // exact: true matters here - Playwright's default name matcher is a
+  // substring match, and EconomicAssessmentPanel's criterion radios carry
+  // aria-labels like "Pago y plazo: 5", which also contain "5" and would
+  // otherwise be counted alongside the real functional/technical inputs.
+  const scoreButtons5 = page.getByRole('radio', { name: '5', exact: true })
   const scoreCount = await scoreButtons5.count()
   for (let i = 0; i < scoreCount; i += 1) {
     await scoreButtons5.nth(i).check({ force: true })
-  }
-  const saveButtons = page.getByRole('button', { name: 'Guardar calificación' })
-  const saveCount = await saveButtons.count()
-  for (let i = 0; i < saveCount; i += 1) {
-    await saveButtons.nth(i).click()
     await expect(page.getByText(`Calificados: ${i + 1} / 2`)).toBeVisible()
   }
 

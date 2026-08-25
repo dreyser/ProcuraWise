@@ -7,7 +7,6 @@ import {
   useGetProposalApiV1EvaluationsEvaluationIdProposalsProposalIdGet,
   useGetResultsApiV1EvaluationsEvaluationIdResultsGet,
   useTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost,
-  useUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut,
   type AIScoreSuggestionCandidate,
   type EvaluationDetailResponse,
   type ProposalDetailResponse,
@@ -30,6 +29,7 @@ import { BuyerDocumentsList } from '@/features/scoring/components/BuyerDocuments
 import { EconomicAssessmentPanel } from '@/features/scoring/components/EconomicAssessmentPanel'
 import { formatReadOnlyValue } from '@/features/vendor-portal/components/AnswerField'
 import { useAiScoreSuggestionJobStatus } from '@/features/evaluations/hooks/useAiScoreSuggestionJobStatus'
+import { useScoreAutosave } from '@/features/scoring/hooks/useScoreAutosave'
 
 interface Draft {
   score: number | null
@@ -73,9 +73,6 @@ export function ScoringPage() {
 
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [initialized, setInitialized] = useState(false)
-  const [savingId, setSavingId] = useState<string | null>(null)
-  const [rowErrors, setRowErrors] = useState<Record<string, string>>({})
-  const [conflictIds, setConflictIds] = useState<Set<string>>(new Set())
   const [suggestionJobId, setSuggestionJobId] = useState<string | null>(null)
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
 
@@ -92,8 +89,12 @@ export function ScoringPage() {
     (currentSnapshot?.answers ?? []).map((a) => [a.requirement_id, a]),
   )
 
-  useEffect(() => {
-    if (initialized || requirements.length === 0) return
+  // "Adjust state during render" (React's own sanctioned replacement for
+  // resetting state once external data first arrives, see useAnswerAutosave
+  // .ts's doc comment for the same pattern) instead of a useEffect - calling
+  // setState directly in the render body triggers an immediate re-render
+  // before paint, without the extra render+effect+render round trip.
+  if (!initialized && requirements.length > 0) {
     const next: Record<string, Draft> = {}
     for (const requirement of requirements) {
       const existing = scoresByRequirement.get(requirement.id)
@@ -105,11 +106,20 @@ export function ScoringPage() {
     }
     setDrafts(next)
     setInitialized(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialized, requirements.length])
+  }
 
-  const upsertScore =
-    useUpsertScoreApiV1EvaluationsEvaluationIdProposalsProposalIdScoresRequirementIdPut()
+  // UAT-15 (R3): scoring no longer requires a manual "Guardar calificación"
+  // click per row - each requirement's Score has its own independent
+  // version (unlike a vendor Proposal's single shared version), so this
+  // controller autosaves per field instead of serializing the whole page.
+  const scoreAutosave = useScoreAutosave(evaluationId!, proposalId!)
+  useEffect(() => {
+    scoresByRequirement.forEach((score, requirementId) => {
+      scoreAutosave.seedVersionIfIdle(requirementId, score.version)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, scoreAutosave])
+
   const triggerSuggestion =
     useTriggerScoreSuggestionApiV1EvaluationsEvaluationIdProposalsProposalIdAiScoreSuggestionsPost()
   const suggestionStatus = useAiScoreSuggestionJobStatus(
@@ -157,40 +167,14 @@ export function ScoringPage() {
     actor?.role !== 'evaluator_functional' && actor?.role !== 'evaluator_technical'
   const scoredCount = requirements.filter((r) => scoresByRequirement.has(r.id)).length
 
-  const handleSave = async (requirementId: string) => {
-    const draft = drafts[requirementId]
-    if (!draft || draft.score === null) return
-    const existing = scoresByRequirement.get(requirementId)
-    setSavingId(requirementId)
-    try {
-      await upsertScore.mutateAsync({
-        evaluationId: evaluationId!,
-        proposalId: proposalId!,
-        requirementId,
-        data: {
-          score: draft.score,
-          comment: draft.comment.trim() || undefined,
-          version: existing?.version,
-          source_ai_execution_id: draft.sourceAiExecutionId ?? undefined,
-        },
-      })
-      await queryClient.invalidateQueries({
-        queryKey: getGetResultsApiV1EvaluationsEvaluationIdResultsGetQueryKey(evaluationId),
-      })
-      setRowErrors((prev) => {
-        const next = { ...prev }
-        delete next[requirementId]
-        return next
-      })
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        setConflictIds((prev) => new Set(prev).add(requirementId))
-      } else {
-        setRowErrors((prev) => ({ ...prev, [requirementId]: normalizeApiError(error).message }))
-      }
-    } finally {
-      setSavingId(null)
-    }
+  const autosave = (requirementId: string, draft: Draft) => {
+    if (draft.score === null) return
+    scoreAutosave.queueScore(
+      requirementId,
+      draft.score,
+      draft.comment.trim() || undefined,
+      draft.sourceAiExecutionId,
+    )
   }
 
   const handleResolveConflict = async (requirementId: string) => {
@@ -208,11 +192,7 @@ export function ScoringPage() {
         sourceAiExecutionId: null,
       },
     }))
-    setConflictIds((prev) => {
-      const next = new Set(prev)
-      next.delete(requirementId)
-      return next
-    })
+    scoreAutosave.resolveConflict(requirementId, freshScore?.version)
   }
 
   const handleTriggerSuggestion = async () => {
@@ -232,14 +212,13 @@ export function ScoringPage() {
 
   const handleUseSuggestion = (requirementId: string, candidate: AIScoreSuggestionCandidate) => {
     if (!suggestionJobId) return
-    setDrafts((prev) => ({
-      ...prev,
-      [requirementId]: {
-        score: candidate.suggested_score,
-        comment: candidate.rationale,
-        sourceAiExecutionId: suggestionJobId,
-      },
-    }))
+    const draft: Draft = {
+      score: candidate.suggested_score,
+      comment: candidate.rationale,
+      sourceAiExecutionId: suggestionJobId,
+    }
+    setDrafts((prev) => ({ ...prev, [requirementId]: draft }))
+    autosave(requirementId, draft)
   }
 
   const renderDimension = (dimension: 'functional' | 'technical') => {
@@ -263,7 +242,9 @@ export function ScoringPage() {
               draft.score !== null
                 ? Math.round((draft.score / 5) * requirement.weight * 100) / 100
                 : null
-            const hasConflict = conflictIds.has(requirement.id)
+            const fieldStatus = scoreAutosave.getFieldStatus(requirement.id)
+            const hasConflict = fieldStatus === 'conflict'
+            const fieldError = scoreAutosave.getFieldError(requirement.id)
             const suggestion = suggestionsByRequirement.get(requirement.id)
             const answer = answersByRequirement.get(requirement.id)
 
@@ -278,6 +259,9 @@ export function ScoringPage() {
                       updatedByMembershipId={existing.evaluator_membership_id}
                       viewerMembershipId={actor?.membership_id}
                     />
+                  )}
+                  {fieldStatus === 'saving' && (
+                    <span className="text-xs text-muted-foreground">Guardando…</span>
                   )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{requirement.description}</p>
@@ -329,10 +313,12 @@ export function ScoringPage() {
                   <ScoreInput
                     requirementId={requirement.id}
                     value={draft.score}
-                    disabled={!isEditable}
-                    onChange={(score) =>
-                      setDrafts((prev) => ({ ...prev, [requirement.id]: { ...draft, score } }))
-                    }
+                    disabled={!isEditable || hasConflict}
+                    onChange={(score) => {
+                      const next = { ...draft, score }
+                      setDrafts((prev) => ({ ...prev, [requirement.id]: next }))
+                      autosave(requirement.id, next)
+                    }}
                   />
                 </div>
 
@@ -340,13 +326,14 @@ export function ScoringPage() {
                   <Textarea
                     placeholder="Comentario (opcional)"
                     value={draft.comment}
-                    disabled={!isEditable}
+                    disabled={!isEditable || hasConflict}
                     onChange={(event) =>
                       setDrafts((prev) => ({
                         ...prev,
                         [requirement.id]: { ...draft, comment: event.target.value },
                       }))
                     }
+                    onBlur={() => autosave(requirement.id, draft)}
                   />
                 </div>
 
@@ -356,9 +343,9 @@ export function ScoringPage() {
                   </p>
                 )}
 
-                {rowErrors[requirement.id] && (
+                {fieldError && (
                   <div className="mt-2">
-                    <ErrorBanner message={rowErrors[requirement.id]} />
+                    <ErrorBanner message={fieldError.message} />
                   </div>
                 )}
 
@@ -374,18 +361,6 @@ export function ScoringPage() {
                       Recargar
                     </Button>
                   </div>
-                )}
-
-                {isEditable && !hasConflict && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="mt-3"
-                    disabled={draft.score === null || savingId === requirement.id}
-                    onClick={() => handleSave(requirement.id)}
-                  >
-                    {savingId === requirement.id ? 'Guardando…' : 'Guardar calificación'}
-                  </Button>
                 )}
               </div>
             )

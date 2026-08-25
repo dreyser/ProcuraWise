@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label'
 import { translateEvaluationStatus } from '@/lib/enumLabels'
 import { normalizeApiError } from '@/lib/errors'
 import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
+import { EvaluationProgressSummary } from '@/features/evaluations/components/EvaluationProgressSummary'
 import {
   APPROVAL_INVALIDATED_MESSAGE,
   useApprovalInvalidationNotice,
@@ -166,6 +167,10 @@ export function EvaluationDetailPage() {
           </div>
         </dl>
       </div>
+
+      {isOwner && (
+        <EvaluationProgressSummary evaluationId={evaluation.id} evaluation={evaluation} />
+      )}
     </div>
   )
 }
