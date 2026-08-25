@@ -32,6 +32,37 @@ describe('normalizeApiError', () => {
     expect(result.kind).toBe('conflict')
   })
 
+  it('keeps the generic conflict message for a genuine stale-version 409', () => {
+    const result = normalizeApiError(new ApiError(409, { detail: 'stale version' }))
+    expect(result.message).toBe(
+      'Los datos cambiaron desde la última vez que los consultaste. Recarga para continuar.',
+    )
+  })
+
+  it('keeps the generic conflict message when a 409 has no recognized detail', () => {
+    const result = normalizeApiError(new ApiError(409, undefined))
+    expect(result.kind).toBe('conflict')
+    expect(result.message).toBe(
+      'Los datos cambiaron desde la última vez que los consultaste. Recarga para continuar.',
+    )
+  })
+
+  it('gives a distinct, actionable message when a 409 means the evaluation is not collecting responses', () => {
+    const result = normalizeApiError(
+      new ApiError(409, { detail: 'evaluation is not collecting_responses' }),
+    )
+    expect(result.kind).toBe('conflict')
+    expect(result.message).not.toBe(
+      'Los datos cambiaron desde la última vez que los consultaste. Recarga para continuar.',
+    )
+    expect(result.message).toMatch(/no está recibiendo respuestas/)
+  })
+
+  it('gives a distinct message when a 409 means the proposal is no longer editable', () => {
+    const result = normalizeApiError(new ApiError(409, { detail: 'proposal is not draft' }))
+    expect(result.message).toMatch(/ya fue enviada/)
+  })
+
   it('maps 422 to validation and extracts per-field messages from Pydantic-style detail', () => {
     const error = new ApiError(422, {
       detail: [

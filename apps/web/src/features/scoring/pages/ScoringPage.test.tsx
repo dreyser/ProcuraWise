@@ -184,6 +184,62 @@ describe('ScoringPage', () => {
     expect(screen.queryByRole('button', { name: 'Guardar calificación' })).not.toBeInTheDocument()
   })
 
+  it('shows the commercial/risk section to the owner', async () => {
+    const router = createFetchRouter()
+    router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
+    router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
+    router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
+    router.on('GET', /\/economic-assessment$/, () => ({
+      status: 404,
+      body: { detail: 'Not Found' },
+    }))
+    vi.stubGlobal('fetch', router.fetchImpl)
+
+    renderPage()
+
+    expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
+    expect(screen.getByText('Condiciones comerciales y riesgo')).toBeInTheDocument()
+  })
+
+  it.each(['evaluator_functional', 'evaluator_technical'])(
+    'hides the commercial/risk section from %s - outside their assigned responsibility (UAT-14)',
+    async (role) => {
+      mockRole = role
+      const router = createFetchRouter()
+      router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
+      router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
+      router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
+      router.on('GET', /\/economic-assessment$/, () => ({
+        status: 404,
+        body: { detail: 'Not Found' },
+      }))
+      vi.stubGlobal('fetch', router.fetchImpl)
+
+      renderPage()
+
+      expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
+      expect(screen.queryByText('Condiciones comerciales y riesgo')).not.toBeInTheDocument()
+    },
+  )
+
+  it('shows the commercial/risk section to evaluator_economic', async () => {
+    mockRole = 'evaluator_economic'
+    const router = createFetchRouter()
+    router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
+    router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
+    router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
+    router.on('GET', /\/economic-assessment$/, () => ({
+      status: 404,
+      body: { detail: 'Not Found' },
+    }))
+    vi.stubGlobal('fetch', router.fetchImpl)
+
+    renderPage()
+
+    expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
+    expect(screen.getByText('Condiciones comerciales y riesgo')).toBeInTheDocument()
+  })
+
   it('triggers a suggestion, shows the candidate, and prefills the draft when used', async () => {
     const router = createFetchRouter()
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))

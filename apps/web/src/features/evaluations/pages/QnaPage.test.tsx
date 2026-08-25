@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QnaPage } from './QnaPage'
 import { createAppQueryClient } from '@/lib/queryClient'
 import { createFetchRouter } from '@/testUtils/mockFetchRouter'
-import type { BuyerQuestionResponse } from '@/api/client'
+import type { BuyerQuestionResponse, EvaluationDetailResponse } from '@/api/client'
 
 let mockRole = 'evaluation_owner'
 vi.mock('@/auth/AuthContext', () => ({
@@ -29,6 +29,73 @@ function buildQuestion(overrides: Partial<BuyerQuestionResponse> = {}): BuyerQue
     answer_history: [],
     ...overrides,
   }
+}
+
+// Fase 28 remediación R1A (UAT-01): QnaPage now fetches the evaluation
+// itself (for the shared header/EvaluationTabNav) - every test needs this
+// mocked too, not just the questions list.
+function buildEvaluation(
+  overrides: Partial<EvaluationDetailResponse> = {},
+): EvaluationDetailResponse {
+  return {
+    id: 'eval-1',
+    name: 'RFP CRM',
+    description: '',
+    status: 'collecting_responses',
+    requirements: [],
+    linked_vendor_count: 1,
+    created_by_membership_id: 'owner-1',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    collecting_responses_started_at: '2026-01-01T00:00:00Z',
+    evaluating_started_at: null,
+    completed_at: null,
+    approval_status: 'approved',
+    approver_membership_id: null,
+    response_deadline: null,
+    approval_requested_at: null,
+    approval_requested_by_membership_id: null,
+    approval_decided_at: null,
+    approval_decided_by_membership_id: null,
+    approval_comment: null,
+    approval_snapshot_id: null,
+    base_currency: 'MXN',
+    tco_horizon_years: 1,
+    economic_criteria_weights: {
+      commercial: {
+        payment_terms: 25,
+        price_protection: 25,
+        contractual_flexibility: 20,
+        discounts_incentives: 15,
+        billing_transparency: 15,
+      },
+      risk: {
+        variable_cost_exposure: 30,
+        increases_indexation: 25,
+        assumptions_exclusions: 20,
+        fx_fiscal_regulatory: 15,
+        exit_portability_lockin: 10,
+      },
+    },
+    reviewer_membership_id: null,
+    review_status: 'not_requested',
+    review_requested_at: null,
+    review_requested_by_membership_id: null,
+    review_decided_at: null,
+    review_decided_by_membership_id: null,
+    review_comment: null,
+    ...overrides,
+  }
+}
+
+function mockEvaluation(
+  router: ReturnType<typeof createFetchRouter>,
+  overrides: Partial<EvaluationDetailResponse> = {},
+) {
+  router.on('GET', /\/api\/v1\/evaluations\/eval-1$/, () => ({
+    status: 200,
+    body: buildEvaluation(overrides),
+  }))
 }
 
 function renderPage() {
@@ -54,6 +121,7 @@ describe('QnaPage', () => {
 
   it('shows an empty state when there are no questions', async () => {
     const router = createFetchRouter()
+    mockEvaluation(router)
     router.on('GET', /\/questions$/, () => ({ status: 200, body: { items: [] } }))
     vi.stubGlobal('fetch', router.fetchImpl)
 
@@ -64,6 +132,7 @@ describe('QnaPage', () => {
 
   it('shows an error banner when the list fails to load', async () => {
     const router = createFetchRouter()
+    mockEvaluation(router)
     router.on('GET', /\/questions$/, () => ({ status: 404 }))
     vi.stubGlobal('fetch', router.fetchImpl)
 
@@ -74,6 +143,7 @@ describe('QnaPage', () => {
 
   it('lists questions with real vendor identity, grouped by status', async () => {
     const router = createFetchRouter()
+    mockEvaluation(router)
     router.on('GET', /\/questions$/, () => ({
       status: 200,
       body: {
@@ -107,6 +177,7 @@ describe('QnaPage', () => {
 
   it('lets the owner publish an answer with a chosen visibility', async () => {
     const router = createFetchRouter()
+    mockEvaluation(router)
     let published = false
     router.on('PUT', /\/questions\/q-1\/answer$/, () => {
       published = true
@@ -161,6 +232,7 @@ describe('QnaPage', () => {
 
   it('shows a conflict message on a stale version and allows reloading', async () => {
     const router = createFetchRouter()
+    mockEvaluation(router)
     router.on('PUT', /\/questions\/q-1\/answer$/, () => ({ status: 409 }))
     router.on('GET', /\/questions$/, () => ({ status: 200, body: { items: [buildQuestion()] } }))
     vi.stubGlobal('fetch', router.fetchImpl)
@@ -181,6 +253,7 @@ describe('QnaPage', () => {
   it('hides the answer form for a non-owner buyer role but still shows the list', async () => {
     mockRole = 'evaluator_functional'
     const router = createFetchRouter()
+    mockEvaluation(router)
     router.on('GET', /\/questions$/, () => ({ status: 200, body: { items: [buildQuestion()] } }))
     vi.stubGlobal('fetch', router.fetchImpl)
 

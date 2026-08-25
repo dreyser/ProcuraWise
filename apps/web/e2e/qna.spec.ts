@@ -95,7 +95,15 @@ async function createDraftEvaluationWithTwoVendors(
   await page.getByRole('button', { name: 'Siguiente' }).click()
 
   await expect(page.getByRole('heading', { name: 'Vincular proveedor' })).toBeVisible()
-  await page.getByRole('button', { name: 'Vincular' }).click()
+  // Scoped to a specific vendor row, not a bare role/name match - the
+  // catalog is shared tenant-wide across specs in a full suite run, so more
+  // than one "Vincular" button can exist by the time this runs (same fix
+  // as UAT-16's own multi-vendor test, proposal-negotiation.spec.ts).
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: 'Proveedor Uno (dev)' })
+    .getByRole('button', { name: 'Vincular' })
+    .click()
   await expect(page.getByText(/Proveedores vinculados \(1 \/ \d+\)/)).toBeVisible()
 
   // Onboard vendor B now, still in draft, via the real VendorsPage route
@@ -227,6 +235,16 @@ test('qna: proveedor pregunta, comprador responde con visibilidad, y un segundo 
   await page.waitForURL('**/evaluations', wait)
   await page.getByRole('link', { name: evaluationName }).click()
   await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
+  await page.getByRole('link', { name: 'Q&A' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/qna`, wait)
+
+  // Fase 28 remediación R1A (UAT-01): Q&A used to drop the evaluation nav
+  // shell entirely - confirm the header/tab bar survived and the owner can
+  // still navigate to another tab without using the browser back button.
+  await expect(page.getByRole('heading', { name: evaluationName })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Requerimientos' })).toBeVisible()
+  await page.getByRole('link', { name: 'Requerimientos' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/requirements`, wait)
   await page.getByRole('link', { name: 'Q&A' }).click()
   await page.waitForURL(`**/evaluations/${evaluationId}/qna`, wait)
 

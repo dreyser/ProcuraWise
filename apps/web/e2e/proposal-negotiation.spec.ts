@@ -211,3 +211,170 @@ test('Negociación (Fase 21): owner reopens a submitted proposal, vendor revises
 
   await checkA11y(page)
 })
+
+/**
+ * UAT-16 (remediación R1B): reopening one vendor's submitted proposal moves
+ * `evaluation.status` from "evaluating" back to "collecting_responses" -
+ * `ProposalsPage.tsx` used to gate the whole "Acciones" column (including
+ * every OTHER vendor's own "Reabrir para negociación" control) on
+ * `evaluation.status === 'evaluating'` only, so reopening vendor A hid
+ * vendor B's controls too, even though the backend never blocked B. This
+ * spec proves two vendors can be in independent states (one reopened, one
+ * still on its original submission) at the same time.
+ */
+test('Negociación (UAT-16): reabrir la propuesta de un proveedor no oculta las acciones de otro', async ({
+  page,
+}) => {
+  const evaluationName = `RFP multi-proveedor ${Date.now()}`
+  const vendorBEmail = `e2e.vendor.uat16.${Date.now()}@dev.procurawise.local`
+
+  // 1. Owner: evaluación con un requerimiento por dimensión, dos
+  // proveedores vinculados (uno ya sembrado, uno nuevo dado de alta en el
+  // wizard mismo - mismo flujo que evaluation-wizard.spec.ts).
+  await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: 'Nueva evaluación' }).click()
+  await page.waitForURL('**/evaluations/new', wait)
+  await page.getByLabel('Nombre').fill(evaluationName)
+  await page.getByRole('button', { name: 'Crear y continuar' }).click()
+  await page.waitForURL(/\/evaluations\/[a-f0-9]+\/wizard$/, wait)
+  const evaluationId = page.url().split('/evaluations/')[1].split('/wizard')[0]
+
+  const functionalSection = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Funcional', exact: true }) })
+  await functionalSection.getByRole('button', { name: 'Agregar requerimiento' }).click()
+  await page.getByLabel('Categoría').fill('Core')
+  await page.getByLabel('Título').fill('Req funcional UAT-16')
+  await page.getByLabel('Descripción', { exact: true }).fill('d')
+  await page.getByLabel('Peso').fill('40')
+  await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
+  await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
+
+  const technicalSection = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Técnico', exact: true }) })
+  await technicalSection.getByRole('button', { name: 'Agregar requerimiento' }).click()
+  await page.getByLabel('Categoría').fill('Core')
+  await page.getByLabel('Título').fill('Req técnico UAT-16')
+  await page.getByLabel('Descripción', { exact: true }).fill('d')
+  await page.getByLabel('Peso').fill('20')
+  await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
+  await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Siguiente' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Vincular proveedor' })).toBeVisible()
+  await page
+    .getByRole('listitem')
+    .filter({ hasText: 'Proveedor Uno (dev)' })
+    .getByRole('button', { name: 'Vincular' })
+    .click()
+  await expect(page.getByText(/Proveedores vinculados \(1 \/ \d+\)/)).toBeVisible()
+
+  await page.getByLabel('Nombre del proveedor').fill('Proveedor Dos UAT-16')
+  await page.getByLabel('Correo del contacto principal').fill(vendorBEmail)
+  await page.getByLabel('Nombre del contacto principal').fill('Contacto Dos')
+  await page.getByRole('button', { name: 'Crear proveedor e invitar' }).click()
+  await expect(page.getByText(/Proveedores vinculados \(2 \/ \d+\)/)).toBeVisible()
+  const inviteCode = page.locator('code')
+  await expect(inviteCode).toBeVisible()
+  const inviteUrl = await inviteCode.textContent()
+  const token = new URL(inviteUrl!).searchParams.get('token')
+  expect(token).toBeTruthy()
+  await page.getByRole('button', { name: 'Siguiente' }).click()
+
+  await page.getByLabel('Aprobador').click()
+  await page.getByRole('option', { name: 'Aprobador A' }).click()
+  await page.getByLabel('Fecha límite de respuesta').fill('2030-01-01')
+  await page.getByRole('button', { name: 'Solicitar aprobación' }).click()
+  await expect(page.getByText('Aprobación pendiente')).toBeVisible()
+
+  await loginAsBuyer(page, 'approver.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: evaluationName }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
+  await page.getByRole('link', { name: 'Aprobación' }).click()
+  await page.getByRole('button', { name: 'Aprobar' }).click()
+  await expect(page.getByText('Aprobada')).toBeVisible()
+
+  await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: evaluationName }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
+  await page.getByRole('link', { name: 'Proveedores' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/vendors`, wait)
+  await page.getByRole('button', { name: 'Iniciar recepción de propuestas' }).click()
+  await page.getByRole('button', { name: 'Iniciar recepción' }).click()
+  await expect(page.getByText('Recibiendo propuestas')).toBeVisible()
+
+  // 2. Proveedor Dos: acepta la invitación y limpia el gate de Agreements.
+  await page.goto(`/vendor/accept-invitation?token=${token}`)
+  await page.getByLabel('Contraseña', { exact: true }).fill('e2e-vendor-uat16-password-123')
+  await page.getByLabel('Confirma tu contraseña').fill('e2e-vendor-uat16-password-123')
+  await page.getByRole('button', { name: 'Crear acceso' }).click()
+  const ndaSection = page.getByText('Acuerdo de confidencialidad (NDA)').locator('..')
+  await ndaSection.getByRole('checkbox').check()
+  await ndaSection.getByRole('button', { name: 'Aceptar' }).click()
+  const coiSection = page.getByText('Declaración de conflicto de interés').locator('..')
+  await coiSection.getByRole('checkbox').check()
+  await coiSection.getByRole('button', { name: 'Aceptar' }).click()
+  await expect(page.getByRole('heading', { name: 'Mis propuestas' })).toBeVisible()
+
+  await page.getByRole('link', { name: evaluationName }).click()
+  await page.waitForURL(/\/vendor\/proposals\/[a-f0-9]+$/, wait)
+  await requirementCard(page, 'Req funcional UAT-16').getByRole('textbox').first().fill('B func')
+  await requirementCard(page, 'Req funcional UAT-16').getByRole('textbox').first().blur()
+  await requirementCard(page, 'Req técnico UAT-16').getByRole('textbox').first().fill('B tech')
+  await requirementCard(page, 'Req técnico UAT-16').getByRole('textbox').first().blur()
+  await expect(page.getByText('Respondidos: 2 / 2')).toBeVisible()
+  await page.getByRole('button', { name: 'Enviar propuesta' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Enviar propuesta' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  // 3. Proveedor Uno: responde y envía también.
+  await loginAsVendor(page, 'vendor.a@dev.procurawise.local')
+  await page.getByRole('link', { name: evaluationName }).click()
+  await page.waitForURL(/\/vendor\/proposals\/[a-f0-9]+$/, wait)
+  await requirementCard(page, 'Req funcional UAT-16').getByRole('textbox').first().fill('A func')
+  await requirementCard(page, 'Req funcional UAT-16').getByRole('textbox').first().blur()
+  await requirementCard(page, 'Req técnico UAT-16').getByRole('textbox').first().fill('A tech')
+  await requirementCard(page, 'Req técnico UAT-16').getByRole('textbox').first().blur()
+  await expect(page.getByText('Respondidos: 2 / 2')).toBeVisible()
+  await page.getByRole('button', { name: 'Enviar propuesta' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Enviar propuesta' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  // 4. Owner: inicia evaluación (2 propuestas enviadas), reabre SOLO la de
+  // Proveedor Uno - la fila de Proveedor Dos debe seguir mostrando su
+  // propio botón "Reabrir para negociación", sin haber cambiado de estado.
+  await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: evaluationName }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
+  await page.getByRole('link', { name: 'Propuestas' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/proposals`, wait)
+  await page.getByRole('button', { name: 'Iniciar evaluación' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Iniciar evaluación' }).click()
+  await expect(page.getByText('En evaluación')).toBeVisible()
+
+  const rowOne = page.getByRole('row', { name: /Proveedor Uno/ })
+  const rowTwo = page.getByRole('row', { name: /Proveedor Dos UAT-16/ })
+  await expect(rowOne.getByRole('button', { name: 'Reabrir para negociación' })).toBeVisible()
+  await expect(rowTwo.getByRole('button', { name: 'Reabrir para negociación' })).toBeVisible()
+
+  await rowOne.getByRole('button', { name: 'Reabrir para negociación' }).click()
+  await page.getByLabel('Motivo').fill('Negociación solo con Proveedor Uno.')
+  await page.getByLabel('Nueva fecha límite de respuesta').fill('2030-06-01')
+  await page.getByRole('dialog').getByRole('button', { name: 'Reabrir propuesta' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  // La evaluación regresó a collecting_responses (efecto colateral real de
+  // reopen()) - antes del fix, esto ocultaba la columna Acciones completa.
+  await expect(page.getByText('Recibiendo propuestas')).toBeVisible()
+  await expect(rowOne.getByText('Ronda 1')).toBeVisible()
+  await expect(rowTwo.getByText('Ronda 0')).toBeVisible()
+  await expect(rowTwo.getByRole('button', { name: 'Reabrir para negociación' })).toBeVisible()
+  await expect(rowTwo.getByRole('link', { name: 'Calificar' })).toBeVisible()
+
+  await checkA11y(page)
+})

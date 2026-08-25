@@ -10,6 +10,7 @@ import {
   translatePriority,
   translateProposalStatus,
   translateResponseType,
+  translateReviewStatus,
   translateRole,
   translateScoringStatus,
 } from '@/lib/enumLabels'
@@ -77,6 +78,13 @@ describe('enumLabels translations', () => {
     expect(translateApprovalStatus('pending')).toBe('Aprobación pendiente')
     expect(translateApprovalStatus('approved')).toBe('Aprobada')
     expect(translateApprovalStatus('rejected')).toBe('Rechazada')
+  })
+
+  it('translates every real review_status wire value distinctly from approval (ADR 0026)', () => {
+    expect(translateReviewStatus('not_requested')).toBe('Sin solicitar')
+    expect(translateReviewStatus('pending')).toBe('Revisión pendiente')
+    expect(translateReviewStatus('approved')).toBe('Aprobada')
+    expect(translateReviewStatus('rejected')).toBe('Rechazada')
   })
 
   it('translates every real ProposalAnswer.status wire value (Fase 21)', () => {

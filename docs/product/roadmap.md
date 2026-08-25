@@ -20,6 +20,23 @@ Ver desglose fase-por-fase con historias y criterios de aceptación en [`docs/de
 | 5 — Decisión | 19-23 | TCO, scoring económico completo, ronda de negociación, decisión, reportes |
 | 6 — Hardening y despliegue | 24-28 | Notificaciones reales, billing/admin P1, hardening, infra Azure real, piloto UAT |
 
+## Remediación UAT piloto (post-Fase 28, bloqueante para el piloto externo)
+
+El primer UAT real end-to-end (Fase 28, 2026-08-24) expuso 20 hallazgos reales de producto/workflow/UX contra una evaluación completa de punta a punta. No estaba contemplado en este roadmap ni en `mvp-scope.md` — es trabajo concreto y secuenciado descubierto por el piloto real, no una reinterpretación del alcance ya cerrado del MVP ni parte del "roadmap post-MVP direccional" de abajo (que es sobre crecimiento futuro sin compromiso de fecha). Detalle completo (hallazgos, decisiones de producto A-I, bloques de implementación) en [`backlog.md`](../development/backlog.md#e12--remediación-uat-piloto-post-fase-28-no-numerado-en-el-planroadmap-original).
+
+Secuencia aprobada, con dependencias reales entre bloques:
+
+| Bloque | Hallazgos | Depende de |
+|---|---|---|
+| R1 (R1A/R1B/R1C) | UAT-01, 11, 16, 14, 10 | Fase 28 |
+| R2 | UAT-06, 07, 08 (Reviewer + aprobación en dos pasos) | R1; **ADR 0026 obligatorio antes de implementar** |
+| R3 | UAT-04, 09, 15 | R2 |
+| R4 | UAT-02, 03, 05, 13, 17, 18, 19, 20 | Fase 28 (sin dependencia fuerte con R1/R2/R3) |
+
+**Gate del piloto externo:** no se considera listo hasta que R1 y R2 estén completos, verificados con la suite completa, desplegados a staging, y validados manualmente con actores distintos (Owner → Reviewer → Approver → Owner publica/invita). R3/R4 quedan como mejoras deseables de MVP, no bloqueantes de este gate.
+
+UAT-12 (descubribilidad de login comprador/proveedor) ya está cerrado (PR #62) — no forma parte de este remediation.
+
 ## Criterio para pasar de fase
 
 Una fase se considera cerrada cuando cumple la "definición de terminado" de [`CLAUDE.md`](../../CLAUDE.md): código + tests correspondientes + `docs/development/current-phase.md` y `docs/development/session-handoff.md` actualizados + lint/typecheck verde + demo manual verificada contra el criterio de aceptación de esa fase en `backlog.md`. No se avanza a la siguiente fase con criterios de aceptación pendientes salvo decisión explícita documentada como deuda técnica en `session-handoff.md`.

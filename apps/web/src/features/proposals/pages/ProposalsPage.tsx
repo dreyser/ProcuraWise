@@ -95,6 +95,18 @@ export function ProposalsPage() {
   const submittedCount = proposals.filter((p) => p.status === 'submitted').length
   const canStartEvaluation =
     isOwner && evaluation.status === 'collecting_responses' && submittedCount > 0
+  // UAT-16 (remediación R1B): reopening one vendor's proposal moves the
+  // evaluation from "evaluating" back to "collecting_responses" (a second+
+  // reopen within the same round is valid there too - see
+  // proposals/service.py's reopen() and
+  // EvaluationRepository.update_deadline_while_collecting). Gating this
+  // column/action on "evaluating" only hid every OTHER vendor's actions
+  // (including their own reopen control) the moment the first reopen
+  // succeeded, even though the backend never blocked them.
+  const showActionsColumn =
+    evaluation.status === 'evaluating' ||
+    evaluation.status === 'collecting_responses' ||
+    evaluation.status === 'completed'
 
   return (
     <div>
@@ -121,16 +133,15 @@ export function ProposalsPage() {
                   <TableHead>Estado</TableHead>
                   <TableHead>Ronda</TableHead>
                   <TableHead>Última actualización</TableHead>
-                  {evaluation.status === 'evaluating' || evaluation.status === 'completed' ? (
-                    <TableHead>Acciones</TableHead>
-                  ) : null}
+                  {showActionsColumn ? <TableHead>Acciones</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {proposals.map((proposal) => {
                   const canReopen =
                     isOwner &&
-                    evaluation.status === 'evaluating' &&
+                    (evaluation.status === 'evaluating' ||
+                      evaluation.status === 'collecting_responses') &&
                     proposal.status === 'submitted' &&
                     proposal.round < MAX_PROPOSAL_ROUNDS - 1
                   return (
@@ -143,7 +154,7 @@ export function ProposalsPage() {
                       <TableCell>
                         {new Date(proposal.updated_at).toLocaleDateString('es-MX')}
                       </TableCell>
-                      {evaluation.status === 'evaluating' || evaluation.status === 'completed' ? (
+                      {showActionsColumn ? (
                         <TableCell>
                           {proposal.status === 'submitted' ? (
                             <div className="flex flex-col items-start gap-1">

@@ -4,6 +4,7 @@ from typing import Any
 
 from pymongo.errors import DuplicateKeyError
 
+from procurawise.audit.models import AuditAction
 from procurawise.audit.service import AuditEventService
 from procurawise.evaluations.exceptions import (
     ApprovalPreconditionError,
@@ -13,8 +14,13 @@ from procurawise.evaluations.exceptions import (
     InvalidEconomicWeightsError,
     InvalidTransitionError,
     NotAssignedApproverError,
+    NotAssignedReviewerError,
     RequirementNotFoundError,
+    ReviewerMembershipNotFoundError,
+    ReviewerRoleMismatchError,
+    ReviewPreconditionError,
     SelfApprovalError,
+    SelfReviewError,
     SnapshotNotFoundError,
     StartCollectionPreconditionError,
     VendorAlreadyLinkedError,
@@ -409,12 +415,27 @@ class EvaluationService:
 
     def _approval_readiness_reasons(self, evaluation: Evaluation) -> list[str]:
         """Plan §16 "approval readiness" = draft readiness + approver +
-        response_deadline."""
+        response_deadline. ADR 0026 (R2): additionally gated on review
+        passing, but only when a reviewer is actually assigned - an
+        evaluation that never uses the (optional) review stage is
+        unaffected, byte-for-byte the same readiness as before R2."""
         reasons = self._draft_readiness_reasons(evaluation)
         if evaluation.approver_membership_id is None:
             reasons.append("an approver must be assigned")
         if evaluation.response_deadline is None:
             reasons.append("a response deadline must be set")
+        if evaluation.reviewer_membership_id is not None and evaluation.review_status != "approved":
+            reasons.append("the evaluation must pass review before approval can be requested")
+        return reasons
+
+    def _review_readiness_reasons(self, evaluation: Evaluation) -> list[str]:
+        """ADR 0026 (R2): mirrors _approval_readiness_reasons for the
+        optional review stage - draft readiness + a reviewer assigned. No
+        response_deadline requirement here; that precondition belongs to the
+        approval stage, not the review stage that precedes it."""
+        reasons = self._draft_readiness_reasons(evaluation)
+        if evaluation.reviewer_membership_id is None:
+            reasons.append("a reviewer must be assigned")
         return reasons
 
     def publication_readiness(self, tenant_id: str, evaluation_id: str) -> dict[str, Any]:
@@ -423,6 +444,7 @@ class EvaluationService:
         real source of truth, re-derived fresh on every call, never cached."""
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
         approval_reasons = self._approval_readiness_reasons(evaluation)
+        review_reasons = self._review_readiness_reasons(evaluation)
         publish_reasons = list(approval_reasons)
         if evaluation.approval_status != "approved":
             publish_reasons.append("evaluation must be approved before publication")
@@ -434,6 +456,10 @@ class EvaluationService:
             "approval_status": evaluation.approval_status,
             "approver_membership_id": evaluation.approver_membership_id,
             "response_deadline": evaluation.response_deadline,
+            "can_request_review": not review_reasons,
+            "request_review_reasons": review_reasons,
+            "review_status": evaluation.review_status,
+            "reviewer_membership_id": evaluation.reviewer_membership_id,
         }
 
     def set_approver(
@@ -589,7 +615,14 @@ class EvaluationService:
         return self.get_evaluation(tenant_id, evaluation_id)
 
     def reject(
-        self, tenant_id: str, evaluation_id: str, comment: str, *, actor: ActorContext
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        comment: str,
+        *,
+        kind: str = "rejected",
+        requirement_notes: list[dict[str, Any]] | None = None,
+        actor: ActorContext,
     ) -> Evaluation:
         evaluation = self.get_evaluation(tenant_id, evaluation_id)
         self._assigned_approver_or_raise(evaluation, actor)
@@ -608,14 +641,264 @@ class EvaluationService:
         )
         if not matched:
             raise InvalidTransitionError(evaluation_id)
+        # ADR 0026 (R2), blocking question resolved 2026-08-24: "solicitar
+        # cambios" persists approval_status="rejected" exactly like a
+        # generic reject - the action name is the only thing that keeps the
+        # two distinguishable in the audit trail, never a metadata flag a
+        # reader could ignore.
+        action: AuditAction = (
+            "evaluation_changes_requested" if kind == "changes_requested" else "evaluation_rejected"
+        )
         self._audit.record(
             tenant_id=tenant_id,
             actor=actor,
-            action="evaluation_rejected",
+            action=action,
             resource_type="evaluation",
             resource_id=evaluation_id,
             evaluation_id=evaluation_id,
-            metadata={"has_comment": True},
+            metadata={"has_comment": True, "requirement_notes": requirement_notes or []},
+        )
+        return self.get_evaluation(tenant_id, evaluation_id)
+
+    def _assigned_reviewer_or_raise(self, evaluation: Evaluation, actor: ActorContext) -> None:
+        if actor.membership_id != evaluation.reviewer_membership_id:
+            raise NotAssignedReviewerError(evaluation.id)
+
+    def set_reviewer(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        reviewer_membership_id: str,
+        *,
+        actor: ActorContext,
+    ) -> Evaluation:
+        """ADR 0026 (R2) - mirrors set_approver exactly: candidate must hold
+        the internal_collaborator role (Reviewer is a capability over that
+        existing role, not a new global Role value), and the owner may not
+        appoint themselves (same SelfApprovalError reasoning as approver)."""
+        evaluation = self.get_evaluation(tenant_id, evaluation_id)
+        if evaluation.status != "draft" or evaluation.review_status not in (
+            "not_requested",
+            "rejected",
+        ):
+            raise InvalidTransitionError(evaluation_id)
+
+        candidate = self._memberships.find_by_id_and_tenant(reviewer_membership_id, tenant_id)
+        if candidate is None:
+            raise ReviewerMembershipNotFoundError(reviewer_membership_id)
+        if candidate["role"] != "internal_collaborator":
+            raise ReviewerRoleMismatchError(candidate["role"])
+
+        creator = self._memberships.find_by_id_and_tenant(
+            evaluation.created_by_membership_id, tenant_id
+        )
+        if creator is not None and candidate["user_id"] == creator["user_id"]:
+            raise SelfReviewError(reviewer_membership_id)
+
+        matched = self._evaluations.set_reviewer(tenant_id, evaluation_id, reviewer_membership_id)
+        self._require_matched(matched, tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_reviewer_set",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"reviewer_membership_id": reviewer_membership_id},
+        )
+        return self.get_evaluation(tenant_id, evaluation_id)
+
+    def request_review(
+        self, tenant_id: str, evaluation_id: str, *, actor: ActorContext
+    ) -> Evaluation:
+        evaluation = self.get_evaluation(tenant_id, evaluation_id)
+        if evaluation.status != "draft":
+            raise InvalidTransitionError(evaluation_id)
+
+        reasons = self._review_readiness_reasons(evaluation)
+        if reasons:
+            raise ReviewPreconditionError("; ".join(reasons))
+
+        now = datetime.now(UTC)
+        matched = self._evaluations.transition_review_status(
+            tenant_id,
+            evaluation_id,
+            ("not_requested", "rejected"),
+            "pending",
+            {
+                "review_requested_at": now,
+                "review_requested_by_membership_id": actor.membership_id,
+                "review_decided_at": None,
+                "review_decided_by_membership_id": None,
+                "review_comment": None,
+            },
+        )
+        if not matched:
+            raise InvalidTransitionError(evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_review_requested",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"reviewer_membership_id": evaluation.reviewer_membership_id},
+        )
+        if evaluation.reviewer_membership_id:
+            self._notifications.notify(
+                tenant_id,
+                recipient_membership_id=evaluation.reviewer_membership_id,
+                event="review_requested",
+                resource_type="evaluation",
+                resource_id=evaluation_id,
+                evaluation_id=evaluation_id,
+                title="Revisión pendiente",
+                body=(
+                    f'La evaluación "{evaluation.name}" espera tu revisión '
+                    "antes de poder pedir aprobación."
+                ),
+            )
+        return self.get_evaluation(tenant_id, evaluation_id)
+
+    def withdraw_review_request(
+        self, tenant_id: str, evaluation_id: str, *, actor: ActorContext
+    ) -> Evaluation:
+        matched = self._evaluations.transition_review_status(
+            tenant_id, evaluation_id, ("pending",), "not_requested"
+        )
+        self._require_matched(matched, tenant_id, evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_review_withdrawn",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={},
+        )
+        return self.get_evaluation(tenant_id, evaluation_id)
+
+    def review_approve(
+        self, tenant_id: str, evaluation_id: str, comment: str | None, *, actor: ActorContext
+    ) -> Evaluation:
+        evaluation = self.get_evaluation(tenant_id, evaluation_id)
+        self._assigned_reviewer_or_raise(evaluation, actor)
+
+        now = datetime.now(UTC)
+        matched = self._evaluations.transition_review_status(
+            tenant_id,
+            evaluation_id,
+            ("pending",),
+            "approved",
+            {
+                "review_decided_at": now,
+                "review_decided_by_membership_id": actor.membership_id,
+                "review_comment": comment,
+            },
+        )
+        if not matched:
+            raise InvalidTransitionError(evaluation_id)
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action="evaluation_review_approved",
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"has_comment": comment is not None},
+        )
+        evaluation = self.get_evaluation(tenant_id, evaluation_id)
+
+        # ADR 0026 (R2), blocking question #2 (founder, 2026-08-25):
+        # auto-chain into "pending approver" in the same action, no second
+        # manual owner step - only when the rest of approval readiness is
+        # already met (approver assigned, response_deadline set). If not,
+        # the owner still needs to finish that configuration and call
+        # request_approval themselves, same as today.
+        approval_reasons = self._approval_readiness_reasons(evaluation)
+        if not approval_reasons and evaluation.approval_status in ("not_requested", "rejected"):
+            chained = self._evaluations.transition_approval_status(
+                tenant_id,
+                evaluation_id,
+                ("not_requested", "rejected"),
+                "pending",
+                {
+                    "approval_requested_at": now,
+                    "approval_requested_by_membership_id": actor.membership_id,
+                    "approval_decided_at": None,
+                    "approval_decided_by_membership_id": None,
+                    "approval_comment": None,
+                },
+            )
+            if chained:
+                self._audit.record(
+                    tenant_id=tenant_id,
+                    actor=actor,
+                    action="evaluation_approval_requested",
+                    resource_type="evaluation",
+                    resource_id=evaluation_id,
+                    evaluation_id=evaluation_id,
+                    metadata={
+                        "approver_membership_id": evaluation.approver_membership_id,
+                        "auto_chained_from_review_approval": True,
+                    },
+                )
+                if evaluation.approver_membership_id:
+                    self._notifications.notify(
+                        tenant_id,
+                        recipient_membership_id=evaluation.approver_membership_id,
+                        event="approval_requested",
+                        resource_type="evaluation",
+                        resource_id=evaluation_id,
+                        evaluation_id=evaluation_id,
+                        title="Aprobación de publicación pendiente",
+                        body=(
+                            f'La evaluación "{evaluation.name}" espera tu '
+                            "aprobación para publicarse."
+                        ),
+                    )
+        return self.get_evaluation(tenant_id, evaluation_id)
+
+    def review_reject(
+        self,
+        tenant_id: str,
+        evaluation_id: str,
+        comment: str,
+        *,
+        kind: str = "rejected",
+        requirement_notes: list[dict[str, Any]] | None = None,
+        actor: ActorContext,
+    ) -> Evaluation:
+        evaluation = self.get_evaluation(tenant_id, evaluation_id)
+        self._assigned_reviewer_or_raise(evaluation, actor)
+
+        now = datetime.now(UTC)
+        matched = self._evaluations.transition_review_status(
+            tenant_id,
+            evaluation_id,
+            ("pending",),
+            "rejected",
+            {
+                "review_decided_at": now,
+                "review_decided_by_membership_id": actor.membership_id,
+                "review_comment": comment,
+            },
+        )
+        if not matched:
+            raise InvalidTransitionError(evaluation_id)
+        action: AuditAction = (
+            "evaluation_review_changes_requested"
+            if kind == "changes_requested"
+            else "evaluation_review_rejected"
+        )
+        self._audit.record(
+            tenant_id=tenant_id,
+            actor=actor,
+            action=action,
+            resource_type="evaluation",
+            resource_id=evaluation_id,
+            evaluation_id=evaluation_id,
+            metadata={"has_comment": True, "requirement_notes": requirement_notes or []},
         )
         return self.get_evaluation(tenant_id, evaluation_id)
 

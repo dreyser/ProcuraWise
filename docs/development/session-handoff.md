@@ -32,6 +32,146 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: R2 implementado (Reviewer + aprobación en dos pasos, ADR 0026)
+
+**Resumen:** Implementación completa del diseño de ADR 0026 (UAT-06/07/08). Backend: 7 campos nuevos en `Evaluation` (sin migración), endpoints `/reviewer`, `/request-review`, `/review/approve`, `/review/reject` mirroring el mecanismo de approver existente, auto-encadenado de la aprobación de revisión a "pendiente de aprobación" (blocking question #2), y `kind`/`requirement_notes` en `reject`/`review_reject` para distinguir "solicitar cambios" de un rechazo genérico en la auditoría (blocking question resuelta 2026-08-24). Frontend: sección "Revisión (opcional)" en `EvaluationApprovalPage.tsx`, navegación contextual en `EvaluationTabNav.tsx` (UAT-08, oculta "Aprobación" a quien no sea owner/approver/reviewer asignado), `translateReviewStatus` nuevo para no confundir "revisión pendiente" con "aprobación pendiente".
+
+**Dos defectos reales encontrados y corregidos durante esta misma sesión (antes de cerrar):**
+1. El filtro Mongo de `set_reviewer`/`transition_review_status` no aceptaba documentos sin `review_status` (campo completamente nuevo) - evaluaciones reales ya existentes del piloto (Fase 28) habrían quedado sin poder asignar revisor nunca. Corregido incluyendo `None` en el `$in` (Mongo trata `None` como "null o campo ausente"), sin necesidad de migración.
+2. Los campos "Aprobador"/"Fecha límite de respuesta" solo se persistían al hacer clic en "Solicitar aprobación" - botón que ahora también puede quedar deshabilitado por el nuevo gate de revisión, un motivo sin relación con si esos campos ya están elegidos. Esto hacía imposible configurar el approver con antelación mientras la revisión está en curso, inutilizando el auto-encadenado. Corregido persistiendo esos campos inmediatamente (`onValueChange`/`onBlur`) en vez de solo al enviar. Encontrado escribiendo el e2e del journey completo, no por inspección de código.
+
+**Archivos tocados (backend):** `evaluations/models.py`, `evaluations/repository.py`, `evaluations/service.py`, `evaluations/router.py`, `evaluations/schemas.py`, `evaluations/exceptions.py`, `scoring/router.py` (su propio builder de `EvaluationDetailResponse`), `audit/models.py`, `notifications/models.py`, `tests/unit/test_evaluation_models.py`, `tests/api/test_review_approval.py` (nuevo).
+
+**Archivos tocados (frontend):** `EvaluationApprovalPage.tsx`/`.test.tsx` (nuevo), `EvaluationTabNav.tsx`/`.test.tsx` (nuevo), `evaluationReadiness.ts`/`.test.ts`, `enumLabels.ts`/`.test.ts`, `e2e/evaluation-approval.spec.ts` (nuevo journey de 3 actores + UAT-08 actualizado), y 4 archivos de test que solo necesitaron los nuevos campos `review_*` en su fixture de `EvaluationDetailResponse` (`App.integration.test.tsx`, `QnaPage.test.tsx`, `WizardStepMetadata.test.tsx`, `deriveWizardStep.test.ts`).
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 309 passed. `pytest -m docker` → 447 passed (+8 nuevos). `pnpm test` → 232/232 (+11 nuevos). `make contracts` → diff real esperado (a diferencia de R1, R2 sí cambia backend/contrato). `make test-e2e` (Docker real, 23 specs) → 23/23 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna adicional a las 2 ya registradas dentro del propio ADR 0026.
+
+**Deuda técnica introducida:** Ninguna nueva. Nota heredada, no bloqueante: un approver/reviewer no-owner sigue sin poder resolver nombres de otros miembros vía `memberLabel` (`GET /org-members` está restringido a `tenant_admin`/`evaluation_owner` desde antes de esta sesión) - limitación pre-existente, no introducida ni ampliada por R2.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar el conjunto `docs/adr-0026-reviewer-approval` + `feat/r2-reviewer-two-step-approval` y confirmar en staging el journey de 3 actores real.
+- Continuar con **R3** (UAT-04/09 progreso/estado consolidado + UAT-15 autosave de scoring, depende de R2) - ver `backlog.md` sección E12.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes - no pushear sin confirmación explícita.
+
+---
+
+### Sesión — 2026-08-25 — Remediación UAT piloto: ADR 0026 (Reviewer + aprobación en dos pasos) redactado y aceptado — R2 desbloqueado
+
+**Resumen:** R2 (UAT-06/07/08) exigía explícitamente un ADR nuevo antes de implementarse. Investigado el mecanismo actual de aprobación de un paso (`approver_membership_id`/`approval_status` en `evaluations/models.py`, `set_approver`/`request_approval`/`approve`/`reject` en `evaluations/service.py`) y confirmado que `Assignment` (dimension+section, solo scoring) no puede representar "revisor de toda la evaluación". Dos preguntas bloqueantes reales identificadas antes de redactar (impacto en modelo de datos y en radio de cambio sobre e2e existentes) — resueltas por el founder: (1) Reviewer opcional por evaluación, no obligatorio — cero migración, cero cambio en tests existentes; (2) aprobación del Reviewer auto-encadena a "pendiente de aprobación" del Approver, sin segunda acción manual del Owner. ADR 0026 registra la decisión completa: Reviewer reutiliza `internal_collaborator` vía un campo `reviewer_membership_id` (mismo patrón que `approver_membership_id`), `review_status` reutiliza el tipo `ApprovalStatus` existente (sin 5º valor), y "solicitar cambios" persiste `rejected` con comentarios por requerimiento y un evento de auditoría distinguible de un rechazo genérico.
+
+**Archivos tocados:**
+- `docs/architecture/decisions/0026-reviewer-aprobacion-dos-pasos.md` — nuevo ADR (Accepted).
+- `docs/development/backlog.md` — fila R2 (sección E12) actualizada: desbloqueada, referencia al ADR 0026.
+
+**Resultado de pruebas:** N/A — sesión de documentación pura, ningún archivo de código de producto tocado.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna adicional — las dos preguntas bloqueantes de esta sesión ya quedaron registradas dentro del propio ADR 0026, no como decisiones ad-hoc separadas.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- **R2 está desbloqueado.** Implementar exactamente el diseño de ADR 0026: nuevos campos en `Evaluation` (`reviewer_membership_id`, `review_status`, `review_requested_at`/`_by`, `review_decided_at`/`_by`, `review_comment`), endpoints nuevos (`POST /reviewer`, `POST`/`DELETE /request-review`, `POST /review/approve`, `POST /review/reject`), extensión `requirement_notes`/`kind` en `approve`/`reject` existentes, nuevos valores de `AuditAction`, extensión de `INVALIDATED_BY_APPROVAL_EDIT` para resetear `review_status` también, y navegación contextual en `EvaluationTabNav.tsx` (ocultar "Aprobación" a quien no sea owner/approver/reviewer asignado).
+- Los tests e2e/integración existentes del flujo de aprobación (`evaluation-approval.spec.ts`, `proposal-negotiation.spec.ts`, `vertical-slice.spec.ts`, `decision-approval.spec.ts`, `tests/conftest.py::approve_and_publish`) no deben requerir cambios — ninguno asigna revisor. Los tests nuevos de R2 deben cubrir explícitamente el camino con revisor (journey de 3 actores) y el test de autorización negativo del criterio de aceptación (reviewer nunca aprueba, approver nunca edita).
+- `dev_seed.py` ya siembra una Membership `internal_collaborator` (`Colaborador Interno A`) — usarla como el actor Reviewer en los tests nuevos, sin sembrar una identidad nueva.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
+### Sesión — 2026-08-25 — Remediación UAT piloto: R1C implementado (UAT-10) — R1 completo
+
+**Resumen:** Tercer y último bloque de R1, encadenado sobre R1B. UAT-10 no era un bug — el análisis de remediación ya lo había investigado y descartado explícitamente como candidato a brecha de seguridad. Este bloque es refuerzo de verificación puro: confirmado que `scoring/`, `tco/` y `decisions/` routers usan uniformemente `shared.context.require_role` → `identity.jwt_provider.get_current_context`, que exige `token_use == "access"` antes de construir cualquier `ActorContext` — un `vendor_contact` solo porta un token `vendor_access`, físicamente distinto, así que se rechaza (401) en la capa de dependencias, antes de cualquier lookup por id. Sin cambios de código de producto; solo se amplió `isolation.spec.ts` con un test explícito para scoring/economic-assessment/decisions (antes solo cubría `/api/v1/evaluations` genéricamente).
+
+**Archivos tocados:**
+- `apps/web/e2e/isolation.spec.ts` — nuevo test cubriendo 5 peticiones (scoring write, economic-assessment read+write, decisions read+approve) con el JWT real de un `vendor_contact`.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed (sin cambio). `pnpm test` → 220/220 (sin cambio). `make contracts` → sin diff. `make test-e2e` (Docker real, 22 specs) → 22/22 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/r1c-vendor-isolation-coverage` (o el conjunto R1A+R1B+R1C junto, a decisión del founder) y confirmar en staging.
+- **R1 queda completo** (R1A + R1B + R1C). El siguiente bloque es **R2** (UAT-06/07/08: Reviewer + aprobación en dos pasos + navegación contextual por rol) — **no empezar sin antes redactar y confirmar el ADR 0026**, sigue pendiente.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
+### Sesión — 2026-08-25 — Remediación UAT piloto: R1B implementado (UAT-16 + UAT-14)
+
+**Resumen:** Segundo bloque de la remediación UAT (E12), encadenado sobre la rama de R1A. UAT-16: `ProposalsPage.tsx` condicionaba acciones y `canReopen` solo a `evaluation.status === 'evaluating'`, sin incluir `collecting_responses` (el estado real tras el primer reopen de un proveedor) — esto ocultaba la columna de acciones de **todos los demás proveedores** aunque el backend (`EvaluationRepository.update_deadline_while_collecting`, sin cambios) ya soporta reopens concurrentes e independientes por proveedor. UAT-14: `ScoringPage.tsx` renderizaba la sección Comercial/Riesgo sin condicional de rol — el backend ya bloqueaba la escritura correctamente vía `enforce_section_assignment`, pero `evaluator_functional`/`evaluator_technical` seguían viéndola. Ambos fixes 100% frontend, sin cambios de backend/contrato.
+
+**Archivos tocados:**
+- `apps/web/src/features/proposals/pages/ProposalsPage.tsx` — `showActionsColumn`, `canReopen` ampliado a incluir `collecting_responses`.
+- `apps/web/src/features/scoring/pages/ScoringPage.tsx`/`ScoringPage.test.tsx` — `canSeeEconomic` gating `EconomicAssessmentPanel` + 4 tests nuevos por rol.
+- `apps/web/e2e/proposal-negotiation.spec.ts` — nuevo spec grande (UAT-16, dos proveedores reales, reopen independiente confirmado).
+- `apps/web/e2e/vertical-slice.spec.ts` — actualizado para usar `evaluator_economic` en la sección económica (dependía del comportamiento antiguo que UAT-14 corrige).
+- `apps/web/e2e/qna.spec.ts` — selector `Vincular` acotado al proveedor específico (se volvió ambiguo con el segundo proveedor del nuevo spec de UAT-16).
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed. `pnpm test` → 220/220. `make contracts` → sin diff. `make test-e2e` (Docker real, 21 specs) → 21/21 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna. Nota abierta, no bloqueante: el mismo patrón de selector `Vincular` sin scope sigue latente (no roto) en `documents.spec.ts`, `ai-score-suggestions.spec.ts`, `evaluation-wizard.spec.ts`, `evaluation-approval.spec.ts` — corregir solo si algún cambio futuro los rompe.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/r1b-multi-vendor-reopen-and-economic-visibility` y confirmar en Azure real: reabrir la propuesta de un proveedor no oculta las acciones de otro; `evaluator_functional`/`evaluator_technical` ya no ven la sección Comercial/Riesgo.
+- Continuar con **R1C** (UAT-10 — ampliar `isolation.spec.ts` con más endpoints buyer-only para `vendor_contact`; es refuerzo de verificación, no hay brecha real encontrada) — ver `backlog.md` sección E12.
+- No empezar R2 sin antes redactar y confirmar el ADR 0026 (sigue pendiente, sin cambios desde la sesión anterior).
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
+### Sesión — 2026-08-25 — Remediación UAT piloto: R1A implementado (UAT-01 + UAT-11)
+
+**Resumen:** Primer bloque de implementación de la remediación UAT (E12) cerrada la sesión anterior. UAT-01: `QnaPage.tsx` no importaba `EvaluationTabNav` (única de las 10 páginas del shell de evaluación sin la barra de tabs) — corregido siguiendo el patrón exacto de `RequirementsPage.tsx`. UAT-11: `normalizeApiError` mapeaba todo 409 al mismo texto genérico sin leer `error.data.detail`, aunque el backend ya devuelve strings distintos por causa (`InvalidProposalTransitionError`/`InvalidQuestionTransitionError` vs. `StaleVersionError`) — corregido con una tabla de traducción que preserva el mensaje genérico para cualquier detail no reconocido (ningún caso de conflicto real se regresionó). Ambos fixes son 100% frontend, sin cambios de backend/contrato.
+
+**Archivos tocados:**
+- `apps/web/src/features/evaluations/pages/QnaPage.tsx` — header + `EvaluationTabNav`.
+- `apps/web/src/features/evaluations/pages/QnaPage.test.tsx` — mock de evaluación agregado a los 6 tests existentes.
+- `apps/web/src/lib/errors.ts`/`errors.test.ts` — tabla `KNOWN_CONFLICT_DETAILS` + 4 tests nuevos.
+- `apps/web/e2e/qna.spec.ts` — aserción de navegación real (ida y vuelta) desde Q&A.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed. `pnpm test` → 216/216. `make contracts` → sin diff. `make test-e2e` (Docker real) → 20/20 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/r1a-qna-navigation-and-conflict-messages` y confirmar en Azure real: Q&A muestra la barra de tabs; un 409 conocido (ej. responder una propuesta cuya evaluación no está en `collecting_responses`) muestra el mensaje específico, no el genérico.
+- Continuar con **R1B** (UAT-16 reopen multi-proveedor + UAT-14 ocultar Comercial/Riesgo a evaluador functional/technical) — sin dependencia de R1A, ver `backlog.md` sección E12 para el detalle de causa raíz ya localizado.
+- No empezar R2 sin antes redactar y confirmar el ADR 0026 (sigue pendiente, sin cambios desde la sesión anterior).
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
+### Sesión — 2026-08-24 — Remediación UAT piloto (E12): análisis completo de 20 hallazgos + cierre de planeación R1-R4
+
+**Resumen:** Sesión en dos partes, ambas en Plan Mode (solo lectura/documentación, sin cambios de código). Parte 1: análisis exhaustivo del primer UAT real end-to-end (creación de evaluación → requerimientos → aprobación → onboarding/respuesta de proveedor → scoring → TCO/económico → reapertura/negociación → resultados/decisión → notificaciones, múltiples proveedores), con 9 decisiones de producto ya aprobadas por el founder (A-I) y 20 hallazgos (UAT-01 a UAT-20) analizados contra el repositorio real vía 4 agentes de exploración en paralelo (identidad/roles/navegación/aprobación; reopen de propuestas; notificaciones/IA; layout de tabla/Company Profile), más investigación directa de vendor isolation y economic assessment ya cubierta en sesiones previas de esta misma fase. Hallazgo transversal: la mayoría de los 20 son "el mecanismo ya existe, la UI no lo deriva/expone" — solo 3 requieren mecanismo nuevo real (Reviewer/aprobación en dos pasos, Company Profile, navegación contextual). Ninguna brecha de seguridad confirmada (UAT-10 investigado y descartado con evidencia). Parte 2: el founder aprobó el análisis completo, resolvió la única pregunta bloqueante (Opción 1: `ApprovalStatus` sin 5º valor, "solicitar cambios" = `rejected` + comentarios por requerimiento + evento de auditoría distinguible) y aprobó la estructura de remediación R1(R1A/R1B/R1C)→R2→R3→R4 con gate de piloto externo en R1+R2. Esta sesión de cierre documentó esa estructura en `backlog.md`/`roadmap.md`/`current-phase.md` — cero cambios de código/producto.
+
+**Archivos tocados:**
+- `docs/development/backlog.md` — nueva sección "E12 — Remediación UAT piloto" con las 6 filas (R1A/R1B/R1C/R2/R3/R4), pregunta bloqueante resuelta, gate de piloto, nota de UAT-12 cerrado.
+- `docs/product/roadmap.md` — nueva sección "Remediación UAT piloto (post-Fase 28...)" con la secuencia y dependencias entre bloques.
+- `docs/development/current-phase.md` — nueva entrada al tope con el resumen completo del análisis y la estructura aprobada.
+
+**Resultado de pruebas:** ninguna — sesión de documentación pura, sin cambios de código. `git diff --check` limpio (ver detalle en la respuesta de cierre de la sesión).
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** El mecanismo de Reviewer (R2) requerirá un ADR nuevo (0026) **antes** de implementarse — no se redacta en esta sesión, solo se deja registrado como bloqueante de R2.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Empezar **R1A** (UAT-01 Q&A + UAT-11 mensaje de conflicto distinguible) — sin dependencias, bajo riesgo, alto valor. Ver detalle exacto de causa raíz y fix esperado en `current-phase.md`/`backlog.md` sección E12.
+- R1B y R1C pueden ejecutarse en cualquier orden respecto a R1A (sin dependencia entre sub-bloques de R1) — considerar sesiones separadas por sub-bloque para mantener el contexto acotado.
+- **No empezar R2 sin antes redactar y confirmar el ADR 0026** (mecanismo de Reviewer/aprobación en dos pasos) — es una extensión real del modelo de autorización, no una extensión trivial.
+- No reabrir UAT-12 (ya cerrado, PR #62).
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-21 — Fase 28: defecto real #7 (respuesta del proveedor no visible al calificar) + confirmación del modelo de permisos de scoring
 
 **Resumen:** El founder, calificando la primera propuesta real, preguntó (Plan Mode, investigación antes de tocar código) si dos comportamientos eran diseño esperado: (1) el owner no ve la respuesta del proveedor al calificar, solo el requerimiento y el control de calificación; (2) como evaluador funcional, no encuentra forma de calificar — solo puede cambiar progreso en "Asignaciones". Investigado con evidencia de código: (1) es un gap real, no diseño — los datos ya existen (`ScoringPage.tsx` nunca leía `currentSnapshot.answers`, sin ninguna razón documentada); (2) no es una limitación — evaluadores sí pueden calificar por diseño (`SCORE_WRITE_ROLES` los incluye, sin gate de `Assignment` para el owner), el problema real es solo de descubribilidad ("Asignaciones" no enlaza hacia "Propuestas"/"Calificar"). El founder autorizó implementar únicamente el fix del punto 1 para proceder con el deploy — el punto 2 (enlace de descubribilidad) y mostrar evidencia agrupada por requerimiento (decisión de diseño ya documentada explícitamente en `BuyerDocumentsList.tsx`) quedaron fuera de alcance de este fix.

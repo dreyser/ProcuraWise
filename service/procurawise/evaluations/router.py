@@ -10,8 +10,13 @@ from procurawise.evaluations.exceptions import (
     InvalidEconomicWeightsError,
     InvalidTransitionError,
     NotAssignedApproverError,
+    NotAssignedReviewerError,
     RequirementNotFoundError,
+    ReviewerMembershipNotFoundError,
+    ReviewerRoleMismatchError,
+    ReviewPreconditionError,
     SelfApprovalError,
+    SelfReviewError,
     SnapshotNotFoundError,
     StartCollectionPreconditionError,
     VendorAlreadyLinkedError,
@@ -35,6 +40,7 @@ from procurawise.evaluations.schemas import (
     RequirementResponse,
     RequirementUpdateRequest,
     SetApproverRequest,
+    SetReviewerRequest,
     UpdateEconomicCriteriaWeightsRequest,
     VendorLinkRequest,
 )
@@ -60,6 +66,13 @@ require_owner = require_role(*OWNER_ONLY)
 # the evaluation's own approver_membership_id - this only gates "holds the
 # approver role at all" (plan §17).
 require_approver = require_role("approver")
+# ADR 0026 (R2): Reviewer is a capability over the existing
+# internal_collaborator role, not a new global Role - this only gates
+# "holds that role at all", same as require_approver above. The service
+# layer restricts further to the evaluation's own reviewer_membership_id
+# (_assigned_reviewer_or_raise), mirroring the approver's own
+# _assigned_approver_or_raise.
+require_reviewer = require_role("internal_collaborator")
 
 
 def get_evaluation_service(settings: Settings = Depends(get_settings)) -> EvaluationService:
@@ -123,6 +136,13 @@ def _evaluation_detail(evaluation: Evaluation) -> EvaluationDetailResponse:
             commercial=evaluation.economic_criteria_weights.commercial,
             risk=evaluation.economic_criteria_weights.risk,
         ),
+        reviewer_membership_id=evaluation.reviewer_membership_id,
+        review_status=evaluation.review_status,
+        review_requested_at=evaluation.review_requested_at,
+        review_requested_by_membership_id=evaluation.review_requested_by_membership_id,
+        review_decided_at=evaluation.review_decided_at,
+        review_decided_by_membership_id=evaluation.review_decided_by_membership_id,
+        review_comment=evaluation.review_comment,
     )
 
 
@@ -306,7 +326,18 @@ def reject_evaluation(
     service: EvaluationService = Depends(get_evaluation_service),
 ) -> EvaluationDetailResponse:
     try:
-        evaluation = service.reject(context.tenant_id, evaluation_id, body.comment, actor=context)
+        evaluation = service.reject(
+            context.tenant_id,
+            evaluation_id,
+            body.comment,
+            kind=body.kind,
+            requirement_notes=(
+                [note.model_dump() for note in body.requirement_notes]
+                if body.requirement_notes
+                else None
+            ),
+            actor=context,
+        )
     except EvaluationNotFoundError:
         raise HTTPException(status_code=404) from None
     except NotAssignedApproverError:
@@ -315,6 +346,122 @@ def reject_evaluation(
         ) from None
     except InvalidTransitionError:
         raise HTTPException(status_code=409, detail="approval is not pending") from None
+    return _evaluation_detail(evaluation)
+
+
+@router.post("/{evaluation_id}/reviewer", response_model=EvaluationDetailResponse)
+def set_reviewer(
+    evaluation_id: str,
+    body: SetReviewerRequest,
+    context: ActorContext = Depends(require_owner),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    """ADR 0026 (R2) - mirrors set_approver exactly."""
+    try:
+        evaluation = service.set_reviewer(
+            context.tenant_id, evaluation_id, body.reviewer_membership_id, actor=context
+        )
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except ReviewerMembershipNotFoundError:
+        raise HTTPException(status_code=404, detail="reviewer membership not found") from None
+    except ReviewerRoleMismatchError:
+        raise HTTPException(
+            status_code=400,
+            detail="target membership does not hold the internal_collaborator role",
+        ) from None
+    except SelfReviewError:
+        raise HTTPException(
+            status_code=400, detail="the evaluation owner may not be their own reviewer"
+        ) from None
+    except InvalidTransitionError:
+        raise HTTPException(
+            status_code=409, detail="evaluation is not draft or review is already in progress"
+        ) from None
+    return _evaluation_detail(evaluation)
+
+
+@router.post("/{evaluation_id}/request-review", response_model=EvaluationDetailResponse)
+def request_review(
+    evaluation_id: str,
+    context: ActorContext = Depends(require_owner),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    try:
+        evaluation = service.request_review(context.tenant_id, evaluation_id, actor=context)
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="evaluation is not draft") from None
+    except ReviewPreconditionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return _evaluation_detail(evaluation)
+
+
+@router.delete("/{evaluation_id}/request-review", status_code=204)
+def withdraw_review_request(
+    evaluation_id: str,
+    context: ActorContext = Depends(require_owner),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> None:
+    try:
+        service.withdraw_review_request(context.tenant_id, evaluation_id, actor=context)
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="review is not pending") from None
+
+
+@router.post("/{evaluation_id}/review/approve", response_model=EvaluationDetailResponse)
+def review_approve(
+    evaluation_id: str,
+    body: ApprovalDecisionRequest,
+    context: ActorContext = Depends(require_reviewer),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    try:
+        evaluation = service.review_approve(
+            context.tenant_id, evaluation_id, body.comment, actor=context
+        )
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except NotAssignedReviewerError:
+        raise HTTPException(
+            status_code=403, detail="only the assigned reviewer may decide this evaluation"
+        ) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="review is not pending") from None
+    return _evaluation_detail(evaluation)
+
+
+@router.post("/{evaluation_id}/review/reject", response_model=EvaluationDetailResponse)
+def review_reject(
+    evaluation_id: str,
+    body: RejectionRequest,
+    context: ActorContext = Depends(require_reviewer),
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> EvaluationDetailResponse:
+    try:
+        evaluation = service.review_reject(
+            context.tenant_id,
+            evaluation_id,
+            body.comment,
+            kind=body.kind,
+            requirement_notes=(
+                [note.model_dump() for note in body.requirement_notes]
+                if body.requirement_notes
+                else None
+            ),
+            actor=context,
+        )
+    except EvaluationNotFoundError:
+        raise HTTPException(status_code=404) from None
+    except NotAssignedReviewerError:
+        raise HTTPException(
+            status_code=403, detail="only the assigned reviewer may decide this evaluation"
+        ) from None
+    except InvalidTransitionError:
+        raise HTTPException(status_code=409, detail="review is not pending") from None
     return _evaluation_detail(evaluation)
 
 

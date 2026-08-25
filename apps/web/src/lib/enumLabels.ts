@@ -77,6 +77,17 @@ export const approvalStatusLabels = {
   rejected: 'Rechazada',
 } as const satisfies Record<string, string>
 
+// ADR 0026 (R2): review_status reuses the same ApprovalStatus wire type as
+// approval_status (founder decision, no 5th enum value) - but "Aprobación
+// pendiente" would be a misleading label on the Revisión section, so this
+// is a presentation-only twin, not a second wire type.
+export const reviewStatusLabels = {
+  not_requested: 'Sin solicitar',
+  pending: 'Revisión pendiente',
+  approved: 'Aprobada',
+  rejected: 'Rechazada',
+} as const satisfies Record<string, string>
+
 // Fase 18 (evaluación asistida por IA, ADR 0022) - matches
 // ai.schemas.RiskFlag exactly.
 export const riskFlagLabels = {
@@ -199,6 +210,7 @@ export const translateAssignmentStatus = (value: string): string =>
   translate(assignmentStatusLabels, value)
 export const translateApprovalStatus = (value: string): string =>
   translate(approvalStatusLabels, value)
+export const translateReviewStatus = (value: string): string => translate(reviewStatusLabels, value)
 export const translateRiskFlag = (value: string): string => translate(riskFlagLabels, value)
 export const translateCostCategory = (value: string): string => translate(costCategoryLabels, value)
 export const translateCostType = (value: string): string => translate(costTypeLabels, value)

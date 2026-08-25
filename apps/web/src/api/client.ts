@@ -1091,6 +1091,29 @@ export type EvaluationDetailResponseApprovalComment = string | null
 
 export type EvaluationDetailResponseApprovalSnapshotId = string | null
 
+export type EvaluationDetailResponseReviewerMembershipId = string | null
+
+export type EvaluationDetailResponseReviewStatus =
+  (typeof EvaluationDetailResponseReviewStatus)[keyof typeof EvaluationDetailResponseReviewStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const EvaluationDetailResponseReviewStatus = {
+  not_requested: 'not_requested',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const
+
+export type EvaluationDetailResponseReviewRequestedAt = string | null
+
+export type EvaluationDetailResponseReviewRequestedByMembershipId = string | null
+
+export type EvaluationDetailResponseReviewDecidedAt = string | null
+
+export type EvaluationDetailResponseReviewDecidedByMembershipId = string | null
+
+export type EvaluationDetailResponseReviewComment = string | null
+
 export interface EvaluationDetailResponse {
   id: string
   name: string
@@ -1116,6 +1139,13 @@ export interface EvaluationDetailResponse {
   base_currency: string
   tco_horizon_years: number
   economic_criteria_weights: EconomicCriteriaWeightsResponse
+  reviewer_membership_id: EvaluationDetailResponseReviewerMembershipId
+  review_status: EvaluationDetailResponseReviewStatus
+  review_requested_at: EvaluationDetailResponseReviewRequestedAt
+  review_requested_by_membership_id: EvaluationDetailResponseReviewRequestedByMembershipId
+  review_decided_at: EvaluationDetailResponseReviewDecidedAt
+  review_decided_by_membership_id: EvaluationDetailResponseReviewDecidedByMembershipId
+  review_comment: EvaluationDetailResponseReviewComment
 }
 
 export type EvaluationSnapshotResponseDimensionWeights = { [key: string]: number }
@@ -1336,6 +1366,7 @@ export const NotificationResponseEvent = {
   proposal_reopened: 'proposal_reopened',
   approval_requested: 'approval_requested',
   evaluation_completed: 'evaluation_completed',
+  review_requested: 'review_requested',
   payment_succeeded: 'payment_succeeded',
 } as const
 
@@ -1514,6 +1545,19 @@ export type PublicationReadinessResponseApproverMembershipId = string | null
 
 export type PublicationReadinessResponseResponseDeadline = string | null
 
+export type PublicationReadinessResponseReviewStatus =
+  (typeof PublicationReadinessResponseReviewStatus)[keyof typeof PublicationReadinessResponseReviewStatus]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const PublicationReadinessResponseReviewStatus = {
+  not_requested: 'not_requested',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const
+
+export type PublicationReadinessResponseReviewerMembershipId = string | null
+
 export interface PublicationReadinessResponse {
   can_request_approval: boolean
   request_approval_reasons: string[]
@@ -1522,6 +1566,10 @@ export interface PublicationReadinessResponse {
   approval_status: PublicationReadinessResponseApprovalStatus
   approver_membership_id: PublicationReadinessResponseApproverMembershipId
   response_deadline: PublicationReadinessResponseResponseDeadline
+  can_request_review: boolean
+  request_review_reasons: string[]
+  review_status: PublicationReadinessResponseReviewStatus
+  reviewer_membership_id: PublicationReadinessResponseReviewerMembershipId
 }
 
 export type PublishAnswerRequestVisibility =
@@ -1587,8 +1635,20 @@ export interface QuestionCreateRequest {
   body: string
 }
 
+export type RejectionRequestKind = (typeof RejectionRequestKind)[keyof typeof RejectionRequestKind]
+
+// eslint-disable-next-line @typescript-eslint/no-redeclare
+export const RejectionRequestKind = {
+  rejected: 'rejected',
+  changes_requested: 'changes_requested',
+} as const
+
+export type RejectionRequestRequirementNotes = RequirementNoteRequest[] | null
+
 export interface RejectionRequest {
   comment: string
+  kind?: RejectionRequestKind
+  requirement_notes?: RejectionRequestRequirementNotes
 }
 
 /**
@@ -1789,6 +1849,17 @@ export interface RequirementImportPreviewResponse {
   columns: string[]
   rows: RequirementImportPreviewResponseRowsItem[]
   suggested_mapping: RequirementImportPreviewResponseSuggestedMapping
+}
+
+/**
+ * ADR 0026 (R2) - a per-requirement comment attached to a "solicitar
+cambios" decision (blocking question resolved 2026-08-24: preserved
+individually, never collapsed into the single evaluation-level
+`comment`).
+ */
+export interface RequirementNoteRequest {
+  requirement_id: string
+  comment: string
 }
 
 export type RequirementResponseDimension =
@@ -2117,6 +2188,10 @@ export interface SetApproverRequest {
 
 export interface SetDecisionApproverRequest {
   approver_membership_id: string
+}
+
+export interface SetReviewerRequest {
+  reviewer_membership_id: string
 }
 
 export type SnapshotCostItemResponseCategory =
@@ -6523,6 +6598,596 @@ export const useRejectEvaluationApiV1EvaluationsEvaluationIdRejectPost = <
 > => {
   const mutationOptions =
     getRejectEvaluationApiV1EvaluationsEvaluationIdRejectPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * ADR 0026 (R2) - mirrors set_approver exactly.
+ * @summary Set Reviewer
+ */
+export type setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponseSuccess =
+  setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponse200 & {
+    headers: Headers
+  }
+export type setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponseError =
+  setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponse422 & {
+    headers: Headers
+  }
+
+export type setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponse =
+  | setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponseSuccess
+  | setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponseError
+
+export const getSetReviewerApiV1EvaluationsEvaluationIdReviewerPostUrl = (evaluationId: string) => {
+  return `/api/v1/evaluations/${evaluationId}/reviewer`
+}
+
+export const setReviewerApiV1EvaluationsEvaluationIdReviewerPost = async (
+  evaluationId: string,
+  setReviewerRequest: SetReviewerRequest,
+  options?: RequestInit,
+): Promise<setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponse> => {
+  return apiFetch<setReviewerApiV1EvaluationsEvaluationIdReviewerPostResponse>(
+    getSetReviewerApiV1EvaluationsEvaluationIdReviewerPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(setReviewerRequest),
+    },
+  )
+}
+
+export const getSetReviewerApiV1EvaluationsEvaluationIdReviewerPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setReviewerApiV1EvaluationsEvaluationIdReviewerPost>>,
+    TError,
+    { evaluationId: string; data: SetReviewerRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setReviewerApiV1EvaluationsEvaluationIdReviewerPost>>,
+  TError,
+  { evaluationId: string; data: SetReviewerRequest },
+  TContext
+> => {
+  const mutationKey = ['setReviewerApiV1EvaluationsEvaluationIdReviewerPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setReviewerApiV1EvaluationsEvaluationIdReviewerPost>>,
+    { evaluationId: string; data: SetReviewerRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return setReviewerApiV1EvaluationsEvaluationIdReviewerPost(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type SetReviewerApiV1EvaluationsEvaluationIdReviewerPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setReviewerApiV1EvaluationsEvaluationIdReviewerPost>>
+>
+export type SetReviewerApiV1EvaluationsEvaluationIdReviewerPostMutationBody = SetReviewerRequest
+export type SetReviewerApiV1EvaluationsEvaluationIdReviewerPostMutationError = HTTPValidationError
+
+/**
+ * @summary Set Reviewer
+ */
+export const useSetReviewerApiV1EvaluationsEvaluationIdReviewerPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof setReviewerApiV1EvaluationsEvaluationIdReviewerPost>>,
+      TError,
+      { evaluationId: string; data: SetReviewerRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof setReviewerApiV1EvaluationsEvaluationIdReviewerPost>>,
+  TError,
+  { evaluationId: string; data: SetReviewerRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getSetReviewerApiV1EvaluationsEvaluationIdReviewerPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Request Review
+ */
+export type requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponseSuccess =
+  requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponse200 & {
+    headers: Headers
+  }
+export type requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponseError =
+  requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponse422 & {
+    headers: Headers
+  }
+
+export type requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponse =
+  | requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponseSuccess
+  | requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponseError
+
+export const getRequestReviewApiV1EvaluationsEvaluationIdRequestReviewPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/request-review`
+}
+
+export const requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponse> => {
+  return apiFetch<requestReviewApiV1EvaluationsEvaluationIdRequestReviewPostResponse>(
+    getRequestReviewApiV1EvaluationsEvaluationIdRequestReviewPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+    },
+  )
+}
+
+export const getRequestReviewApiV1EvaluationsEvaluationIdRequestReviewPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost>>,
+    TError,
+    { evaluationId: string },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationKey = ['requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost>>,
+    { evaluationId: string }
+  > = (props) => {
+    const { evaluationId } = props ?? {}
+
+    return requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost(evaluationId)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type RequestReviewApiV1EvaluationsEvaluationIdRequestReviewPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost>>
+>
+
+export type RequestReviewApiV1EvaluationsEvaluationIdRequestReviewPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Request Review
+ */
+export const useRequestReviewApiV1EvaluationsEvaluationIdRequestReviewPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost>>,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof requestReviewApiV1EvaluationsEvaluationIdRequestReviewPost>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getRequestReviewApiV1EvaluationsEvaluationIdRequestReviewPostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Withdraw Review Request
+ */
+export type withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponse204 = {
+  data: void
+  status: 204
+}
+
+export type withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponseSuccess =
+  withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponse204 & {
+    headers: Headers
+  }
+export type withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponseError =
+  withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponse422 & {
+    headers: Headers
+  }
+
+export type withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponse =
+  | withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponseSuccess
+  | withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponseError
+
+export const getWithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/request-review`
+}
+
+export const withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete = async (
+  evaluationId: string,
+  options?: RequestInit,
+): Promise<withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponse> => {
+  return apiFetch<withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteResponse>(
+    getWithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteUrl(evaluationId),
+    {
+      ...options,
+      method: 'DELETE',
+    },
+  )
+}
+
+export const getWithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteMutationOptions =
+  <TError = HTTPValidationError, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete>
+      >,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  }): UseMutationOptions<
+    Awaited<
+      ReturnType<typeof withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete>
+    >,
+    TError,
+    { evaluationId: string },
+    TContext
+  > => {
+    const mutationKey = ['withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete']
+    const { mutation: mutationOptions } = options
+      ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+        ? options
+        : { ...options, mutation: { ...options.mutation, mutationKey } }
+      : { mutation: { mutationKey } }
+
+    const mutationFn: MutationFunction<
+      Awaited<
+        ReturnType<typeof withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete>
+      >,
+      { evaluationId: string }
+    > = (props) => {
+      const { evaluationId } = props ?? {}
+
+      return withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete(evaluationId)
+    }
+
+    return { mutationFn, ...mutationOptions }
+  }
+
+export type WithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteMutationResult =
+  NonNullable<
+    Awaited<ReturnType<typeof withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete>>
+  >
+
+export type WithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Withdraw Review Request
+ */
+export const useWithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<
+        ReturnType<typeof withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete>
+      >,
+      TError,
+      { evaluationId: string },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof withdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDelete>>,
+  TError,
+  { evaluationId: string },
+  TContext
+> => {
+  const mutationOptions =
+    getWithdrawReviewRequestApiV1EvaluationsEvaluationIdRequestReviewDeleteMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Review Approve
+ */
+export type reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponseSuccess =
+  reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponse200 & {
+    headers: Headers
+  }
+export type reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponseError =
+  reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponse422 & {
+    headers: Headers
+  }
+
+export type reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponse =
+  | reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponseSuccess
+  | reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponseError
+
+export const getReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/review/approve`
+}
+
+export const reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost = async (
+  evaluationId: string,
+  approvalDecisionRequest: ApprovalDecisionRequest,
+  options?: RequestInit,
+): Promise<reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponse> => {
+  return apiFetch<reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostResponse>(
+    getReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(approvalDecisionRequest),
+    },
+  )
+}
+
+export const getReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost>>,
+    TError,
+    { evaluationId: string; data: ApprovalDecisionRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost>>,
+  TError,
+  { evaluationId: string; data: ApprovalDecisionRequest },
+  TContext
+> => {
+  const mutationKey = ['reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost>>,
+    { evaluationId: string; data: ApprovalDecisionRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type ReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost>>
+>
+export type ReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostMutationBody =
+  ApprovalDecisionRequest
+export type ReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Review Approve
+ */
+export const useReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost>>,
+      TError,
+      { evaluationId: string; data: ApprovalDecisionRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof reviewApproveApiV1EvaluationsEvaluationIdReviewApprovePost>>,
+  TError,
+  { evaluationId: string; data: ApprovalDecisionRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getReviewApproveApiV1EvaluationsEvaluationIdReviewApprovePostMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
+}
+
+/**
+ * @summary Review Reject
+ */
+export type reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponse200 = {
+  data: EvaluationDetailResponse
+  status: 200
+}
+
+export type reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponseSuccess =
+  reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponse200 & {
+    headers: Headers
+  }
+export type reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponseError =
+  reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponse422 & {
+    headers: Headers
+  }
+
+export type reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponse =
+  | reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponseSuccess
+  | reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponseError
+
+export const getReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostUrl = (
+  evaluationId: string,
+) => {
+  return `/api/v1/evaluations/${evaluationId}/review/reject`
+}
+
+export const reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost = async (
+  evaluationId: string,
+  rejectionRequest: RejectionRequest,
+  options?: RequestInit,
+): Promise<reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponse> => {
+  return apiFetch<reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostResponse>(
+    getReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostUrl(evaluationId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(rejectionRequest),
+    },
+  )
+}
+
+export const getReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost>>,
+    TError,
+    { evaluationId: string; data: RejectionRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost>>,
+  TError,
+  { evaluationId: string; data: RejectionRequest },
+  TContext
+> => {
+  const mutationKey = ['reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost>>,
+    { evaluationId: string; data: RejectionRequest }
+  > = (props) => {
+    const { evaluationId, data } = props ?? {}
+
+    return reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost(evaluationId, data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type ReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost>>
+>
+export type ReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostMutationBody = RejectionRequest
+export type ReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostMutationError =
+  HTTPValidationError
+
+/**
+ * @summary Review Reject
+ */
+export const useReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost>>,
+      TError,
+      { evaluationId: string; data: RejectionRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof reviewRejectApiV1EvaluationsEvaluationIdReviewRejectPost>>,
+  TError,
+  { evaluationId: string; data: RejectionRequest },
+  TContext
+> => {
+  const mutationOptions =
+    getReviewRejectApiV1EvaluationsEvaluationIdReviewRejectPostMutationOptions(options)
 
   return useMutation(mutationOptions, queryClient)
 }
