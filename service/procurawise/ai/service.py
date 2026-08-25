@@ -50,10 +50,12 @@ from procurawise.shared.mongo import get_database
 logger = logging.getLogger("procurawise.ai")
 
 PROMPT_TEMPLATE = "requirement_generation"
-# Fase 14 (ADR 0011): v2 adds source-id citation instructions to the prompt -
-# v1 is left on disk, untouched, per ADR 0021's versioned-prompt discipline
-# (never mutate a shipped prompt version in place).
-PROMPT_VERSION = "v2"
+# UAT-19 (R4): v3 adds an explicit candidate-count instruction (8-10 per
+# call) - the prompt never specified a quantity before, so the model's
+# output volume was effectively arbitrary. v1/v2 are left on disk,
+# untouched, per ADR 0021's versioned-prompt discipline (never mutate a
+# shipped prompt version in place).
+PROMPT_VERSION = "v3"
 JOB_TOPIC = "ai-requirement-generation"
 
 
@@ -64,8 +66,22 @@ JOB_TOPIC = "ai-requirement-generation"
 # finish_reason="length" y un output vacío. Con 8000 el mismo prompt termina
 # con finish_reason="stop" usando solo ~1929 completion_tokens en total - hay
 # margen real, no es solo "subir el número hasta que funcione una vez".
-_MAX_TOKENS = 8000
+#
+# UAT-19 (R4): esa medición fue para un volumen de candidatos nunca antes
+# especificado (el prompt v2 no pedía una cantidad) - con v3 pidiendo
+# explícitamente 8-10 candidatos, 12000 es una estimación razonada (mismo
+# orden de magnitud que _SCORE_SUGGESTION_MAX_TOKENS abajo, para un volumen
+# de salida estructurada comparable), no una medición nueva. Pendiente de
+# validar empíricamente contra el deployment real, mismo procedimiento
+# manual de staging que originó el defecto #9 - no reproducible en tests.
+_MAX_TOKENS = 12000
 _MAX_GENERATION_ATTEMPTS = 2
+# UAT-19 (R4): a hard cap independent of the prompt's own instruction -
+# Azure OpenAI's structured-output "strict" mode does not support JSON-
+# schema minItems/maxItems (see AIRequirementCandidate's own docstring on
+# strict-mode limitations), so this is enforced in _parse_candidates below
+# instead of on AIRequirementCandidateBatch.
+_MAX_REQUIREMENT_CANDIDATES = 10
 
 # Fase 18 (ADR 0022): evaluacion asistida por IA - a second use_case sharing
 # every other piece of this module's machinery (AIProvider, AIExecution,
@@ -140,7 +156,10 @@ def _parse_candidates(parsed_output: dict) -> tuple[list[AIRequirementCandidate]
 
     if not valid and raw_candidates:
         raise _NoValidCandidatesError(f"all {len(raw_candidates)} candidates failed validation")
-    return valid, invalid_count
+    # UAT-19 (R4): the prompt asks for 8-10, but nothing before this point
+    # stops the model from returning more - truncate rather than reject the
+    # whole batch, keeping the first N in the order the model produced them.
+    return valid[:_MAX_REQUIREMENT_CANDIDATES], invalid_count
 
 
 class _NoValidScoreCandidatesError(Exception):

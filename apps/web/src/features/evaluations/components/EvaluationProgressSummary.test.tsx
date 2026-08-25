@@ -89,10 +89,8 @@ describe('EvaluationProgressSummary', () => {
 
     expect(await screen.findByText('Estado consolidado')).toBeInTheDocument()
     // The first blocker doubles as "próxima acción" - appears once there and
-    // once in the "Bloqueadores" list.
-    expect(
-      screen.getAllByText(/Los requerimientos funcionales deben sumar 40 puntos/),
-    ).toHaveLength(2)
+    // once in the "Bloqueadores" list. UAT-02 (R4): phrased in percent now.
+    expect(screen.getAllByText(/Los requerimientos funcionales deben sumar 100%/)).toHaveLength(2)
     expect(screen.getByText('Debes vincular al menos un proveedor.')).toBeInTheDocument()
   })
 

@@ -13,7 +13,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { normalizeApiError } from '@/lib/errors'
-import { translateEconomicCriterion } from '@/lib/enumLabels'
+import { economicCriterionGuidanceFor, translateEconomicCriterion } from '@/lib/enumLabels'
 
 const COMMERCIAL_KEYS = [
   'payment_terms',
@@ -81,6 +81,11 @@ function CriterionRow({ criterionKey, draft, disabled, onChange }: CriterionRowP
       <p className="text-sm font-medium text-foreground">
         {translateEconomicCriterion(criterionKey)}
       </p>
+      {economicCriterionGuidanceFor(criterionKey) && (
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {economicCriterionGuidanceFor(criterionKey)}
+        </p>
+      )}
       <fieldset aria-label={`Calificación de ${translateEconomicCriterion(criterionKey)}`}>
         <div id={groupId} className="mt-2 flex flex-wrap gap-1.5">
           {[0, 1, 2, 3, 4, 5].map((option) => (

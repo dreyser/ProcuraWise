@@ -1,8 +1,14 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { type NotificationResponse } from '@/api/client'
 import { NotificationsBell } from './NotificationsBell'
+
+function LocationMarker() {
+  const location = useLocation()
+  return <p>Landed: {location.pathname}</p>
+}
 
 function notification(overrides: Partial<NotificationResponse> = {}): NotificationResponse {
   return {
@@ -19,18 +25,34 @@ function notification(overrides: Partial<NotificationResponse> = {}): Notificati
   }
 }
 
+// UAT-13 (R4): clicking a notification navigates now, so useNavigate()
+// requires a Router in every render - a landing marker route lets tests
+// assert which page a click actually lands on.
+function renderBell(
+  props: Omit<Parameters<typeof NotificationsBell>[0], 'audience'> & {
+    audience?: Parameters<typeof NotificationsBell>[0]['audience']
+  },
+) {
+  return render(
+    <MemoryRouter initialEntries={['/start']}>
+      <Routes>
+        <Route path="/start" element={<NotificationsBell audience="buyer" {...props} />} />
+        <Route path="*" element={<LocationMarker />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
 describe('NotificationsBell', () => {
   it('shows no unread badge and an empty-state message when there are no notifications', async () => {
     const user = userEvent.setup()
-    render(
-      <NotificationsBell
-        items={[]}
-        unreadCount={0}
-        isLoading={false}
-        onMarkRead={vi.fn()}
-        onMarkAllRead={vi.fn()}
-      />,
-    )
+    renderBell({
+      items: [],
+      unreadCount: 0,
+      isLoading: false,
+      onMarkRead: vi.fn(),
+      onMarkAllRead: vi.fn(),
+    })
 
     expect(screen.queryByText('0')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Notificaciones' }))
@@ -47,15 +69,13 @@ describe('NotificationsBell', () => {
         read_at: '2026-08-02T00:00:00Z',
       }),
     ]
-    render(
-      <NotificationsBell
-        items={items}
-        unreadCount={1}
-        isLoading={false}
-        onMarkRead={vi.fn()}
-        onMarkAllRead={vi.fn()}
-      />,
-    )
+    renderBell({
+      items,
+      unreadCount: 1,
+      isLoading: false,
+      onMarkRead: vi.fn(),
+      onMarkAllRead: vi.fn(),
+    })
 
     expect(screen.getByRole('button', { name: 'Notificaciones (1 sin leer)' })).toBeInTheDocument()
     expect(screen.getByText('1')).toBeInTheDocument()
@@ -70,18 +90,20 @@ describe('NotificationsBell', () => {
     const user = userEvent.setup()
     const onMarkRead = vi.fn()
     const items = [
-      notification({ id: 'unread-1', read_at: null }),
-      notification({ id: 'read-1', read_at: '2026-08-02T00:00:00Z' }),
+      notification({ id: 'unread-1', read_at: null, event: 'qna_answer_published' }),
+      notification({
+        id: 'read-1',
+        read_at: '2026-08-02T00:00:00Z',
+        event: 'qna_answer_published',
+      }),
     ]
-    render(
-      <NotificationsBell
-        items={items}
-        unreadCount={1}
-        isLoading={false}
-        onMarkRead={onMarkRead}
-        onMarkAllRead={vi.fn()}
-      />,
-    )
+    renderBell({
+      items,
+      unreadCount: 1,
+      isLoading: false,
+      onMarkRead,
+      onMarkAllRead: vi.fn(),
+    })
 
     await user.click(screen.getByRole('button', { name: 'Notificaciones (1 sin leer)' }))
     const [unreadItem, readItem] = await screen.findAllByText('RFP Notificaciones fue publicada')
@@ -99,18 +121,48 @@ describe('NotificationsBell', () => {
   it('calls onMarkAllRead when "Marcar todas" is clicked', async () => {
     const user = userEvent.setup()
     const onMarkAllRead = vi.fn()
-    render(
-      <NotificationsBell
-        items={[notification()]}
-        unreadCount={1}
-        isLoading={false}
-        onMarkRead={vi.fn()}
-        onMarkAllRead={onMarkAllRead}
-      />,
-    )
+    renderBell({
+      items: [notification({ event: 'qna_answer_published' })],
+      unreadCount: 1,
+      isLoading: false,
+      onMarkRead: vi.fn(),
+      onMarkAllRead,
+    })
 
     await user.click(screen.getByRole('button', { name: 'Notificaciones (1 sin leer)' }))
     await user.click(await screen.findByText('Marcar todas'))
     expect(onMarkAllRead).toHaveBeenCalledTimes(1)
+  })
+
+  it('navigates to the resolved target when a linkable notification is clicked (UAT-13)', async () => {
+    const user = userEvent.setup()
+    renderBell({
+      items: [notification({ event: 'evaluation_published', evaluation_id: 'eval-42' })],
+      unreadCount: 1,
+      isLoading: false,
+      onMarkRead: vi.fn(),
+      onMarkAllRead: vi.fn(),
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Notificaciones (1 sin leer)' }))
+    await user.click(await screen.findByText('RFP Notificaciones fue publicada'))
+
+    expect(await screen.findByText('Landed: /evaluations/eval-42')).toBeInTheDocument()
+  })
+
+  it('does not navigate for a non-linkable notification (e.g. vendor_invited)', async () => {
+    const user = userEvent.setup()
+    renderBell({
+      items: [notification({ event: 'vendor_invited', evaluation_id: null })],
+      unreadCount: 1,
+      isLoading: false,
+      onMarkRead: vi.fn(),
+      onMarkAllRead: vi.fn(),
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Notificaciones (1 sin leer)' }))
+    await user.click(await screen.findByText('RFP Notificaciones fue publicada'))
+
+    expect(screen.queryByText(/Landed:/)).not.toBeInTheDocument()
   })
 })

@@ -165,10 +165,10 @@ export function ProposalsPage() {
                                 Calificar
                               </Link>
                               <Link
-                                to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/tco`}
+                                to={`/evaluations/${evaluation.id}/proposals/${proposal.id}/commercial`}
                                 className="text-sm text-foreground underline-offset-2 hover:underline"
                               >
-                                Ver TCO
+                                Evaluación comercial
                               </Link>
                               {proposal.round > 0 && (
                                 <Link

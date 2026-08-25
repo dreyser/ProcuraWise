@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { normalizeApiError } from '@/lib/errors'
 import { dimensionLabels, priorityLabels, responseTypeLabels } from '@/lib/enumLabels'
+import { percentToPoints, pointsToPercent } from '@/features/evaluations/lib/evaluationReadiness'
 import type { RequirementResponse } from '@/api/client'
 
 const CHOICE_TYPES = new Set(['single_choice', 'multi_choice'])
@@ -31,7 +32,10 @@ const schema = z
       'comment',
       'currency',
     ]),
-    weight: z.coerce.number().min(0, 'El peso debe ser mayor o igual a 0'),
+    weightPercent: z.coerce
+      .number()
+      .min(0, 'El peso debe ser mayor o igual a 0%')
+      .max(100, 'El peso no puede exceder 100%'),
     required: z.boolean(),
     buyer_guidance: z.string().trim().optional(),
     display_order: z.coerce.number().int().min(1, 'El orden debe ser mayor o igual a 1'),
@@ -78,7 +82,7 @@ function toDefaultValues(
       description: '',
       priority: 'important',
       response_type: 'text',
-      weight: 0,
+      weightPercent: 0,
       required: true,
       buyer_guidance: '',
       display_order: nextDisplayOrder,
@@ -92,7 +96,10 @@ function toDefaultValues(
     description: requirement.description,
     priority: requirement.priority,
     response_type: requirement.response_type,
-    weight: requirement.weight,
+    // UAT-02 (R4): the form authors/displays weight as a percentage of the
+    // requirement's dimension budget - requirement.weight itself stays in
+    // raw points (unchanged wire contract, no migration).
+    weightPercent: Math.round(pointsToPercent(requirement.weight, requirement.dimension) * 10) / 10,
     required: requirement.required,
     buyer_guidance: requirement.buyer_guidance ?? '',
     display_order: requirement.display_order,
@@ -141,7 +148,10 @@ export function RequirementForm({
       description: values.description,
       priority: values.priority,
       response_type: values.response_type,
-      weight: values.weight,
+      // UAT-02 (R4): convert back to points (the wire contract) using the
+      // dimension actually selected in this submission, not defaultDimension -
+      // the owner may have changed it via the Dimensión select above.
+      weight: percentToPoints(values.weightPercent, values.dimension),
       required: values.required,
       buyer_guidance: values.buyer_guidance || undefined,
       display_order: values.display_order,
@@ -254,18 +264,20 @@ export function RequirementForm({
           </select>
         </div>
         <div>
-          <Label htmlFor="req-weight">Peso</Label>
+          <Label htmlFor="req-weight">Peso (%)</Label>
           <Input
             id="req-weight"
             type="number"
             step="0.1"
-            {...register('weight')}
-            aria-invalid={Boolean(errors.weight)}
-            aria-describedby={errors.weight ? 'req-weight-error' : undefined}
+            min={0}
+            max={100}
+            {...register('weightPercent')}
+            aria-invalid={Boolean(errors.weightPercent)}
+            aria-describedby={errors.weightPercent ? 'req-weight-error' : undefined}
           />
-          {errors.weight && (
+          {errors.weightPercent && (
             <p id="req-weight-error" className="mt-1 text-sm text-destructive" role="alert">
-              {errors.weight.message}
+              {errors.weightPercent.message}
             </p>
           )}
         </div>

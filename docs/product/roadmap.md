@@ -45,9 +45,13 @@ Una fase se considera cerrada cuando cumple la "definición de terminado" de [`C
 
 Corre en paralelo desde la Fase 1 como workstream del founder/abogado externo, sin bloquear ninguna fase de desarrollo. Su único gate real: `FoundryWebSearchProvider` no se activa (feature flag) en la Fase 14 sin aprobación documentada. Cronograma de referencia: conclusión preliminar antes de la Fase 7, aprobación final ≥2 semanas antes del piloto (Fase 28).
 
+**UAT-03 (R4, backlog.md):** Company Profile agregó el campo `website_url` con la intención explícita, ya aprobada por el founder, de que una fase posterior use ese sitio para investigar la empresa (ubicaciones, número de empleados, productos/servicios) y sugerir requerimientos relevantes. Esa investigación queda deliberadamente sin implementar en R4 — solo se guarda el dato. Cuando se construya, debe pasar por `ai.research_provider`'s `ResearchProvider` Protocol (nunca un fetch directo del campo desde un módulo de negocio, CLAUDE.md §5.1) y, si usa un proveedor con capacidad de búsqueda web, respeta el mismo gate legal de `FoundryWebSearchProvider` de este apartado.
+
 ## Roadmap post-MVP (referencia direccional, no compromiso de fecha)
 
 Las fases 2/3/4 de la especificación original (§25) permanecen como referencia direccional de hacia dónde crece el producto después del MVP. Los ítems etiquetados "fase posterior" en [`docs/product/mvp-scope.md`](mvp-scope.md) (CFDI, MFA, import Word/PDF, RFI/RFQ, firma legal, integraciones ERP, app móvil, subastas, WebSockets/tiempo real, rondas de negociación adicionales) son **candidatos a una versión futura independiente**, planeada y trabajada por separado — no ítems comprometidos dentro de los bloques 0-6 de este roadmap.
+
+También candidata a esta lista: investigación automática del sitio web de la empresa (campo `website_url` de Company Profile, UAT-03/R4) para sugerir ubicaciones/tamaño/productos relevantes al definir requerimientos — ver la nota legal de web-grounding arriba para el gate que aplica cuando se construya.
 
 ## Hitos de decisión pendientes fuera del roadmap técnico
 

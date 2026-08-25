@@ -52,9 +52,10 @@ describe('AppShell - role-aware navigation', () => {
     expect(screen.queryByRole('link', { name: 'Evaluaciones' })).not.toBeInTheDocument()
   })
 
-  it('shows only Facturación for tenant_admin (Fase 25) - no access to evaluations', () => {
+  it('shows Facturación and Perfil de la empresa for tenant_admin (Fase 25/UAT-03) - no access to evaluations', () => {
     renderShell({ role: 'tenant_admin', display_name: 'Tenant Admin A' })
     expect(screen.getByRole('link', { name: 'Facturación' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Perfil de la empresa' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Evaluaciones' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Mis propuestas' })).not.toBeInTheDocument()
   })

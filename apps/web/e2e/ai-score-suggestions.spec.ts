@@ -67,7 +67,7 @@ test('AI score suggestions (Fase 18): owner triggers a suggestion job from Scori
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req funcional IA')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('40')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 
@@ -78,7 +78,7 @@ test('AI score suggestions (Fase 18): owner triggers a suggestion job from Scori
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req técnico IA')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('20')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Siguiente' }).click()

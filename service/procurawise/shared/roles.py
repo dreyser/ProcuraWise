@@ -69,6 +69,13 @@ BUYER_LOGIN_ROLES: tuple[str, ...] = (
 BILLING_WRITE_ROLES: tuple[str, ...] = ("tenant_admin",)
 BILLING_READ_ROLES: tuple[str, ...] = ("tenant_admin", "evaluation_owner")
 
+# UAT-03 (R4): "Company Profile" is tenant configuration data (spec S4:
+# "Administrador del cliente: ... configuración"), same least-privilege
+# reasoning as BILLING_WRITE_ROLES - tenant_admin only, for both read and
+# write, until the deferred website-research feature (backlog.md UAT-03)
+# gives some other role a real reason to read it.
+COMPANY_PROFILE_ROLES: tuple[str, ...] = ("tenant_admin",)
+
 EVALUATOR_ROLE_BY_DIMENSION: dict[str, str] = {
     "functional": "evaluator_functional",
     "technical": "evaluator_technical",

@@ -79,7 +79,7 @@ test('Decisión (Fase 22): owner selects a vendor, approver rejects then approve
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req funcional decisión')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('40')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 
@@ -90,7 +90,7 @@ test('Decisión (Fase 22): owner selects a vendor, approver rejects then approve
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req técnico decisión')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('20')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Siguiente' }).click()
@@ -182,6 +182,20 @@ test('Decisión (Fase 22): owner selects a vendor, approver rejects then approve
     await scoreButtons5.nth(i).check({ force: true })
     await expect(page.getByText(`Calificados: ${i + 1} / 2`)).toBeVisible()
   }
+  // UAT-17 (R4): the economic/risk section moved off ScoringPage onto its
+  // own "Evaluación comercial" page, reached from Propuestas. ScoringPage
+  // has no EvaluationTabNav of its own (same fact the comment below already
+  // relies on) - go via the evaluations list, not a direct link off this
+  // page.
+  await page.getByRole('link', { name: 'Evaluaciones' }).click()
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: evaluationName }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
+  await page.getByRole('link', { name: 'Propuestas' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/proposals`, wait)
+  await page.getByRole('link', { name: 'Evaluación comercial' }).click()
+  await page.waitForURL(/\/proposals\/[a-f0-9]+\/commercial$/, wait)
+
   for (const label of ECONOMIC_CRITERION_LABELS) {
     await page.getByRole('radio', { name: `${label}: 3` }).check({ force: true })
   }

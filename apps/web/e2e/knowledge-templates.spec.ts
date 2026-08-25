@@ -28,7 +28,7 @@ async function addTemplateItem(
   await page.getByLabel('Categoría').fill(fields.category)
   await page.getByLabel('Título').fill(fields.title)
   await page.getByLabel('Descripción', { exact: true }).fill(fields.description)
-  await page.getByLabel('Peso').fill(fields.weight)
+  await page.getByLabel('Peso (%)').fill(fields.weight)
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 }
@@ -65,13 +65,13 @@ test.describe('knowledge templates (Fase 11)', () => {
       category: 'Core',
       title: 'Gestión de flujos',
       description: 'Debe soportar flujos configurables',
-      weight: '40',
+      weight: '100',
     })
     await addTemplateItem(page, 'Técnico', {
       category: 'Integración',
       title: 'API REST',
       description: 'Debe exponer una API documentada',
-      weight: '20',
+      weight: '100',
     })
 
     // Create a new evaluation through the wizard and apply the template at
@@ -91,8 +91,8 @@ test.describe('knowledge templates (Fase 11)', () => {
     await expect(page.getByText('Gestión de flujos')).toBeVisible()
     await expect(page.getByText('API REST')).toBeVisible()
 
-    // The applied weights (40 functional + 20 technical) satisfy readiness
-    // without any further manual entry - "Siguiente" is enabled.
+    // The applied weights (100% functional + 100% technical) satisfy
+    // readiness without any further manual entry - "Siguiente" is enabled.
     await expect(page.getByRole('button', { name: 'Siguiente' })).toBeEnabled()
 
     await checkA11y(page)

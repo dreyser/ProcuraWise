@@ -26,10 +26,10 @@ import { normalizeApiError } from '@/lib/errors'
 import { translateDimension, translateRiskFlag } from '@/lib/enumLabels'
 import { ScoreInput } from '@/features/scoring/components/ScoreInput'
 import { BuyerDocumentsList } from '@/features/scoring/components/BuyerDocumentsList'
-import { EconomicAssessmentPanel } from '@/features/scoring/components/EconomicAssessmentPanel'
 import { formatReadOnlyValue } from '@/features/vendor-portal/components/AnswerField'
 import { useAiScoreSuggestionJobStatus } from '@/features/evaluations/hooks/useAiScoreSuggestionJobStatus'
 import { useScoreAutosave } from '@/features/scoring/hooks/useScoreAutosave'
+import { pointsToPercent } from '@/features/evaluations/lib/evaluationReadiness'
 
 interface Draft {
   score: number | null
@@ -155,16 +155,6 @@ export function ScoringPage() {
 
   const canWriteScores = Boolean(actor?.role && SCORE_WRITE_ROLES.includes(actor.role))
   const isEditable = evaluation.status === 'evaluating' && canWriteScores
-  // UAT-14 (remediación R1B, Decisión F): the backend already blocks a
-  // functional/technical evaluator from writing commercial/risk scores
-  // (enforce_section_assignment with the "economic" sentinel,
-  // scoring/service.py) - but the panel still rendered for them
-  // read-only, showing questions entirely outside their assigned
-  // responsibility. Owner/evaluator_economic/internal_collaborator/
-  // approver are unaffected - only the two non-economic evaluator
-  // sub-roles never see this section at all.
-  const canSeeEconomic =
-    actor?.role !== 'evaluator_functional' && actor?.role !== 'evaluator_technical'
   const scoredCount = requirements.filter((r) => scoresByRequirement.has(r.id)).length
 
   const autosave = (requirementId: string, draft: Draft) => {
@@ -253,7 +243,9 @@ export function ScoringPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold text-foreground">{requirement.title}</h3>
                   <PriorityBadge priority={requirement.priority} />
-                  <span className="text-xs text-muted-foreground">Peso: {requirement.weight}</span>
+                  <span className="text-xs text-muted-foreground">
+                    Peso: {Math.round(pointsToPercent(requirement.weight, dimension) * 10) / 10}%
+                  </span>
                   {existing && (
                     <UpdatedByBadge
                       updatedByMembershipId={existing.evaluator_membership_id}
@@ -428,13 +420,6 @@ export function ScoringPage() {
 
       {renderDimension('functional')}
       {renderDimension('technical')}
-      {canSeeEconomic && (
-        <EconomicAssessmentPanel
-          evaluationId={evaluationId!}
-          proposalId={proposalId!}
-          isEditable={isEditable}
-        />
-      )}
 
       <BuyerDocumentsList evaluationId={evaluationId!} proposalId={proposalId!} />
     </div>

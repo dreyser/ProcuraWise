@@ -1,4 +1,5 @@
 import { Bell } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { type NotificationResponse } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,11 +12,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { translateNotificationEvent } from '@/lib/enumLabels'
+import {
+  resolveNotificationTarget,
+  type NotificationAudience,
+} from '@/features/notifications/notificationTarget'
 
 interface NotificationsBellProps {
   items: NotificationResponse[]
   unreadCount: number
   isLoading: boolean
+  audience: NotificationAudience
   onMarkRead: (notificationId: string) => void
   onMarkAllRead: () => void
 }
@@ -24,17 +30,23 @@ interface NotificationsBellProps {
  * Presentation-only dropdown shared by BuyerNotificationsBell/
  * VendorNotificationsBell (Fase 24 plan S5.5) - the last ~20 notifications
  * (server-side limit, notifications/repository.py::list_for_recipient),
- * with a "marcar todas" action. Deliberately no dedicated /notifications
- * page or per-item navigation in this phase - the dropdown alone satisfies
- * "centro de notificaciones" at NFR-003's ≤50-concurrent-users scale.
+ * with a "marcar todas" action.
+ *
+ * UAT-13 (R4): clicking an item now navigates to the relevant page (via
+ * resolveNotificationTarget), in addition to marking it read - still no
+ * dedicated /notifications page, the dropdown itself remains the only
+ * "centro de notificaciones" surface (Fase 24, NFR-003's ≤50-concurrent-
+ * users scale).
  */
 export function NotificationsBell({
   items,
   unreadCount,
   isLoading,
+  audience,
   onMarkRead,
   onMarkAllRead,
 }: NotificationsBellProps) {
+  const navigate = useNavigate()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -79,24 +91,30 @@ export function NotificationsBell({
           </p>
         ) : (
           <div className="max-h-96 overflow-y-auto">
-            {items.map((item) => (
-              <DropdownMenuItem
-                key={item.id}
-                onSelect={(event) => {
-                  event.preventDefault()
-                  if (!item.read_at) onMarkRead(item.id)
-                }}
-                className="flex flex-col items-start gap-0.5 whitespace-normal"
-              >
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-foreground">
-                    {translateNotificationEvent(item.event)}
-                  </span>
-                  {!item.read_at && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
-                </div>
-                <p className="text-xs text-muted-foreground">{item.title}</p>
-              </DropdownMenuItem>
-            ))}
+            {items.map((item) => {
+              const target = resolveNotificationTarget(item, audience)
+              return (
+                <DropdownMenuItem
+                  key={item.id}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    if (!item.read_at) onMarkRead(item.id)
+                    if (target) navigate(target)
+                  }}
+                  className="flex flex-col items-start gap-0.5 whitespace-normal"
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground">
+                      {translateNotificationEvent(item.event)}
+                    </span>
+                    {!item.read_at && (
+                      <span className="size-1.5 shrink-0 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{item.title}</p>
+                </DropdownMenuItem>
+              )
+            })}
           </div>
         )}
       </DropdownMenuContent>

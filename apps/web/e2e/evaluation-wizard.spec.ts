@@ -28,7 +28,7 @@ async function fillRequirement(
   await page.getByLabel('Categoría').fill(fields.category)
   await page.getByLabel('Título').fill(fields.title)
   await page.getByLabel('Descripción', { exact: true }).fill(fields.description)
-  await page.getByLabel('Peso').fill(fields.weight)
+  await page.getByLabel('Peso (%)').fill(fields.weight)
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 }
@@ -56,19 +56,20 @@ test.describe('evaluation wizard (Fase 10)', () => {
     await page.waitForURL(/\/evaluations\/[a-f0-9]+\/wizard$/, wait)
     await expect(page.getByRole('heading', { name })).toBeVisible()
 
-    // Step 2: requirements - exactly the 40/20 weights start-collection
-    // requires server-side, via the real POST /requirements endpoint.
+    // Step 2: requirements - each dimension's single requirement must carry
+    // 100% of that dimension's presentation weight (UAT-02, R4) for
+    // start-collection's server-side readiness check to pass.
     await fillRequirement(page, 'Funcional', {
       category: 'Core',
       title: 'Gestión de flujos',
       description: 'Debe soportar flujos configurables',
-      weight: '40',
+      weight: '100',
     })
     await fillRequirement(page, 'Técnico', {
       category: 'Integración',
       title: 'API REST',
       description: 'Debe exponer una API documentada',
-      weight: '20',
+      weight: '100',
     })
     await page.getByRole('button', { name: 'Siguiente' }).click()
 

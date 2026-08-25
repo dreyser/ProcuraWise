@@ -203,8 +203,12 @@ test('vertical slice: owner -> vendor -> evaluator -> owner, end to end', async 
   await page.waitForURL(/\/evaluations\/[a-f0-9]+$/, wait)
   await page.getByRole('link', { name: 'Propuestas' }).click()
   await page.waitForURL(`**/evaluations/${evaluationId}/proposals`, wait)
-  await page.getByRole('link', { name: 'Calificar' }).click()
-  await page.waitForURL(/\/proposals\/[a-f0-9]+\/score$/, wait)
+  // UAT-17 (R4): the economic/risk section moved off ScoringPage onto its
+  // own "Evaluación comercial" page (still gated the same way - only
+  // evaluator_economic/owner see it, evaluator_functional/technical do
+  // not).
+  await page.getByRole('link', { name: 'Evaluación comercial' }).click()
+  await page.waitForURL(/\/proposals\/[a-f0-9]+\/commercial$/, wait)
 
   const economicCriterionLabels = [
     'Pago y plazo',

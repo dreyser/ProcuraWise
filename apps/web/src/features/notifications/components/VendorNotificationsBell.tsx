@@ -9,6 +9,7 @@ export function VendorNotificationsBell() {
       items={items}
       unreadCount={unreadCount}
       isLoading={isLoading}
+      audience="vendor"
       onMarkRead={(notificationId) => void markRead(notificationId)}
       onMarkAllRead={() => void markAllRead()}
     />

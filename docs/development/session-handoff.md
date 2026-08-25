@@ -32,6 +32,41 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: R4 implementado (último bloque) — E12 completo (R1+R2+R3+R4)
+
+**Resumen:** Los 8 hallazgos restantes de R4 (UAT-02/03/05/13/17/18/19/20), sin dependencia fuerte entre sí ni con R1/R2/R3. 4 decisiones de producto ya resueltas por el founder vía `AskUserQuestion` antes de implementar: UAT-03 (identidad mínima + `website_url`, investigación de sitio diferida a fase posterior), UAT-17 (página nueva `CommercialEvaluationPage`, no una pestaña más), UAT-18 (copy de guía borrador, para revisión del founder), UAT-19 (~10 candidatos fijos por dimensión, tope duro server-side). Único bloque de R4 con cambio de backend real (`company_profile/`, nuevo módulo 1:1-por-tenant) — el resto es 100% frontend o solo prompt de IA. Con este bloque, **la remediación UAT piloto completa (R1→R2→R3→R4) queda implementada**.
+
+**Archivos tocados (por hallazgo):**
+- UAT-05: `RequirementsPage.tsx`/`WizardStepRequirements.tsx` — columna "Descripción", "Título" ya no truncado ilegible.
+- UAT-13: `notificationTarget.ts`/`.test.ts` (nuevo), `NotificationsBell.tsx`/`.test.tsx`, `Buyer`/`VendorNotificationsBell.tsx` — deep-link por `(event, resource_type, audience)`.
+- UAT-19: `ai/prompts/requirement_generation/v3/` (nuevo, nunca se muta v2), `ai/service.py` (`PROMPT_VERSION="v3"`, `_MAX_TOKENS=12000`, `_MAX_REQUIREMENT_CANDIDATES=10`, truncamiento post-generación), `tests/integration/test_ai_service.py`.
+- UAT-18: `lib/enumLabels.ts` (`economicCriterionGuidanceFor`), `EconomicAssessmentPanel.tsx`/`.test.tsx`.
+- UAT-02: `evaluationReadiness.ts` (`pointsToPercent`/`percentToPoints`, deduplicación de `weightReasons`), `WeightSummary.tsx`, `RequirementForm.tsx` ("Peso (%)"), `RequirementsPage.tsx`/`WizardStepRequirements.tsx`/`KnowledgeTemplateDetailPage.tsx`/`ScoringPage.tsx` (display en %), `evaluations/service.py` (mensaje de readiness en %).
+- UAT-17: `CommercialEvaluationPage.tsx`/`.test.tsx` (nuevo), `TcoResultPage.tsx` (`<h1>`→`<h2>`), `router.tsx` (`/tco`→`/commercial`), `ProposalsPage.tsx` ("Ver TCO"→"Evaluación comercial"), `ScoringPage.tsx`/`.test.tsx` (panel económico removido).
+- UAT-03: `service/procurawise/company_profile/` (nuevo módulo completo: models/repository/service/dependencies/router/schemas), `shared/roles.py` (`COMPANY_PROFILE_ROLES`), `audit/models.py` (`company_profile_updated`, resource_type `company_profile`), `api/main.py` (router registrado), `apps/web/src/features/company-profile/pages/CompanyProfilePage.tsx`/`.test.tsx` (nuevo), `router.tsx`/`AppShell.tsx` (ruta + nav "Perfil de la empresa"), `roadmap.md` (nota de investigación de sitio diferida), `tests/api/test_company_profile_router.py`/`tests/security/test_tenant_isolation.py` (aislamiento).
+- UAT-20: sin cambio de código — cierre documental (ya investigado como no-bug en la sesión de planeación).
+- 9 specs e2e actualizados por regresiones de UAT-02/UAT-17 (ver defectos abajo): `ai-score-suggestions`, `documents`, `decision-approval`, `evaluation-approval`, `qna`, `tco`, `proposal-negotiation`, `evaluation-wizard`, `knowledge-templates`, `vertical-slice`.
+
+**Cuatro defectos reales encontrados y corregidos en esta misma sesión:**
+1. UAT-02 rompió en silencio 9 specs e2e que llenaban "Peso" con valores en puntos crudos (`40`/`20`), ahora interpretados como porcentaje — el requerimiento único de cada dimensión quedaba muy por debajo del 100%, bloqueando "Siguiente" indefinidamente. Corregido a `100`/`100` en cada uno (100% de la única dimensión que cada requerimiento representa).
+2. UAT-17 movió `EconomicAssessmentPanel` fuera de `ScoringPage.tsx` sin actualizar `vertical-slice.spec.ts`/`decision-approval.spec.ts`, que seguían esperando los criterios económicos en `/score`. Corregido navegando a "Evaluación comercial"/`.../commercial`, con la ruta correcta desde `ScoringPage` (sin `EvaluationTabNav` propio — hay que volver a la lista de evaluaciones primero).
+3. `CompanyProfileService.update_profile` devolvía el objeto en memoria (microsegundos completos) en vez de releer de Mongo (BSON trunca a milisegundos) tras persistir — un GET inmediato después de un PUT devolvía un `updated_at` distinto. Corregido releyendo tras persistir, mismo patrón que `BillingService.apply_payment_completed`.
+4. Los tests de aislamiento cross-tenant de `company-profile` asumían un `tenant_admin` sembrado para un segundo tenant — `dev_seed.py` solo siembra uno (tenant A). Corregido creando la Membership ad hoc dentro del test, mismo patrón que `test_review_approval.py`.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 309 passed (sin cambio). `uv run pytest -m docker` → 458 passed (+11 vs. R2: 1 UAT-19, 9 `company-profile`, 1 aislamiento). `pnpm test` → 268/268 (+23 vs. R3). `make contracts` → diff real (único bloque de R4 con backend nuevo). `make test-e2e` (Docker real, 23 specs) → 23/23 passed tras corregir los defectos #1/#2.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna nueva de arquitectura — las 4 decisiones de producto (UAT-03/17/18/19) ya fueron resueltas explícitamente por el founder vía `AskUserQuestion` en esta misma sesión, documentadas arriba y en `current-phase.md`.
+
+**Deuda técnica introducida:** Ninguna nueva. UAT-19's `_MAX_TOKENS=12000` es una estimación razonada, no una medición empírica fresca — pendiente de revalidación real en staging si se observan truncamientos.
+
+**Instrucciones para la siguiente sesión:**
+- **E12 (remediación UAT piloto) queda completo: R1+R2+R3+R4.** No queda ningún bloque planeado pendiente de este remediation.
+- Mergear/desplegar y confirmar en staging el conjunto completo de R1-R4; el founder decide el orden/agrupación de PRs.
+- Si se decide construir la investigación automática del sitio web de Company Profile (UAT-03, diferida), empezar por `roadmap.md`/`ai/research_provider.py` — debe pasar por el `ResearchProvider` Protocol y el gate legal de `FoundryWebSearchProvider` (CLAUDE.md §5.1, ADR 0011), nunca un fetch directo de `website_url` desde un módulo de negocio.
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-25 — Remediación UAT piloto: R3 implementado (autosave de scoring + estado consolidado) — R3 completo
 
 **Resumen:** Último bloque de R3. UAT-15: `ScoringPage.tsx` autoguarda (sin botón manual), vía un `ScoreAutosaveController` nuevo (no reutiliza literalmente `AnswerAutosaveController` - `Score.version` es por-requerimiento, no global por propuesta como `Proposal.version`, así que serializa por campo en vez de globalmente, y un 409 en un campo no bloquea los demás). UAT-04/09: nuevo `EvaluationProgressSummary.tsx` en la pestaña "Resumen" (solo owner) con bloqueadores/próxima acción/completitud por evaluador, combinando datos ya expuestos por endpoints existentes (readiness + proposals + results + assignments + org-members), sin agregación nueva de backend. 100% frontend, `make contracts` sin diff.

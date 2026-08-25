@@ -65,7 +65,7 @@ test('TCO (Fase 19): vendor captures a cost item and submits, owner reads the fr
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req funcional TCO')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('40')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 
@@ -76,7 +76,7 @@ test('TCO (Fase 19): vendor captures a cost item and submits, owner reads the fr
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req técnico TCO')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('20')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Siguiente' }).click()
@@ -161,8 +161,8 @@ test('TCO (Fase 19): vendor captures a cost item and submits, owner reads the fr
   await page.getByRole('dialog').getByRole('button', { name: 'Iniciar evaluación' }).click()
   await expect(page.getByText('En evaluación')).toBeVisible()
 
-  await page.getByRole('link', { name: 'Ver TCO' }).click()
-  await page.waitForURL(/\/proposals\/[a-f0-9]+\/tco$/, wait)
+  await page.getByRole('link', { name: 'Evaluación comercial' }).click()
+  await page.waitForURL(/\/proposals\/[a-f0-9]+\/commercial$/, wait)
 
   await expect(page.getByText(/TCO \(1 año\(s\), MXN\)/)).toBeVisible()
   await expect(page.getByText('10000.00').first()).toBeVisible()

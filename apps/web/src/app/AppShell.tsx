@@ -17,7 +17,11 @@ const VENDOR_NAV: NavItem[] = [{ to: '/vendor/proposals', label: 'Mis propuestas
 // Fase 25 (billing/admin, ADR 0025): tenant_admin's only area this phase -
 // deliberately not merged into BUYER_NAV, since tenant_admin has no access
 // to /evaluations or /knowledge-templates (BUYER_ROLES in app/router.tsx).
-const TENANT_ADMIN_NAV: NavItem[] = [{ to: '/billing', label: 'Facturación' }]
+// UAT-03 (R4) added "Perfil de la empresa" as tenant_admin's second area.
+const TENANT_ADMIN_NAV: NavItem[] = [
+  { to: '/company-profile', label: 'Perfil de la empresa' },
+  { to: '/billing', label: 'Facturación' },
+]
 
 // Fase 25 Bloque 4: platform_admin's console - read-only cross-tenant pages
 // (plan Bloqueante #2 Opcion b), no dashboard/tenant-management/write

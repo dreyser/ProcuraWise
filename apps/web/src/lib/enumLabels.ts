@@ -129,6 +129,37 @@ export const economicCriterionLabels = {
   exit_portability_lockin: 'Salida y portabilidad',
 } as const satisfies Record<string, string>
 
+// UAT-18 (R4): ADR 0009 promised "guías por criterio" for the 10 fixed
+// commercial/risk criteria above, but no guidance text was ever written -
+// evaluators only ever saw a bare label + score input. Placeholder copy
+// (founder decision: draft now, review/edit the wording afterward) - static
+// here like economicCriterionLabels itself, not frozen into
+// EvaluationSnapshot, since it describes what a fixed criterion KEY means,
+// not an evaluation-specific configurable value (unlike the criteria
+// weights, which ARE snapshotted).
+export const economicCriterionGuidance = {
+  payment_terms:
+    'Qué tan favorables son los términos de pago: plazos de crédito, anticipos exigidos y flexibilidad del calendario. Alto = plazos extendidos o pago contra entrega. Bajo = pago inmediato o anticipos elevados sin negociación.',
+  price_protection:
+    'Qué tan protegido queda el comprador ante incrementos de precio durante la vigencia del contrato. Alto = precios fijos garantizados por un periodo largo. Bajo = precios sujetos a cambio con poco o ningún aviso previo.',
+  contractual_flexibility:
+    'Capacidad de modificar, escalar o cancelar el contrato sin penalizaciones desproporcionadas. Alto = cláusulas de salida razonables y ajuste de volumen sin fricción. Bajo = contrato rígido con penalizaciones severas.',
+  discounts_incentives:
+    'Descuentos por volumen, pronto pago o compromiso a largo plazo que ofrece el proveedor. Alto = incentivos concretos y cuantificables. Bajo = sin descuentos, o condicionados a compromisos poco realistas.',
+  billing_transparency:
+    'Qué tan claro y auditable es el modelo de facturación: desglose de conceptos, frecuencia y soporte ante disputas. Alto = facturación detallada y fácil de auditar. Bajo = cargos poco claros o agrupados sin desglose.',
+  variable_cost_exposure:
+    'Qué tan expuesto queda el comprador a costos variables no garantizados (uso, consumo, cargos por excedente). Alto = costos mayormente fijos y predecibles. Bajo = una porción significativa del costo fuera de control del comprador.',
+  increases_indexation:
+    'Cómo y cuándo puede el proveedor incrementar precios durante la vigencia (indexación a inflación, tipo de cambio u otro índice). Alto = incrementos limitados y acordados por adelantado. Bajo = incrementos discrecionales o sin tope.',
+  assumptions_exclusions:
+    'Qué tan claros y razonables son los supuestos y exclusiones de la propuesta (qué NO está incluido en el precio). Alto = exclusiones mínimas y documentadas. Bajo = supuestos vagos que probablemente generen costos no anticipados.',
+  fx_fiscal_regulatory:
+    'Riesgo cambiario, fiscal o regulatorio asociado con el proveedor (moneda de facturación, retenciones, cumplimiento normativo). Alto = bajo riesgo cambiario/fiscal para el comprador. Bajo = exposición significativa a fluctuaciones o incertidumbre regulatoria.',
+  exit_portability_lockin:
+    'Qué tan fácil es migrar a otro proveedor al finalizar el contrato: propiedad de los datos, formatos de exportación y asistencia en la transición. Alto = portabilidad clara y sin costos de salida. Bajo = dependencia fuerte del proveedor (lock-in) sin plan de salida viable.',
+} as const satisfies Record<string, string>
+
 // Fase 21 (ADR 0013) - matches proposals.models.ProposalAnswerVersionStatus
 // exactly. A ProposalAnswer always maps 1:1 to a Requirement that can never
 // be removed, so "removed" is not a valid answer status (see costItemStatusLabels).
@@ -216,6 +247,8 @@ export const translateCostCategory = (value: string): string => translate(costCa
 export const translateCostType = (value: string): string => translate(costTypeLabels, value)
 export const translateEconomicCriterion = (value: string): string =>
   translate(economicCriterionLabels, value)
+export const economicCriterionGuidanceFor = (value: string): string | undefined =>
+  (economicCriterionGuidance as Record<string, string>)[value]
 export const translateAnswerStatus = (value: string): string => translate(answerStatusLabels, value)
 export const translateCostItemStatus = (value: string): string =>
   translate(costItemStatusLabels, value)

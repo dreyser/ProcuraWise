@@ -21,8 +21,10 @@ describe('RequirementForm', () => {
     await user.type(screen.getByLabelText('Categoría'), 'Core')
     await user.type(screen.getByLabelText('Título'), 'Gestión de flujos')
     await user.type(screen.getByLabelText('Descripción'), 'Debe soportar flujos configurables')
-    await user.clear(screen.getByLabelText('Peso'))
-    await user.type(screen.getByLabelText('Peso'), '40')
+    // UAT-02 (R4): "Peso (%)" is a percentage of the dimension's point
+    // budget now - 100% of "functional" (40 points) submits weight: 40.
+    await user.clear(screen.getByLabelText('Peso (%)'))
+    await user.type(screen.getByLabelText('Peso (%)'), '100')
     await user.click(screen.getByRole('button', { name: 'Guardar requerimiento' }))
 
     expect(onSubmit).toHaveBeenCalledTimes(1)
@@ -36,6 +38,32 @@ describe('RequirementForm', () => {
       weight: 40,
       options: undefined,
     })
+  })
+
+  it('converts weight percent against the technical budget (20 points) rather than functional', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    render(
+      <RequirementForm
+        defaultDimension="technical"
+        nextDisplayOrder={1}
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+        isSubmitting={false}
+        submitError={undefined}
+      />,
+    )
+
+    await user.type(screen.getByLabelText('Categoría'), 'Core')
+    await user.type(screen.getByLabelText('Título'), 'Disponibilidad')
+    await user.type(screen.getByLabelText('Descripción'), 'SLA de disponibilidad')
+    await user.clear(screen.getByLabelText('Peso (%)'))
+    await user.type(screen.getByLabelText('Peso (%)'), '50')
+    await user.click(screen.getByRole('button', { name: 'Guardar requerimiento' }))
+
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    // 50% of the technical budget (20 points) = 10 points, not 20.
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ dimension: 'technical', weight: 10 })
   })
 
   it('blocks submit with an inline error when single_choice has no options, mirroring the backend rule', async () => {

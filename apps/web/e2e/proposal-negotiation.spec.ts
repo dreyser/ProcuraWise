@@ -64,7 +64,7 @@ test('Negociación (Fase 21): owner reopens a submitted proposal, vendor revises
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req funcional negociación')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('40')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 
@@ -75,7 +75,7 @@ test('Negociación (Fase 21): owner reopens a submitted proposal, vendor revises
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req técnico negociación')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('20')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Siguiente' }).click()
@@ -188,7 +188,7 @@ test('Negociación (Fase 21): owner reopens a submitted proposal, vendor revises
   // 5. Owner: reopening moved the evaluation back to collecting_responses -
   // starting it again is the same reused transition as after Ronda 0, and
   // is what makes "Comparar rondas" reachable again (same Acciones gate
-  // as "Calificar"/"Ver TCO").
+  // as "Calificar"/"Evaluación comercial").
   await loginAsBuyer(page, 'owner.a@dev.procurawise.local')
   await page.waitForURL('**/evaluations', wait)
   await page.getByRole('link', { name: evaluationName }).click()
@@ -247,7 +247,7 @@ test('Negociación (UAT-16): reabrir la propuesta de un proveedor no oculta las 
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req funcional UAT-16')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('40')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 
@@ -258,7 +258,7 @@ test('Negociación (UAT-16): reabrir la propuesta de un proveedor no oculta las 
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req técnico UAT-16')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('20')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Siguiente' }).click()

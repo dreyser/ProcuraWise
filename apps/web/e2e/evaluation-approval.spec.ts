@@ -40,7 +40,7 @@ async function createDraftEvaluation(page: Page, name: string): Promise<void> {
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req funcional')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('40')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 
@@ -51,7 +51,7 @@ async function createDraftEvaluation(page: Page, name: string): Promise<void> {
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req técnico')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('20')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Siguiente' }).click()

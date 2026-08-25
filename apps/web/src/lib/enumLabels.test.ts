@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  economicCriterionGuidanceFor,
   translateAnswerStatus,
   translateApprovalStatus,
   translateCompliantStatus,
   translateCostItemStatus,
   translateDimension,
+  translateEconomicCriterion,
   translateEvaluationStatus,
   translateNotificationEvent,
   translatePriority,
@@ -14,6 +16,21 @@ import {
   translateRole,
   translateScoringStatus,
 } from '@/lib/enumLabels'
+
+// Fase 20 (ADR 0009) - the 10 fixed commercial/risk criterion keys, matching
+// evaluations.models.DEFAULT_COMMERCIAL_WEIGHTS/DEFAULT_RISK_WEIGHTS.
+const ECONOMIC_CRITERION_KEYS = [
+  'payment_terms',
+  'price_protection',
+  'contractual_flexibility',
+  'discounts_incentives',
+  'billing_transparency',
+  'variable_cost_exposure',
+  'increases_indexation',
+  'assumptions_exclusions',
+  'fx_fiscal_regulatory',
+  'exit_portability_lockin',
+]
 
 describe('enumLabels translations', () => {
   it('translates every real EvaluationStatus wire value', () => {
@@ -116,5 +133,18 @@ describe('enumLabels translations', () => {
 
   it('falls back to the raw value for an unknown enum (never throws)', () => {
     expect(translateEvaluationStatus('some_future_status')).toBe('some_future_status')
+  })
+
+  it('translates every fixed economic criterion and gives each one guidance text (UAT-18)', () => {
+    for (const key of ECONOMIC_CRITERION_KEYS) {
+      expect(translateEconomicCriterion(key)).not.toBe(key)
+      const guidance = economicCriterionGuidanceFor(key)
+      expect(guidance).toBeDefined()
+      expect(guidance!.length).toBeGreaterThan(20)
+    }
+  })
+
+  it('returns undefined guidance for an unknown criterion key (never throws)', () => {
+    expect(economicCriterionGuidanceFor('some_future_criterion')).toBeUndefined()
   })
 })
