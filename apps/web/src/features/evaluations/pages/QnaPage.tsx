@@ -2,22 +2,26 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   getListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGetQueryKey,
+  useGetEvaluationApiV1EvaluationsEvaluationIdGet,
   useListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet,
   usePublishAnswerApiV1EvaluationsEvaluationIdQuestionsQuestionIdAnswerPut,
   type BuyerQuestionListResponse,
   type BuyerQuestionResponse,
+  type EvaluationDetailResponse,
   type PublishAnswerRequestVisibility,
 } from '@/api/client'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/auth/AuthContext'
 import { ApiError, unwrapData } from '@/lib/http'
 import { normalizeApiError } from '@/lib/errors'
+import { translateEvaluationStatus } from '@/lib/enumLabels'
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { EvaluationTabNav } from '@/features/evaluations/components/EvaluationTabNav'
 import { useQnaPolling } from '@/features/evaluations/hooks/useQnaPolling'
 
 const VISIBILITY_LABEL: Record<string, string> = {
@@ -41,6 +45,9 @@ export function QnaPage() {
   const { actor } = useAuth()
   const queryClient = useQueryClient()
   const isOwner = Boolean(actor?.role && OWNER_ONLY.includes(actor.role))
+
+  const evaluationQuery = useGetEvaluationApiV1EvaluationsEvaluationIdGet(evaluationId!)
+  const evaluation = unwrapData<EvaluationDetailResponse>(evaluationQuery.data)
 
   const listQuery = useListQuestionsAsBuyerApiV1EvaluationsEvaluationIdQuestionsGet(evaluationId!)
   const questions = unwrapData<BuyerQuestionListResponse>(listQuery.data)?.items ?? []
@@ -115,12 +122,19 @@ export function QnaPage() {
     })
   }
 
-  if (listQuery.isLoading) {
+  if (evaluationQuery.isLoading || listQuery.isLoading) {
     return <LoadingState label="Cargando preguntas…" />
+  }
+  if (evaluationQuery.error instanceof ApiError && evaluationQuery.error.status === 404) {
+    return <ErrorBanner message="Esta evaluación no está disponible." />
+  }
+  if (evaluationQuery.error) {
+    return <ErrorBanner message={normalizeApiError(evaluationQuery.error).message} />
   }
   if (listQuery.error) {
     return <ErrorBanner message={normalizeApiError(listQuery.error).message} />
   }
+  if (!evaluation) return null
 
   const openQuestions = questions.filter((q) => q.status === 'open')
   const answeredQuestions = questions.filter((q) => q.status === 'answered')
@@ -232,41 +246,51 @@ export function QnaPage() {
   }
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-lg font-semibold text-foreground">Preguntas y respuestas</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Sin responder: {openQuestions.length} / {questions.length}
-      </p>
+    <div>
+      <div className="flex items-center gap-3">
+        <h1 className="text-lg font-semibold text-foreground">{evaluation.name}</h1>
+        <StatusBadge label={translateEvaluationStatus(evaluation.status)} />
+      </div>
+      <EvaluationTabNav evaluationId={evaluation.id} />
 
-      {!isOwner && (
-        <p className="mt-2 text-sm text-muted-foreground">
-          Tu rol puede revisar esta sección, pero no puede responder ni publicar.
+      <div className="mt-6 max-w-3xl">
+        <h2 className="text-sm font-semibold text-foreground">Preguntas y respuestas</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Sin responder: {openQuestions.length} / {questions.length}
         </p>
-      )}
 
-      {questions.length === 0 ? (
-        <div className="mt-4">
-          <EmptyState
-            title="Sin preguntas"
-            description="Todavía no hay preguntas de proveedores."
-          />
-        </div>
-      ) : (
-        <>
-          {openQuestions.length > 0 && (
-            <section className="mt-4">
-              <h2 className="text-sm font-semibold text-foreground">Sin responder</h2>
-              <ul className="mt-2 flex flex-col gap-3">{openQuestions.map(renderQuestion)}</ul>
-            </section>
-          )}
-          {answeredQuestions.length > 0 && (
-            <section className="mt-6">
-              <h2 className="text-sm font-semibold text-foreground">Respondidas</h2>
-              <ul className="mt-2 flex flex-col gap-3">{answeredQuestions.map(renderQuestion)}</ul>
-            </section>
-          )}
-        </>
-      )}
+        {!isOwner && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Tu rol puede revisar esta sección, pero no puede responder ni publicar.
+          </p>
+        )}
+
+        {questions.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState
+              title="Sin preguntas"
+              description="Todavía no hay preguntas de proveedores."
+            />
+          </div>
+        ) : (
+          <>
+            {openQuestions.length > 0 && (
+              <section className="mt-4">
+                <h2 className="text-sm font-semibold text-foreground">Sin responder</h2>
+                <ul className="mt-2 flex flex-col gap-3">{openQuestions.map(renderQuestion)}</ul>
+              </section>
+            )}
+            {answeredQuestions.length > 0 && (
+              <section className="mt-6">
+                <h2 className="text-sm font-semibold text-foreground">Respondidas</h2>
+                <ul className="mt-2 flex flex-col gap-3">
+                  {answeredQuestions.map(renderQuestion)}
+                </ul>
+              </section>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

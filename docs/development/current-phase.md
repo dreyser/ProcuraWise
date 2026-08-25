@@ -1,5 +1,24 @@
 # Fase actual
 
+## Remediación UAT piloto — R1A completo (UAT-01 + UAT-11)
+
+**Estado: ✅ Implementado y verificado localmente (2026-08-25) — redeploy real pendiente.** Primer bloque de la remediación UAT (E12) implementado.
+
+**UAT-01 (Q&A rompía el shell de navegación):** `QnaPage.tsx` nunca importaba `EvaluationTabNav` — a diferencia de sus 9 páginas hermanas (Requirements, Assignments, Vendors, Approval, Results, Decision, Reports, Proposals, EvaluationDetail), no tenía header con nombre/estado de evaluación ni la barra de tabs. Corregido: se agregó `useGetEvaluationApiV1EvaluationsEvaluationIdGet` (mismo patrón exacto de `RequirementsPage.tsx` — loading/404/error, luego `<h1>{evaluation.name}</h1><StatusBadge/><EvaluationTabNav/>`) antes del contenido propio de la página, que ahora vive en un contenedor `max-w-3xl` separado en vez de ser el `<div>` raíz.
+
+**UAT-11 (mensaje de conflicto genérico, no distinguible por causa real):** `normalizeApiError` (`apps/web/src/lib/errors.ts`) mapeaba **todo** 409 al mismo texto fijo "Los datos cambiaron..." sin leer nunca `error.data.detail` — aunque el backend ya devuelve strings distintos y descriptivos por excepción (`vendor_portal/router.py:216-219`: `InvalidProposalTransitionError` → `detail=str(exc)` = literalmente "evaluation is not collecting_responses"/"proposal is not draft"; `qna/router.py:143` igual para `InvalidQuestionTransitionError`; `StaleVersionError` → `detail="stale version"` fijo). Corregido con un diccionario `KNOWN_CONFLICT_DETAILS` que traduce los `detail` de transición de negocio ya conocidos a un mensaje accionable específico; cualquier `detail` no reconocido (incluyendo todo "stale ... version" genuino) conserva el mensaje original — no se regresionó ningún caso de conflicto real. Sin cambios de backend: los `detail` ya existían, solo nunca se leían en frontend.
+
+**Archivos tocados:**
+- `apps/web/src/features/evaluations/pages/QnaPage.tsx` — header + `EvaluationTabNav`.
+- `apps/web/src/features/evaluations/pages/QnaPage.test.tsx` — mock de la evaluación agregado a los 6 tests existentes (`buildEvaluation`/`mockEvaluation`, mismo patrón que `App.integration.test.tsx`).
+- `apps/web/src/lib/errors.ts` — `KNOWN_CONFLICT_DETAILS` + lectura de `detail` en el caso 409.
+- `apps/web/src/lib/errors.test.ts` — 4 casos nuevos (mensaje distinguible para 2 detail conocidos, fallback genérico confirmado para "stale version" y para 409 sin detail).
+- `apps/web/e2e/qna.spec.ts` — nueva aserción confirmando que el header/tab bar de Q&A están presentes y que se puede navegar a otra pestaña y volver sin usar el botón atrás del navegador.
+
+**Pruebas de esta sesión:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed (sin cambio, R1A es 100% frontend). `pnpm test` → 216/216 (+4 vs. la sesión anterior). `make contracts` → sin diff. `make test-e2e` (Docker real, 20 specs) → 20/20 passed.
+
+**Diferido**: redeploy real — acción del founder. R1B (UAT-16/14) y R1C (UAT-10) siguen pendientes — ver `backlog.md` sección E12.
+
 ## Remediación UAT piloto (post-Fase 28) — E12: planeación cerrada, R1 es la siguiente fase
 
 **Estado: 📋 Planeación cerrada y aprobada (2026-08-24) — implementación de R1 (R1A/R1B/R1C) todavía no iniciada.** Primer UAT real end-to-end de una evaluación completa (creación → requerimientos → aprobación interna → onboarding/respuesta de proveedor → scoring → TCO/económico → reapertura/negociación → resultados/decisión → notificaciones, con múltiples proveedores) expuso 20 hallazgos reales (UAT-01 a UAT-20). Analizados en sesión de Plan Mode contra el repositorio real (backend, frontend, tests, docs) — el patrón dominante encontrado fue "el mecanismo correcto ya existe, la UI no lo deriva/expone correctamente", con 3 excepciones genuinas de producto nuevo (Reviewer/aprobación en dos pasos, Company Profile, navegación contextual). Ningún hallazgo de los 20 constituyó una brecha de seguridad confirmada (UAT-10 investigado explícitamente como candidato y descartado con evidencia — aislamiento ya reforzado por `isolation.spec.ts` + mecanismos de auth físicamente separados comprador/proveedor).

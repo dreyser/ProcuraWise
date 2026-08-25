@@ -32,6 +32,30 @@ Plantilla de cierre de sesión. Cada sesión de Claude Code que trabaje en Fase 
 
 ## Historial de sesiones
 
+### Sesión — 2026-08-25 — Remediación UAT piloto: R1A implementado (UAT-01 + UAT-11)
+
+**Resumen:** Primer bloque de implementación de la remediación UAT (E12) cerrada la sesión anterior. UAT-01: `QnaPage.tsx` no importaba `EvaluationTabNav` (única de las 10 páginas del shell de evaluación sin la barra de tabs) — corregido siguiendo el patrón exacto de `RequirementsPage.tsx`. UAT-11: `normalizeApiError` mapeaba todo 409 al mismo texto genérico sin leer `error.data.detail`, aunque el backend ya devuelve strings distintos por causa (`InvalidProposalTransitionError`/`InvalidQuestionTransitionError` vs. `StaleVersionError`) — corregido con una tabla de traducción que preserva el mensaje genérico para cualquier detail no reconocido (ningún caso de conflicto real se regresionó). Ambos fixes son 100% frontend, sin cambios de backend/contrato.
+
+**Archivos tocados:**
+- `apps/web/src/features/evaluations/pages/QnaPage.tsx` — header + `EvaluationTabNav`.
+- `apps/web/src/features/evaluations/pages/QnaPage.test.tsx` — mock de evaluación agregado a los 6 tests existentes.
+- `apps/web/src/lib/errors.ts`/`errors.test.ts` — tabla `KNOWN_CONFLICT_DETAILS` + 4 tests nuevos.
+- `apps/web/e2e/qna.spec.ts` — aserción de navegación real (ida y vuelta) desde Q&A.
+
+**Resultado de pruebas:** `make lint`/`make typecheck` (backend + frontend) → limpio. `make test-backend` → 304 passed. `pnpm test` → 216/216. `make contracts` → sin diff. `make test-e2e` (Docker real) → 20/20 passed.
+
+**Decisiones ad-hoc tomadas en esta sesión (candidatas a ADR):** Ninguna.
+
+**Deuda técnica introducida:** Ninguna.
+
+**Instrucciones para la siguiente sesión:**
+- Mergear/desplegar `fix/r1a-qna-navigation-and-conflict-messages` y confirmar en Azure real: Q&A muestra la barra de tabs; un 409 conocido (ej. responder una propuesta cuya evaluación no está en `collecting_responses`) muestra el mensaje específico, no el genérico.
+- Continuar con **R1B** (UAT-16 reopen multi-proveedor + UAT-14 ocultar Comercial/Riesgo a evaluador functional/technical) — sin dependencia de R1A, ver `backlog.md` sección E12 para el detalle de causa raíz ya localizado.
+- No empezar R2 sin antes redactar y confirmar el ADR 0026 (sigue pendiente, sin cambios desde la sesión anterior).
+- El founder sigue prefiriendo acumular commits localmente y hacer push/PR en lotes — no pushear sin confirmación explícita.
+
+---
+
 ### Sesión — 2026-08-24 — Remediación UAT piloto (E12): análisis completo de 20 hallazgos + cierre de planeación R1-R4
 
 **Resumen:** Sesión en dos partes, ambas en Plan Mode (solo lectura/documentación, sin cambios de código). Parte 1: análisis exhaustivo del primer UAT real end-to-end (creación de evaluación → requerimientos → aprobación → onboarding/respuesta de proveedor → scoring → TCO/económico → reapertura/negociación → resultados/decisión → notificaciones, múltiples proveedores), con 9 decisiones de producto ya aprobadas por el founder (A-I) y 20 hallazgos (UAT-01 a UAT-20) analizados contra el repositorio real vía 4 agentes de exploración en paralelo (identidad/roles/navegación/aprobación; reopen de propuestas; notificaciones/IA; layout de tabla/Company Profile), más investigación directa de vendor isolation y economic assessment ya cubierta en sesiones previas de esta misma fase. Hallazgo transversal: la mayoría de los 20 son "el mecanismo ya existe, la UI no lo deriva/expone" — solo 3 requieren mecanismo nuevo real (Reviewer/aprobación en dos pasos, Company Profile, navegación contextual). Ninguna brecha de seguridad confirmada (UAT-10 investigado y descartado con evidencia). Parte 2: el founder aprobó el análisis completo, resolvió la única pregunta bloqueante (Opción 1: `ApprovalStatus` sin 5º valor, "solicitar cambios" = `rejected` + comentarios por requerimiento + evento de auditoría distinguible) y aprobó la estructura de remediación R1(R1A/R1B/R1C)→R2→R3→R4 con gate de piloto externo en R1+R2. Esta sesión de cierre documentó esa estructura en `backlog.md`/`roadmap.md`/`current-phase.md` — cero cambios de código/producto.
