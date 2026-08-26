@@ -43,6 +43,7 @@ import {
   APPROVAL_INVALIDATED_MESSAGE,
   useApprovalInvalidationNotice,
 } from '@/features/evaluations/lib/useApprovalInvalidationNotice'
+import { pointsToPercent } from '@/features/evaluations/lib/evaluationReadiness'
 
 type Dimension = 'functional' | 'technical'
 type FormTarget =
@@ -181,9 +182,10 @@ export function RequirementsPage() {
                   <TableHead>Orden</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Título</TableHead>
+                  <TableHead>Descripción</TableHead>
                   <TableHead>Prioridad</TableHead>
                   <TableHead>Tipo de respuesta</TableHead>
-                  <TableHead>Peso</TableHead>
+                  <TableHead>Peso (%)</TableHead>
                   <TableHead>Requerido</TableHead>
                   {canEdit && <TableHead>Acciones</TableHead>}
                 </TableRow>
@@ -213,12 +215,22 @@ export function RequirementsPage() {
                         )}
                       </TableCell>
                       <TableCell>{requirement.category}</TableCell>
-                      <TableCell>{requirement.title}</TableCell>
+                      <TableCell className="max-w-[16rem] whitespace-normal">
+                        {requirement.title}
+                      </TableCell>
+                      <TableCell
+                        className="max-w-xs truncate text-muted-foreground"
+                        title={requirement.description}
+                      >
+                        {requirement.description || '—'}
+                      </TableCell>
                       <TableCell>
                         <PriorityBadge priority={requirement.priority} />
                       </TableCell>
                       <TableCell>{translateResponseType(requirement.response_type)}</TableCell>
-                      <TableCell>{requirement.weight}</TableCell>
+                      <TableCell>
+                        {Math.round(pointsToPercent(requirement.weight, dimension) * 10) / 10}%
+                      </TableCell>
                       <TableCell>{requirement.required ? 'Sí' : 'No'}</TableCell>
                       {canEdit && (
                         <TableCell>
@@ -246,7 +258,7 @@ export function RequirementsPage() {
                     {formTarget?.mode === 'edit' &&
                       formTarget.requirement.id === requirement.id && (
                         <TableRow>
-                          <TableCell colSpan={canEdit ? 8 : 7}>
+                          <TableCell colSpan={canEdit ? 9 : 8}>
                             <RequirementForm
                               requirement={requirement}
                               defaultDimension={dimension}

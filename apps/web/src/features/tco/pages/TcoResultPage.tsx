@@ -18,7 +18,15 @@ import { normalizeApiError } from '@/lib/errors'
 
 /** Fase 19 - the TCO frozen at submit time (plan §11.7). Read-only: the
  * comprador can never edit a vendor's costs, only see the deterministic
- * result the backend already calculated. */
+ * result the backend already calculated.
+ *
+ * UAT-17 (R4): no longer independently routed - embedded inside
+ * CommercialEvaluationPage (features/scoring/pages/), alongside the
+ * commercial/risk EconomicAssessmentPanel, as one "Evaluación Comercial"
+ * view instead of two disconnected pages. Its own data-fetching/error
+ * handling stays self-contained (including its own 404 "not submitted yet"
+ * message), so it works standalone inside that wrapper without any prop
+ * threading - hence the h2 (the wrapper owns the page's h1). */
 export function TcoResultPage() {
   const { evaluationId, proposalId } = useParams<{ evaluationId: string; proposalId: string }>()
 
@@ -43,9 +51,9 @@ export function TcoResultPage() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold text-foreground">
+      <h2 className="text-sm font-semibold text-foreground">
         TCO ({tco.horizon_years} año(s), {tco.base_currency})
-      </h1>
+      </h2>
 
       <div className="mt-4 overflow-x-auto rounded-md border border-border">
         <Table>

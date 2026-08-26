@@ -79,7 +79,7 @@ test('Decisión (Fase 22): owner selects a vendor, approver rejects then approve
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req funcional decisión')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('40')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
 
@@ -90,7 +90,7 @@ test('Decisión (Fase 22): owner selects a vendor, approver rejects then approve
   await page.getByLabel('Categoría').fill('Core')
   await page.getByLabel('Título').fill('Req técnico decisión')
   await page.getByLabel('Descripción', { exact: true }).fill('d')
-  await page.getByLabel('Peso').fill('20')
+  await page.getByLabel('Peso (%)').fill('100')
   await page.getByRole('button', { name: 'Guardar requerimiento' }).click()
   await expect(page.getByRole('button', { name: 'Guardar requerimiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Siguiente' }).click()
@@ -169,17 +169,33 @@ test('Decisión (Fase 22): owner selects a vendor, approver rejects then approve
   await page.getByRole('link', { name: 'Calificar' }).click()
   await page.waitForURL(/\/proposals\/[a-f0-9]+\/score$/, wait)
   await expect(page.getByText('Calificados: 0 / 2')).toBeVisible()
-  const scoreButtons5 = page.getByRole('radio', { name: '5' })
+  // UAT-15 (R3): scoring autosaves - checking a score radio is itself the
+  // save trigger, checked one at a time so each "Calificados: N / 2"
+  // increment is verified against the write that caused it.
+  // exact: true matters here - Playwright's default name matcher is a
+  // substring match, and EconomicAssessmentPanel's criterion radios carry
+  // aria-labels like "Pago y plazo: 5", which also contain "5" and would
+  // otherwise be counted alongside the real functional/technical inputs.
+  const scoreButtons5 = page.getByRole('radio', { name: '5', exact: true })
   const scoreCount = await scoreButtons5.count()
   for (let i = 0; i < scoreCount; i += 1) {
     await scoreButtons5.nth(i).check({ force: true })
-  }
-  const saveButtons = page.getByRole('button', { name: 'Guardar calificación' })
-  const saveCount = await saveButtons.count()
-  for (let i = 0; i < saveCount; i += 1) {
-    await saveButtons.nth(i).click()
     await expect(page.getByText(`Calificados: ${i + 1} / 2`)).toBeVisible()
   }
+  // UAT-17 (R4): the economic/risk section moved off ScoringPage onto its
+  // own "Evaluación comercial" page, reached from Propuestas. ScoringPage
+  // has no EvaluationTabNav of its own (same fact the comment below already
+  // relies on) - go via the evaluations list, not a direct link off this
+  // page.
+  await page.getByRole('link', { name: 'Evaluaciones' }).click()
+  await page.waitForURL('**/evaluations', wait)
+  await page.getByRole('link', { name: evaluationName }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}`, wait)
+  await page.getByRole('link', { name: 'Propuestas' }).click()
+  await page.waitForURL(`**/evaluations/${evaluationId}/proposals`, wait)
+  await page.getByRole('link', { name: 'Evaluación comercial' }).click()
+  await page.waitForURL(/\/proposals\/[a-f0-9]+\/commercial$/, wait)
+
   for (const label of ECONOMIC_CRITERION_LABELS) {
     await page.getByRole('radio', { name: `${label}: 3` }).check({ force: true })
   }

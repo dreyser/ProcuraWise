@@ -158,6 +158,21 @@ describe('EconomicAssessmentPanel', () => {
     ).toBe(true)
   })
 
+  it('shows guidance text under every criterion (UAT-18, ADR 0009)', async () => {
+    const router = createFetchRouter()
+    router.on('GET', /\/economic-assessment$/, () => ({
+      status: 404,
+      body: { detail: 'Not Found' },
+    }))
+    vi.stubGlobal('fetch', router.fetchImpl)
+
+    renderPanel()
+
+    expect(await screen.findByText('Pago y plazo')).toBeInTheDocument()
+    expect(screen.getByText(/plazos de crédito, anticipos exigidos/)).toBeInTheDocument()
+    expect(screen.getByText(/lock-in.*sin plan de salida viable/)).toBeInTheDocument()
+  })
+
   it('disables every input and hides the save button when not editable', async () => {
     const router = createFetchRouter()
     router.on('GET', /\/economic-assessment$/, () => ({ status: 200, body: assessmentBody() }))

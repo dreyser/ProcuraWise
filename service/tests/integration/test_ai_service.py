@@ -79,6 +79,35 @@ def _partially_valid_response() -> AIResponse:
     )
 
 
+def _response_with_n_candidates(n: int) -> AIResponse:
+    candidate_template = {
+        "dimension": "functional",
+        "category": "Reporting",
+        "priority": "important",
+        "response_type": "text",
+        "weight": 5.0,
+        "required": False,
+        "buyer_guidance": "",
+        "options": [],
+        "rationale": "Matches the described reporting need",
+        "sources": [],
+    }
+    payload = {
+        "candidates": [
+            {**candidate_template, "title": f"Candidate {i}", "description": f"Item {i}"}
+            for i in range(n)
+        ]
+    }
+    return AIResponse(
+        raw_output=json.dumps(payload),
+        parsed_output=payload,
+        token_usage=TokenUsage(prompt_tokens=100, completion_tokens=50, total_tokens=150),
+        model="gpt-4o-mini",
+        latency_ms=500,
+        finish_reason="stop",
+    )
+
+
 @pytest.fixture
 def actor(seeded_actors) -> ActorContext:
     from tests.conftest import tenant_ids
@@ -202,6 +231,37 @@ def test_generation_keeps_valid_candidates_and_drops_invalid_ones_without_retryi
     # the corrective-prompt retry (ADR 0021 §12: partial success keeps the
     # valid ones instead of discarding the whole batch).
     assert len(fake_provider.calls) == 1
+
+
+def test_generation_caps_candidates_at_the_configured_maximum(mongo_test_settings, actor) -> None:
+    """UAT-19 (R4): the v3 prompt asks for 8-10 candidates, but nothing
+    guarantees the model actually respects that - Azure OpenAI's structured-
+    output strict mode doesn't support JSON-schema minItems/maxItems, so the
+    cap is enforced server-side in _parse_candidates instead."""
+    evaluation_id = _create_draft_evaluation(mongo_test_settings, actor.tenant_id, actor)
+    fake_provider = FakeAIProvider(responses=[_response_with_n_candidates(15)])
+    service = build_ai_service(mongo_test_settings, fake_provider)
+
+    execution = service.request_generation(
+        actor.tenant_id,
+        evaluation_id,
+        dimension="functional",
+        description="We need a reporting tool",
+        actor=actor,
+    )
+    service.process_generation_job(
+        actor.tenant_id,
+        execution.id,
+        dimension="functional",
+        description="We need a reporting tool",
+    )
+
+    result = service.get_execution(actor.tenant_id, evaluation_id, execution.id)
+    assert result.status == "succeeded"
+    assert result.candidates is not None
+    assert len(result.candidates) == 10
+    assert result.candidates[0]["title"] == "Candidate 0"
+    assert result.candidates[9]["title"] == "Candidate 9"
 
 
 def test_processing_an_already_succeeded_job_is_a_noop(mongo_test_settings, actor) -> None:

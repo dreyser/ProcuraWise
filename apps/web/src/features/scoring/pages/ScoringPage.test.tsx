@@ -152,103 +152,36 @@ describe('ScoringPage', () => {
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
-    router.on('GET', /\/economic-assessment$/, () => ({
-      status: 404,
-      body: { detail: 'Not Found' },
-    }))
     vi.stubGlobal('fetch', router.fetchImpl)
 
     renderPage()
 
     expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sugerir con IA' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Guardar calificación' })).toBeDisabled()
+    // UAT-15 (R3): scoring autosaves - there is no manual "Guardar
+    // calificación" button anymore, for any role.
+    expect(screen.queryByRole('button', { name: 'Guardar calificación' })).not.toBeInTheDocument()
   })
 
-  it('hides the AI trigger and save controls for a non-owner buyer role', async () => {
+  it('hides the AI trigger for a non-owner buyer role', async () => {
     mockRole = 'internal_collaborator'
     const router = createFetchRouter()
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
-    router.on('GET', /\/economic-assessment$/, () => ({
-      status: 404,
-      body: { detail: 'Not Found' },
-    }))
     vi.stubGlobal('fetch', router.fetchImpl)
 
     renderPage()
 
     expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sugerir con IA' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Guardar calificación' })).not.toBeInTheDocument()
   })
 
-  it('shows the commercial/risk section to the owner', async () => {
+  it('triggers a suggestion, shows the candidate, and prefills+autosaves the draft when used', async () => {
     const router = createFetchRouter()
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
-    router.on('GET', /\/economic-assessment$/, () => ({
-      status: 404,
-      body: { detail: 'Not Found' },
-    }))
-    vi.stubGlobal('fetch', router.fetchImpl)
-
-    renderPage()
-
-    expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
-    expect(screen.getByText('Condiciones comerciales y riesgo')).toBeInTheDocument()
-  })
-
-  it.each(['evaluator_functional', 'evaluator_technical'])(
-    'hides the commercial/risk section from %s - outside their assigned responsibility (UAT-14)',
-    async (role) => {
-      mockRole = role
-      const router = createFetchRouter()
-      router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
-      router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
-      router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
-      router.on('GET', /\/economic-assessment$/, () => ({
-        status: 404,
-        body: { detail: 'Not Found' },
-      }))
-      vi.stubGlobal('fetch', router.fetchImpl)
-
-      renderPage()
-
-      expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
-      expect(screen.queryByText('Condiciones comerciales y riesgo')).not.toBeInTheDocument()
-    },
-  )
-
-  it('shows the commercial/risk section to evaluator_economic', async () => {
-    mockRole = 'evaluator_economic'
-    const router = createFetchRouter()
-    router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
-    router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
-    router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
-    router.on('GET', /\/economic-assessment$/, () => ({
-      status: 404,
-      body: { detail: 'Not Found' },
-    }))
-    vi.stubGlobal('fetch', router.fetchImpl)
-
-    renderPage()
-
-    expect(await screen.findByText('Soporta SSO')).toBeInTheDocument()
-    expect(screen.getByText('Condiciones comerciales y riesgo')).toBeInTheDocument()
-  })
-
-  it('triggers a suggestion, shows the candidate, and prefills the draft when used', async () => {
-    const router = createFetchRouter()
-    router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
-    router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
-    router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
-    router.on('GET', /\/economic-assessment$/, () => ({
-      status: 404,
-      body: { detail: 'Not Found' },
-    }))
     router.on('POST', /\/ai\/score-suggestions$/, () => ({
       status: 202,
       body: {
@@ -277,6 +210,30 @@ describe('ScoringPage', () => {
         latency_ms: 500,
       },
     }))
+    let capturedBody: Record<string, unknown> | undefined
+    router.on('PUT', /\/scores\/req-1$/, async (ctx) => {
+      capturedBody = ctx.body as Record<string, unknown>
+      return {
+        status: 200,
+        body: {
+          id: 'score-1',
+          requirement_id: REQUIREMENT_ID,
+          dimension: 'functional',
+          priority: 'important',
+          requirement_weight: 40,
+          score: 4,
+          comment: 'La respuesta no incluye evidencia suficiente.',
+          weighted_points: 32,
+          mandatory_alert: false,
+          version: 1,
+          created_by_membership_id: 'owner-1',
+          updated_by_membership_id: 'owner-1',
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          source_ai_execution_id: 'job-1',
+        },
+      }
+    })
     vi.stubGlobal('fetch', router.fetchImpl)
 
     const user = userEvent.setup()
@@ -296,7 +253,9 @@ describe('ScoringPage', () => {
     expect(screen.getByPlaceholderText('Comentario (opcional)')).toHaveValue(
       'La respuesta no incluye evidencia suficiente.',
     )
-    expect(screen.getByRole('button', { name: 'Guardar calificación' })).toBeEnabled()
+    // UAT-15 (R3): applying a suggestion autosaves immediately, no manual
+    // "Guardar calificación" click involved.
+    await vi.waitFor(() => expect(capturedBody?.source_ai_execution_id).toBe('job-1'))
   })
 
   it('saves the accepted suggestion with source_ai_execution_id', async () => {
@@ -304,10 +263,6 @@ describe('ScoringPage', () => {
     router.on('GET', /\/evaluations\/eval-1$/, () => ({ status: 200, body: evaluationBody() }))
     router.on('GET', /\/proposals\/proposal-1$/, () => ({ status: 200, body: proposalBody() }))
     router.on('GET', /\/results$/, () => ({ status: 200, body: resultsBody() }))
-    router.on('GET', /\/economic-assessment$/, () => ({
-      status: 404,
-      body: { detail: 'Not Found' },
-    }))
     router.on('POST', /\/ai\/score-suggestions$/, () => ({
       status: 202,
       body: {
@@ -367,8 +322,8 @@ describe('ScoringPage', () => {
     await screen.findByText('Soporta SSO')
     await user.click(screen.getByRole('button', { name: 'Sugerir con IA' }))
     await screen.findByText('Sugerencia de IA')
+    // UAT-15 (R3): applying a suggestion autosaves immediately.
     await user.click(screen.getByRole('button', { name: 'Usar esta sugerencia' }))
-    await user.click(screen.getByRole('button', { name: 'Guardar calificación' }))
 
     await vi.waitFor(() => expect(capturedBody?.source_ai_execution_id).toBe('job-1'))
     expect(capturedBody?.score).toBe(4)

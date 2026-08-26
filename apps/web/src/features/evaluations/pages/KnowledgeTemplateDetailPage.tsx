@@ -33,6 +33,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { translateResponseType } from '@/lib/enumLabels'
+import { pointsToPercent } from '@/features/evaluations/lib/evaluationReadiness'
 import { normalizeApiError } from '@/lib/errors'
 import {
   RequirementForm,
@@ -169,7 +170,7 @@ export function KnowledgeTemplateDetailPage() {
                   <TableHead>Título</TableHead>
                   <TableHead>Prioridad</TableHead>
                   <TableHead>Tipo de respuesta</TableHead>
-                  <TableHead>Peso</TableHead>
+                  <TableHead>Peso (%)</TableHead>
                   <TableHead>Requerido</TableHead>
                   {isOwner && <TableHead>Acciones</TableHead>}
                 </TableRow>
@@ -185,7 +186,9 @@ export function KnowledgeTemplateDetailPage() {
                         <PriorityBadge priority={item.priority} />
                       </TableCell>
                       <TableCell>{translateResponseType(item.response_type)}</TableCell>
-                      <TableCell>{item.weight}</TableCell>
+                      <TableCell>
+                        {Math.round(pointsToPercent(item.weight, item.dimension) * 10) / 10}%
+                      </TableCell>
                       <TableCell>{item.required ? 'Sí' : 'No'}</TableCell>
                       {isOwner && (
                         <TableCell>

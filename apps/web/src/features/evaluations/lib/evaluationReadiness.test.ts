@@ -4,6 +4,8 @@ import {
   hasLinkedVendor,
   isReadyToRequestApproval,
   isReadyToStartCollection,
+  percentToPoints,
+  pointsToPercent,
   requestApprovalPreconditionReasons,
   startCollectionPreconditionReasons,
   weightOf,
@@ -162,5 +164,22 @@ describe('evaluationReadiness', () => {
     })
     expect(requestApprovalPreconditionReasons(ready)).toHaveLength(0)
     expect(isReadyToRequestApproval(ready)).toBe(true)
+  })
+
+  it('converts points to percent and back against each dimension budget (UAT-02)', () => {
+    expect(pointsToPercent(40, 'functional')).toBe(100)
+    expect(pointsToPercent(20, 'technical')).toBe(100)
+    expect(pointsToPercent(10, 'functional')).toBe(25)
+    expect(percentToPoints(25, 'functional')).toBe(10)
+    expect(percentToPoints(100, 'technical')).toBe(20)
+  })
+
+  it('phrases weight reasons in percent, not raw points (UAT-02)', () => {
+    const halfFunctional = evaluation({
+      requirements: [requirement({ dimension: 'functional', weight: 20 })],
+    })
+    const reasons = startCollectionPreconditionReasons(halfFunctional)
+    expect(reasons[0]).toBe('Los requerimientos funcionales deben sumar 100% (llevan 50%).')
+    expect(reasons[1]).toBe('Los requerimientos técnicos deben sumar 100% (llevan 0%).')
   })
 })

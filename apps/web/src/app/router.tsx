@@ -26,7 +26,7 @@ import { ScoringPage } from '@/features/scoring/pages/ScoringPage'
 import { ResultsPage } from '@/features/scoring/pages/ResultsPage'
 import { DecisionPage } from '@/features/decisions/pages/DecisionPage'
 import { ReportsPage } from '@/features/reports/pages/ReportsPage'
-import { TcoResultPage } from '@/features/tco/pages/TcoResultPage'
+import { CommercialEvaluationPage } from '@/features/scoring/pages/CommercialEvaluationPage'
 import { VendorProposalListPage } from '@/features/vendor-portal/pages/VendorProposalListPage'
 import { VendorProposalDetailPage } from '@/features/vendor-portal/pages/VendorProposalDetailPage'
 import { AssignmentsPage } from '@/features/evaluations/pages/AssignmentsPage'
@@ -36,6 +36,7 @@ import { KnowledgeTemplateDetailPage } from '@/features/evaluations/pages/Knowle
 import { QnaPage } from '@/features/evaluations/pages/QnaPage'
 import { BuyerNotificationsBell } from '@/features/notifications/components/BuyerNotificationsBell'
 import { VendorNotificationsBell } from '@/features/notifications/components/VendorNotificationsBell'
+import { CompanyProfilePage } from '@/features/company-profile/pages/CompanyProfilePage'
 import { BillingPage } from '@/features/billing/pages/BillingPage'
 import { CheckoutSuccessPage } from '@/features/billing/pages/CheckoutSuccessPage'
 import { CheckoutCancelledPage } from '@/features/billing/pages/CheckoutCancelledPage'
@@ -289,10 +290,10 @@ export function AppRouter() {
           }
         />
         <Route
-          path="/evaluations/:evaluationId/proposals/:proposalId/tco"
+          path="/evaluations/:evaluationId/proposals/:proposalId/commercial"
           element={
             <BuyerLayout>
-              <TcoResultPage />
+              <CommercialEvaluationPage />
             </BuyerLayout>
           }
         />
@@ -337,6 +338,14 @@ export function AppRouter() {
           }
         />
 
+        <Route
+          path="/company-profile"
+          element={
+            <BuyerLayout roles={TENANT_ADMIN_ROLES}>
+              <CompanyProfilePage />
+            </BuyerLayout>
+          }
+        />
         <Route
           path="/billing"
           element={

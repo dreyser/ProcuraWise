@@ -29,7 +29,7 @@ import {
   type RequirementSubmitPayload,
 } from '@/features/evaluations/components/RequirementForm'
 import { WeightSummary } from '@/features/evaluations/components/WeightSummary'
-import { hasCompleteWeights } from '@/features/evaluations/lib/evaluationReadiness'
+import { hasCompleteWeights, pointsToPercent } from '@/features/evaluations/lib/evaluationReadiness'
 
 type Dimension = 'functional' | 'technical'
 type FormTarget =
@@ -143,9 +143,10 @@ export function WizardStepRequirements({
                 <TableRow>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Título</TableHead>
+                  <TableHead>Descripción</TableHead>
                   <TableHead>Prioridad</TableHead>
                   <TableHead>Tipo de respuesta</TableHead>
-                  <TableHead>Peso</TableHead>
+                  <TableHead>Peso (%)</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -154,12 +155,22 @@ export function WizardStepRequirements({
                   <Fragment key={requirement.id}>
                     <TableRow>
                       <TableCell>{requirement.category}</TableCell>
-                      <TableCell>{requirement.title}</TableCell>
+                      <TableCell className="max-w-[16rem] whitespace-normal">
+                        {requirement.title}
+                      </TableCell>
+                      <TableCell
+                        className="max-w-xs truncate text-muted-foreground"
+                        title={requirement.description}
+                      >
+                        {requirement.description || '—'}
+                      </TableCell>
                       <TableCell>
                         <PriorityBadge priority={requirement.priority} />
                       </TableCell>
                       <TableCell>{translateResponseType(requirement.response_type)}</TableCell>
-                      <TableCell>{requirement.weight}</TableCell>
+                      <TableCell>
+                        {Math.round(pointsToPercent(requirement.weight, dimension) * 10) / 10}%
+                      </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button
@@ -184,7 +195,7 @@ export function WizardStepRequirements({
                     {formTarget?.mode === 'edit' &&
                       formTarget.requirement.id === requirement.id && (
                         <TableRow>
-                          <TableCell colSpan={6}>
+                          <TableCell colSpan={7}>
                             <RequirementForm
                               requirement={requirement}
                               defaultDimension={dimension}
@@ -232,7 +243,7 @@ export function WizardStepRequirements({
           ready
             ? []
             : [
-                'Los requerimientos funcionales deben sumar 40 puntos y los técnicos 20 puntos para continuar.',
+                'Los requerimientos funcionales deben sumar 100% y los técnicos 100% para continuar.',
               ]
         }
       />

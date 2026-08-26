@@ -23,6 +23,7 @@ AuditResourceType = Literal[
     "report",
     "notification",
     "purchase",
+    "company_profile",
 ]
 
 # Stable, closed taxonomy (plan §7) - never a free-form string built ad hoc at
@@ -191,6 +192,11 @@ AuditAction = Literal[
     "evaluation_review_rejected",
     "evaluation_review_changes_requested",
     "evaluation_changes_requested",
+    # UAT-03 (R4) - resource_type "company_profile" (id == tenant_id, same
+    # 1:1 grain as billing.BillingAccount). No "_created" action: the row's
+    # lazy first materialization is always empty (CompanyProfile.create()),
+    # never audit-worthy on its own - only an actual field change is.
+    "company_profile_updated",
 ]
 
 

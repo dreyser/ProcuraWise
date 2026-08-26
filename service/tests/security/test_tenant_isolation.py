@@ -4,8 +4,12 @@ from fastapi.testclient import TestClient
 from procurawise.api.main import app
 from procurawise.dev_seed import seed
 from procurawise.identity.dev_provider import DEV_ACTOR_HEADER
-from procurawise.identity.models import VendorOrganization
-from procurawise.identity.repository import VendorOrganizationRepository
+from procurawise.identity.models import Membership, User, VendorOrganization
+from procurawise.identity.repository import (
+    MembershipRepository,
+    UserRepository,
+    VendorOrganizationRepository,
+)
 from procurawise.shared.config import Settings, get_settings
 from procurawise.shared.tenant_collection import TenantCollection
 from tests.conftest import bearer_headers_for as _bearer_headers_for
@@ -260,6 +264,46 @@ def test_billing_purchase_read_for_another_tenant_is_404(
     list_response = client.get("/api/v1/billing/purchases", headers=owner_b_headers)
     assert list_response.status_code == 200
     assert all(item["id"] != purchase_id for item in list_response.json()["items"])
+
+
+# UAT-03 (R4) - dedicated negative isolation coverage for the new
+# company-profile/* route, per CLAUDE.md S4. Overlaps by design with
+# tests/api/test_company_profile_router.py's own isolation case, same
+# reasoning as the billing pair above.
+
+
+def test_company_profile_of_another_tenant_is_never_returned(
+    client, seeded_actors, mongo_test_settings, mongo_test_db
+) -> None:
+    tenant_a, tenant_admin_a = _unique_actor_by_role(seeded_actors, "tenant_admin")
+    tenant_admin_a_headers = _bearer_headers_for(tenant_admin_a, mongo_test_settings)
+    client.put(
+        "/api/v1/company-profile",
+        json={
+            "legal_name": "Tenant A Legal Name",
+            "tax_id": "AAA010101AAA",
+            "address": "Tenant A address",
+            "industry": "Tenant A industry",
+            "website_url": "",
+        },
+        headers=tenant_admin_a_headers,
+    )
+
+    # dev_seed.py only seeds one tenant_admin (tenant_a) - a second tenant's
+    # tenant_admin is created ad hoc here, same pattern as
+    # tests/api/test_review_approval.py's `other_membership`.
+    tenant_b = next(t for t in _tenant_ids(seeded_actors) if t != tenant_a)
+    users = UserRepository(mongo_test_db)
+    memberships = MembershipRepository(mongo_test_db)
+    user = User.create(display_name="Other Tenant Admin", email="other.tenant.admin.b@dev.local")
+    users.insert(user.to_document())
+    membership_b = Membership.create(tenant_id=tenant_b, user_id=user.id, role="tenant_admin")
+    memberships.insert(membership_b.to_document())
+    tenant_admin_b_headers = _bearer_headers_for(membership_b.id, mongo_test_settings)
+
+    response = client.get("/api/v1/company-profile", headers=tenant_admin_b_headers)
+    assert response.status_code == 200
+    assert response.json()["legal_name"] == ""
 
 
 def test_seed_dev_is_idempotent(mongo_test_settings: Settings, mongo_test_db) -> None:

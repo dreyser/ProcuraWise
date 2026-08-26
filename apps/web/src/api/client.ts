@@ -488,6 +488,15 @@ export interface CollaboratorSummaryResponse {
   accepted_at: CollaboratorSummaryResponseAcceptedAt
 }
 
+export interface CompanyProfileResponse {
+  legal_name: string
+  tax_id: string
+  address: string
+  industry: string
+  website_url: string
+  updated_at: string
+}
+
 export type CostItemResponseCategory =
   (typeof CostItemResponseCategory)[keyof typeof CostItemResponseCategory]
 
@@ -2457,6 +2466,22 @@ export interface TriggerSuggestionRequest {
 export interface TriggerSuggestionResponse {
   job_id: string
   status_url: string
+}
+
+/**
+ * Full-replace shape (a settings form always sends its entire current
+state) - no partial-update semantics, so there is no separate meaning
+for "field omitted" vs "field cleared". website_url may be blank (not
+every tenant has filled it in yet); when non-blank it must be an
+http(s) URL, since a future research feature will eventually fetch it
+(UAT-03, backlog.md) and must never be handed an arbitrary scheme.
+ */
+export interface UpdateCompanyProfileRequest {
+  legal_name: string
+  tax_id: string
+  address: string
+  industry: string
+  website_url: string
 }
 
 export type UpdateCuratedSourceRequestTitle = string | null
@@ -22566,4 +22591,286 @@ export function useGetPurchaseApiV1BillingPurchasesPurchaseIdGet<
   query.queryKey = queryOptions.queryKey
 
   return query
+}
+
+/**
+ * @summary Get Company Profile
+ */
+export type getCompanyProfileApiV1CompanyProfileGetResponse200 = {
+  data: CompanyProfileResponse
+  status: 200
+}
+
+export type getCompanyProfileApiV1CompanyProfileGetResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getCompanyProfileApiV1CompanyProfileGetResponseSuccess =
+  getCompanyProfileApiV1CompanyProfileGetResponse200 & {
+    headers: Headers
+  }
+export type getCompanyProfileApiV1CompanyProfileGetResponseError =
+  getCompanyProfileApiV1CompanyProfileGetResponse422 & {
+    headers: Headers
+  }
+
+export type getCompanyProfileApiV1CompanyProfileGetResponse =
+  | getCompanyProfileApiV1CompanyProfileGetResponseSuccess
+  | getCompanyProfileApiV1CompanyProfileGetResponseError
+
+export const getGetCompanyProfileApiV1CompanyProfileGetUrl = () => {
+  return `/api/v1/company-profile`
+}
+
+export const getCompanyProfileApiV1CompanyProfileGet = async (
+  options?: RequestInit,
+): Promise<getCompanyProfileApiV1CompanyProfileGetResponse> => {
+  return apiFetch<getCompanyProfileApiV1CompanyProfileGetResponse>(
+    getGetCompanyProfileApiV1CompanyProfileGetUrl(),
+    {
+      ...options,
+      method: 'GET',
+    },
+  )
+}
+
+export const getGetCompanyProfileApiV1CompanyProfileGetQueryKey = () => {
+  return [`/api/v1/company-profile`] as const
+}
+
+export const getGetCompanyProfileApiV1CompanyProfileGetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+  TError = HTTPValidationError,
+>(options?: {
+  query?: Partial<
+    UseQueryOptions<
+      Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+      TError,
+      TData
+    >
+  >
+}) => {
+  const { query: queryOptions } = options ?? {}
+
+  const queryKey = queryOptions?.queryKey ?? getGetCompanyProfileApiV1CompanyProfileGetQueryKey()
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>
+  > = () => getCompanyProfileApiV1CompanyProfileGet()
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetCompanyProfileApiV1CompanyProfileGetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>
+>
+export type GetCompanyProfileApiV1CompanyProfileGetQueryError = HTTPValidationError
+
+export function useGetCompanyProfileApiV1CompanyProfileGet<
+  TData = Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+  TError = HTTPValidationError,
+>(
+  options: {
+    query: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanyProfileApiV1CompanyProfileGet<
+  TData = Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+        TError,
+        TData
+      >
+    > &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+          TError,
+          Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>
+        >,
+        'initialData'
+      >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetCompanyProfileApiV1CompanyProfileGet<
+  TData = Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Company Profile
+ */
+
+export function useGetCompanyProfileApiV1CompanyProfileGet<
+  TData = Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+  TError = HTTPValidationError,
+>(
+  options?: {
+    query?: Partial<
+      UseQueryOptions<
+        Awaited<ReturnType<typeof getCompanyProfileApiV1CompanyProfileGet>>,
+        TError,
+        TData
+      >
+    >
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getGetCompanyProfileApiV1CompanyProfileGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>
+  }
+
+  query.queryKey = queryOptions.queryKey
+
+  return query
+}
+
+/**
+ * @summary Update Company Profile
+ */
+export type updateCompanyProfileApiV1CompanyProfilePutResponse200 = {
+  data: CompanyProfileResponse
+  status: 200
+}
+
+export type updateCompanyProfileApiV1CompanyProfilePutResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type updateCompanyProfileApiV1CompanyProfilePutResponseSuccess =
+  updateCompanyProfileApiV1CompanyProfilePutResponse200 & {
+    headers: Headers
+  }
+export type updateCompanyProfileApiV1CompanyProfilePutResponseError =
+  updateCompanyProfileApiV1CompanyProfilePutResponse422 & {
+    headers: Headers
+  }
+
+export type updateCompanyProfileApiV1CompanyProfilePutResponse =
+  | updateCompanyProfileApiV1CompanyProfilePutResponseSuccess
+  | updateCompanyProfileApiV1CompanyProfilePutResponseError
+
+export const getUpdateCompanyProfileApiV1CompanyProfilePutUrl = () => {
+  return `/api/v1/company-profile`
+}
+
+export const updateCompanyProfileApiV1CompanyProfilePut = async (
+  updateCompanyProfileRequest: UpdateCompanyProfileRequest,
+  options?: RequestInit,
+): Promise<updateCompanyProfileApiV1CompanyProfilePutResponse> => {
+  return apiFetch<updateCompanyProfileApiV1CompanyProfilePutResponse>(
+    getUpdateCompanyProfileApiV1CompanyProfilePutUrl(),
+    {
+      ...options,
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(updateCompanyProfileRequest),
+    },
+  )
+}
+
+export const getUpdateCompanyProfileApiV1CompanyProfilePutMutationOptions = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCompanyProfileApiV1CompanyProfilePut>>,
+    TError,
+    { data: UpdateCompanyProfileRequest },
+    TContext
+  >
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCompanyProfileApiV1CompanyProfilePut>>,
+  TError,
+  { data: UpdateCompanyProfileRequest },
+  TContext
+> => {
+  const mutationKey = ['updateCompanyProfileApiV1CompanyProfilePut']
+  const { mutation: mutationOptions } = options
+    ? options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey } }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCompanyProfileApiV1CompanyProfilePut>>,
+    { data: UpdateCompanyProfileRequest }
+  > = (props) => {
+    const { data } = props ?? {}
+
+    return updateCompanyProfileApiV1CompanyProfilePut(data)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type UpdateCompanyProfileApiV1CompanyProfilePutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCompanyProfileApiV1CompanyProfilePut>>
+>
+export type UpdateCompanyProfileApiV1CompanyProfilePutMutationBody = UpdateCompanyProfileRequest
+export type UpdateCompanyProfileApiV1CompanyProfilePutMutationError = HTTPValidationError
+
+/**
+ * @summary Update Company Profile
+ */
+export const useUpdateCompanyProfileApiV1CompanyProfilePut = <
+  TError = HTTPValidationError,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof updateCompanyProfileApiV1CompanyProfilePut>>,
+      TError,
+      { data: UpdateCompanyProfileRequest },
+      TContext
+    >
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof updateCompanyProfileApiV1CompanyProfilePut>>,
+  TError,
+  { data: UpdateCompanyProfileRequest },
+  TContext
+> => {
+  const mutationOptions = getUpdateCompanyProfileApiV1CompanyProfilePutMutationOptions(options)
+
+  return useMutation(mutationOptions, queryClient)
 }

@@ -405,9 +405,18 @@ class EvaluationService:
         else:
             for dimension, max_points in DIMENSION_MAX_POINTS.items():
                 if abs(by_dimension[dimension] - max_points) > _WEIGHT_TOLERANCE:
+                    # UAT-02 (R4): weights are still stored/validated as raw
+                    # points (DIMENSION_MAX_POINTS, unchanged - no
+                    # migration) - only this message's wording switched to
+                    # percent, matching the frontend's own presentation
+                    # (evaluationReadiness.ts's pointsToPercent), since this
+                    # detail can reach the user verbatim (see
+                    # normalizeApiError's 400 case, apps/web/src/lib/
+                    # errors.ts) if a client ever bypasses its own
+                    # client-side readiness check.
+                    percent = round(by_dimension[dimension] / max_points * 100, 1)
                     reasons.append(
-                        f"{dimension} requirement weights must sum to {max_points}, got "
-                        f"{by_dimension[dimension]}"
+                        f"{dimension} requirement weights must sum to 100%, got {percent}%"
                     )
         if evaluation.linked_vendor_count == 0:
             reasons.append("at least one vendor must be linked")
